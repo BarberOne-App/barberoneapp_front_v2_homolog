@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Store,
   Bell,
@@ -33,6 +33,7 @@ import {
   type HomeInfo,
   updateHomeInfo,
 } from '../../service/homeInfoService';
+import { uploadHeroImage } from '../../service/uploadService';
 import {
   getPaymentFrequencySettings,
   getSettings,
@@ -139,6 +140,8 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
     hero_images: [] as string[],
   });
   const [heroImageUrl, setHeroImageUrl] = useState('');
+  const [isUploadingHeroImage, setIsUploadingHeroImage] = useState(false);
+  const heroImageFileInputRef = useRef<HTMLInputElement | null>(null);
   const [workingHoursForm, setWorkingHoursForm] = useState({
     schedule_title: '',
     schedule_line1: '',
@@ -384,6 +387,55 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
       hero_images: [...current.hero_images, trimmedUrl],
     }));
     setHeroImageUrl('');
+  }
+
+  async function uploadHeroImageFile(file: File) {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecione apenas arquivos de imagem.');
+      return;
+    }
+
+    if (heroForm.hero_images.length >= MAX_HERO_IMAGES) {
+      toast.error('O banner pode ter no maximo 5 imagens.');
+      return;
+    }
+
+    setIsUploadingHeroImage(true);
+
+    try {
+      const secureUrl = await uploadHeroImage(file);
+
+      setHeroForm((current) => {
+        if (current.hero_images.includes(secureUrl)) {
+          return current;
+        }
+
+        return {
+          ...current,
+          hero_images: [...current.hero_images, secureUrl].slice(0, MAX_HERO_IMAGES),
+        };
+      });
+
+      toast.success('Foto enviada e adicionada ao banner.');
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      toast.error(message || 'Erro ao enviar foto para o Cloudinary.');
+    } finally {
+      setIsUploadingHeroImage(false);
+      if (heroImageFileInputRef.current) {
+        heroImageFileInputRef.current.value = '';
+      }
+    }
+  }
+
+  function handleHeroImageFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    void uploadHeroImageFile(file);
   }
 
   function removeHeroImage(imageUrl: string) {
@@ -827,6 +879,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
                     disabled={
                       isLoadingHomeInfo ||
                       isSavingGeneralSettings ||
+                      isUploadingHeroImage ||
                       heroForm.hero_images.length >= MAX_HERO_IMAGES
                     }
                     placeholder="https://exemplo.com/banner.jpg"
@@ -840,11 +893,34 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
                     disabled={
                       isLoadingHomeInfo ||
                       isSavingGeneralSettings ||
+                      isUploadingHeroImage ||
                       heroForm.hero_images.length >= MAX_HERO_IMAGES
                     }
                   >
                     <Plus size={14} />
                     Adicionar
+                  </Button>
+                  <input
+                    ref={heroImageFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleHeroImageFileChange}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => heroImageFileInputRef.current?.click()}
+                    disabled={
+                      isLoadingHomeInfo ||
+                      isSavingGeneralSettings ||
+                      isUploadingHeroImage ||
+                      heroForm.hero_images.length >= MAX_HERO_IMAGES
+                    }
+                  >
+                    {isUploadingHeroImage ? <Spinner /> : <Upload size={14} />}
+                    {isUploadingHeroImage ? 'Enviando...' : 'Enviar foto'}
                   </Button>
                 </div>
               </div>
@@ -872,7 +948,11 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
                           variant="secondary"
                           size="icon"
                           onClick={() => removeHeroImage(imageUrl)}
-                          disabled={isLoadingHomeInfo || isSavingGeneralSettings}
+                          disabled={
+                            isLoadingHomeInfo ||
+                            isSavingGeneralSettings ||
+                            isUploadingHeroImage
+                          }
                           className="absolute right-2 top-2 h-8 w-8"
                           aria-label="Remover imagem do banner"
                         >
@@ -1057,7 +1137,8 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
               disabled={
                 isLoadingBusinessProfile ||
                 isLoadingHomeInfo ||
-                isSavingGeneralSettings
+                isSavingGeneralSettings ||
+                isUploadingHeroImage
               }
             >
               {isSavingGeneralSettings ? <Spinner /> : <Save size={14} />}
