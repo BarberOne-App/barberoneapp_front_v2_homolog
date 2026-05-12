@@ -33,7 +33,7 @@ import {
   type HomeInfo,
   updateHomeInfo,
 } from '../../service/homeInfoService';
-import { uploadHeroImage } from '../../service/uploadService';
+import { uploadBusinessLogo, uploadHeroImage } from '../../service/uploadService';
 import {
   getPaymentFrequencySettings,
   getSettings,
@@ -49,6 +49,7 @@ type StoredBarbershop = {
   id?: string;
   name?: string;
   slug?: string;
+  logoUrl?: string;
 };
 
 const PAYMENT_FREQUENCY_OPTIONS: Array<{
@@ -133,6 +134,9 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
     cnpj: '',
   });
   const [businessSlug, setBusinessSlug] = useState('');
+  const [businessLogoUrl, setBusinessLogoUrl] = useState('');
+  const [isUploadingBusinessLogo, setIsUploadingBusinessLogo] = useState(false);
+  const businessLogoFileInputRef = useRef<HTMLInputElement | null>(null);
   const [homeInfo, setHomeInfo] = useState<HomeInfo | null>(null);
   const [heroForm, setHeroForm] = useState({
     hero_title: '',
@@ -212,6 +216,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
           cnpj: profile.cnpj ?? '',
         });
         setBusinessSlug(profile.slug ?? '');
+        setBusinessLogoUrl(profile.logoUrl ?? '');
       } catch {
         if (isMounted) {
           toast.error('Erro ao carregar dados da barbearia.');
@@ -344,6 +349,25 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
     }));
   }
 
+  function persistStoredBarbershop(profile: {
+    id: string;
+    name: string;
+    slug: string;
+    logoUrl?: string;
+  }) {
+    localStorage.setItem(
+      'barbershop',
+      JSON.stringify({
+        ...getStoredBarbershop(),
+        id: profile.id,
+        name: profile.name,
+        slug: profile.slug,
+        logoUrl: profile.logoUrl ?? '',
+      })
+    );
+    window.dispatchEvent(new Event('barbershop:updated'));
+  }
+
   function updateWorkingHoursField(
     field: keyof typeof workingHoursForm,
     value: string
@@ -438,6 +462,81 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
     void uploadHeroImageFile(file);
   }
 
+  async function saveBusinessLogo(logoUrl: string, successMessage: string) {
+    const profile = await updateBarbershopProfile({
+      name: businessForm.name,
+      email: businessForm.email,
+      phone: businessForm.phone,
+      cnpj: businessForm.cnpj,
+      logoUrl,
+    });
+
+    setBusinessForm({
+      name: profile.name ?? '',
+      email: profile.email ?? '',
+      phone: profile.phone ?? '',
+      cnpj: profile.cnpj ?? '',
+    });
+    setBusinessSlug(profile.slug ?? '');
+    setBusinessLogoUrl(profile.logoUrl ?? '');
+    persistStoredBarbershop(profile);
+    toast.success(successMessage);
+  }
+
+  async function uploadBusinessLogoFile(file: File) {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecione apenas arquivos de imagem.');
+      return;
+    }
+
+    if (!businessForm.name.trim()) {
+      toast.error('Carregue ou informe o nome comercial antes de alterar a logo.');
+      return;
+    }
+
+    setIsUploadingBusinessLogo(true);
+
+    try {
+      const secureUrl = await uploadBusinessLogo(file);
+      await saveBusinessLogo(secureUrl, 'Logo atualizada com sucesso.');
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      toast.error(message || 'Erro ao atualizar logo da barbearia.');
+    } finally {
+      setIsUploadingBusinessLogo(false);
+      if (businessLogoFileInputRef.current) {
+        businessLogoFileInputRef.current.value = '';
+      }
+    }
+  }
+
+  function handleBusinessLogoFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    void uploadBusinessLogoFile(file);
+  }
+
+  async function removeBusinessLogo() {
+    if (isUploadingBusinessLogo || isLoadingBusinessProfile) {
+      return;
+    }
+
+    setIsUploadingBusinessLogo(true);
+
+    try {
+      await saveBusinessLogo('', 'Logo removida com sucesso.');
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      toast.error(message || 'Erro ao remover logo da barbearia.');
+    } finally {
+      setIsUploadingBusinessLogo(false);
+    }
+  }
+
   function removeHeroImage(imageUrl: string) {
     setHeroForm((current) => ({
       ...current,
@@ -530,6 +629,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
           email: businessForm.email,
           phone: businessForm.phone,
           cnpj: businessForm.cnpj,
+          logoUrl: businessLogoUrl,
         }),
         updateHomeInfo({
           ...(homeInfo ?? {}),
@@ -547,15 +647,8 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
         cnpj: profile.cnpj ?? '',
       });
       setBusinessSlug(profile.slug ?? '');
-      localStorage.setItem(
-        'barbershop',
-        JSON.stringify({
-          ...getStoredBarbershop(),
-          id: profile.id,
-          name: profile.name,
-          slug: profile.slug,
-        })
-      );
+      setBusinessLogoUrl(profile.logoUrl ?? '');
+      persistStoredBarbershop(profile);
       setHomeInfo(updatedHomeInfo);
       setHeroForm({
         hero_title: updatedHomeInfo.hero_title ?? '',
@@ -804,17 +897,59 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
 
           <div className="bg-card rounded-xl border border-border p-6">
             <h3 className="text-lg font-medium text-foreground mb-4">Business Logo</h3>
-            <div className="flex items-center gap-6">
-              <div className="w-24 h-24 bg-secondary rounded-xl flex items-center justify-center border border-border">
-                <span className="text-3xl font-bold text-primary">B</span>
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+              <div className="relative h-24 w-24 overflow-hidden rounded-xl border border-border bg-secondary">
+                {businessLogoUrl ? (
+                  <img
+                    src={businessLogoUrl}
+                    alt="Logo da barbearia"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <Store size={30} className="text-primary" />
+                  </div>
+                )}
+                {isUploadingBusinessLogo && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/70">
+                    <Spinner />
+                  </div>
+                )}
               </div>
               <div className="space-y-3">
-                <Button variant="outline" className="gap-2" disabled>
-                  <Upload size={14} />
-                  Upload New Logo
-                </Button>
+                <input
+                  ref={businessLogoFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleBusinessLogoFileChange}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => businessLogoFileInputRef.current?.click()}
+                    disabled={isLoadingBusinessProfile || isUploadingBusinessLogo}
+                  >
+                    {isUploadingBusinessLogo ? <Spinner /> : <Upload size={14} />}
+                    {businessLogoUrl ? 'Substituir Logo' : 'Upload New Logo'}
+                  </Button>
+                  {businessLogoUrl && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={removeBusinessLogo}
+                      disabled={isLoadingBusinessProfile || isUploadingBusinessLogo}
+                    >
+                      <X size={14} />
+                      Remover
+                    </Button>
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  Logo ainda nao disponivel no cadastro atual.
+                  Envie uma imagem para usar como identidade visual no sistema.
                 </p>
               </div>
             </div>
@@ -1138,6 +1273,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
                 isLoadingBusinessProfile ||
                 isLoadingHomeInfo ||
                 isSavingGeneralSettings ||
+                isUploadingBusinessLogo ||
                 isUploadingHeroImage
               }
             >

@@ -35,12 +35,14 @@ export interface AuthResponse {
     name: string;
     slug: string;
     status?: string;
+    logoUrl?: string;
   } | null;
   currentBarbershop?: {
     id: string;
     name: string;
     slug: string;
     status?: string;
+    logoUrl?: string;
   } | null;
 }
 

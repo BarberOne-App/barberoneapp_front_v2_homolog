@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { Bell, Settings } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -13,6 +14,25 @@ interface AppHeaderProps {
   actionHref: string;
 }
 
+type StoredBarbershop = {
+  name?: string;
+  logoUrl?: string;
+};
+
+function getStoredBarbershop() {
+  const storedBarbershop = localStorage.getItem("barbershop");
+
+  if (!storedBarbershop) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(storedBarbershop) as StoredBarbershop;
+  } catch {
+    return null;
+  }
+}
+
 export function AppHeader({
   title,
   breadcrumbs,
@@ -20,8 +40,14 @@ export function AppHeader({
   actionHref,
 }: AppHeaderProps) {
   const { user } = useAuth();
+  const [barbershop, setBarbershop] = useState<StoredBarbershop | null>(() =>
+    getStoredBarbershop()
+  );
   const profileConfig = getProfileConfig(user?.role);
   const userName = user?.name?.trim() || "Usuario";
+  const barbershopName = barbershop?.name?.trim() || "BarberOne";
+  const logoUrl = barbershop?.logoUrl?.trim() || "";
+  const barbershopInitial = barbershopName[0]?.toUpperCase() || "B";
   const initials = userName
     .split(" ")
     .filter(Boolean)
@@ -29,20 +55,45 @@ export function AppHeader({
     .map((item) => item[0]?.toUpperCase())
     .join("");
 
+  useEffect(() => {
+    function refreshBarbershop() {
+      setBarbershop(getStoredBarbershop());
+    }
+
+    window.addEventListener("storage", refreshBarbershop);
+    window.addEventListener("barbershop:updated", refreshBarbershop);
+
+    return () => {
+      window.removeEventListener("storage", refreshBarbershop);
+      window.removeEventListener("barbershop:updated", refreshBarbershop);
+    };
+  }, []);
+
   return (
     <header className="flex items-center justify-between px-6 py-4">
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">{title}</h1>
-        <nav className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-          {breadcrumbs.map((crumb, index) => (
-            <span key={`${crumb}-${index}`}>
-              {index > 0 && <span className="mr-2">/</span>}
-              <span className={index === breadcrumbs.length - 1 ? "text-foreground" : ""}>
-                {crumb}
-              </span>
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary">
+          {logoUrl ? (
+            <img src={logoUrl} alt={barbershopName} className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-sm font-bold text-primary-foreground">
+              {barbershopInitial}
             </span>
-          ))}
-        </nav>
+          )}
+        </div>
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-semibold text-foreground">{title}</h1>
+          <nav className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+            {breadcrumbs.map((crumb, index) => (
+              <span key={`${crumb}-${index}`}>
+                {index > 0 && <span className="mr-2">/</span>}
+                <span className={index === breadcrumbs.length - 1 ? "text-foreground" : ""}>
+                  {crumb}
+                </span>
+              </span>
+            ))}
+          </nav>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">

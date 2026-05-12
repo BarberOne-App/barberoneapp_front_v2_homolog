@@ -6,6 +6,7 @@ export interface BarbershopProfile {
   email: string;
   phone: string;
   cnpj: string;
+  logoUrl: string;
   slug: string;
 }
 
@@ -14,6 +15,7 @@ export interface UpdateBarbershopProfilePayload {
   email: string;
   phone: string;
   cnpj: string;
+  logoUrl?: string;
 }
 
 export async function getBarbershopProfile() {
@@ -24,12 +26,15 @@ export async function getBarbershopProfile() {
 export async function updateBarbershopProfile(
   data: UpdateBarbershopProfilePayload
 ) {
-  const response = await api.put<BarbershopProfile>("/barbershop/profile", {
+  const payload = {
     name: data.name,
     email: data.email,
     phone: data.phone,
     cnpj: data.cnpj,
-  });
+    ...(data.logoUrl !== undefined ? { logoUrl: data.logoUrl } : {}),
+  };
+
+  const response = await api.put<BarbershopProfile>("/barbershop/profile", payload);
 
   return response.data;
 }

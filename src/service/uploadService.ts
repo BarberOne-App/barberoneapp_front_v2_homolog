@@ -4,7 +4,11 @@ interface CloudinaryUploadResponse {
   secure_url?: string;
 }
 
-export async function uploadHeroImage(file: File) {
+export async function uploadImage(file: File) {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Selecione apenas arquivos de imagem.');
+  }
+
   const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
   const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
@@ -26,4 +30,12 @@ export async function uploadHeroImage(file: File) {
   }
 
   return response.data.secure_url;
+}
+
+export async function uploadHeroImage(file: File) {
+  return uploadImage(file);
+}
+
+export async function uploadBusinessLogo(file: File) {
+  return uploadImage(file);
 }
