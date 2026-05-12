@@ -1,0 +1,90 @@
+import { Link } from "react-router-dom";
+import { Bell, Settings } from "lucide-react";
+
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { getProfileConfig } from "../../config/profileConfig";
+import { useAuth } from "../../hooks/useAuth";
+
+interface AppHeaderProps {
+  title: string;
+  breadcrumbs: string[];
+  actionLabel: string;
+  actionHref: string;
+}
+
+export function AppHeader({
+  title,
+  breadcrumbs,
+  actionLabel,
+  actionHref,
+}: AppHeaderProps) {
+  const { user } = useAuth();
+  const profileConfig = getProfileConfig(user?.role);
+  const userName = user?.name?.trim() || "Usuario";
+  const initials = userName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((item) => item[0]?.toUpperCase())
+    .join("");
+
+  return (
+    <header className="flex items-center justify-between px-6 py-4">
+      <div>
+        <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+        <nav className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+          {breadcrumbs.map((crumb, index) => (
+            <span key={`${crumb}-${index}`}>
+              {index > 0 && <span className="mr-2">/</span>}
+              <span className={index === breadcrumbs.length - 1 ? "text-foreground" : ""}>
+                {crumb}
+              </span>
+            </span>
+          ))}
+        </nav>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Button
+          asChild
+          variant="outline"
+          className="border-border bg-card text-foreground hover:bg-secondary"
+        >
+          <Link to={actionHref}>{actionLabel}</Link>
+        </Button>
+
+        <button
+          type="button"
+          className="relative p-2 text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <Bell size={20} />
+          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
+        </button>
+
+        <Link
+          to="/settings"
+          className="p-2 text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <Settings size={20} />
+        </Link>
+
+        <div className="flex items-center gap-3 border-l border-border pl-3">
+          <Avatar className="h-9 w-9">
+            <AvatarImage
+              src={`https://i.pravatar.cc/150?u=${user?.id || user?.email || "barberone"}`}
+              alt={userName}
+            />
+            <AvatarFallback className="bg-primary/10 text-sm text-primary">
+              {initials || "U"}
+            </AvatarFallback>
+          </Avatar>
+          <div className="hidden md:block">
+            <p className="text-sm font-medium text-foreground">{userName}</p>
+            <p className="text-xs text-muted-foreground">{profileConfig.label}</p>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
