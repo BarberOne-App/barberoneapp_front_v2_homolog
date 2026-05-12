@@ -28,6 +28,7 @@ export interface RegisterClientResponse {
     name: string;
     slug: string;
     status?: string;
+    logoUrl?: string;
   };
 }
 
@@ -35,6 +36,7 @@ export interface PublicBarbershop {
   id: string;
   name: string;
   slug: string;
+  logoUrl?: string;
 }
 
 export async function listPublicBarbershops() {

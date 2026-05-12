@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import { ChevronLeft, ChevronRight, LogOut, Search } from "lucide-react";
@@ -23,11 +23,36 @@ interface ProfileSidebarProps {
   sections: SidebarSection[];
 }
 
+type StoredBarbershop = {
+  name?: string;
+  logoUrl?: string;
+};
+
+function getStoredBarbershop() {
+  const storedBarbershop = localStorage.getItem("barbershop");
+
+  if (!storedBarbershop) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(storedBarbershop) as StoredBarbershop;
+  } catch {
+    return null;
+  }
+}
+
 export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [barbershop, setBarbershop] = useState<StoredBarbershop | null>(() =>
+    getStoredBarbershop()
+  );
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const sidebarTitle = barbershop?.name?.trim() || title;
+  const logoUrl = barbershop?.logoUrl?.trim() || "";
+  const fallbackInitial = sidebarTitle.trim()[0]?.toUpperCase() || "B";
 
   const menuSections = [
     ...sections,
@@ -41,6 +66,20 @@ export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProp
     navigate("/login", { replace: true });
   };
 
+  useEffect(() => {
+    function refreshBarbershop() {
+      setBarbershop(getStoredBarbershop());
+    }
+
+    window.addEventListener("storage", refreshBarbershop);
+    window.addEventListener("barbershop:updated", refreshBarbershop);
+
+    return () => {
+      window.removeEventListener("storage", refreshBarbershop);
+      window.removeEventListener("barbershop:updated", refreshBarbershop);
+    };
+  }, []);
+
   return (
     <aside
       className={cn(
@@ -50,11 +89,19 @@ export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProp
     >
       <div className="flex items-center justify-between border-b border-sidebar-border p-4">
         <Link to={homeHref} className="flex items-center gap-3">
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary">
-            <span className="text-sm font-bold text-primary-foreground">B</span>
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary">
+            {logoUrl ? (
+              <img src={logoUrl} alt={sidebarTitle} className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-sm font-bold text-primary-foreground">
+                {fallbackInitial}
+              </span>
+            )}
           </div>
           {!collapsed && (
-            <span className="font-semibold text-sidebar-foreground">{title}</span>
+            <span className="truncate font-semibold text-sidebar-foreground">
+              {sidebarTitle}
+            </span>
           )}
         </Link>
         <button
