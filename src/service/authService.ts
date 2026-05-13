@@ -29,6 +29,7 @@ export interface AuthResponse {
     email: string;
     role?: string;
     isAdmin?: boolean;
+    photoUrl?: string | null;
   };
   barbershop?: {
     id: string;

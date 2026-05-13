@@ -15,6 +15,7 @@ import {
   Link2,
   Plus,
   X,
+  CircleUserRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,11 @@ import {
   type HomeInfo,
   updateHomeInfo,
 } from '../../service/homeInfoService';
-import { uploadBusinessLogo, uploadHeroImage } from '../../service/uploadService';
+import {
+  uploadBusinessLogo,
+  uploadHeroImage,
+  uploadProfilePhoto,
+} from '../../service/uploadService';
 import {
   getPaymentFrequencySettings,
   getSettings,
@@ -43,7 +48,7 @@ import {
   updatePaymentFrequencySettings,
   updateSettings,
 } from '../../service/settingsService';
-import { changePassword } from '../../service/userService';
+import { changePassword, updateProfilePhoto } from '../../service/userService';
 
 type StoredBarbershop = {
   id?: string;
@@ -125,8 +130,11 @@ function getHeroImages(data: HomeInfo) {
 }
 
 export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps) {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState('general');
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState(user?.photoUrl ?? '');
+  const [isUploadingProfilePhoto, setIsUploadingProfilePhoto] = useState(false);
+  const profilePhotoFileInputRef = useRef<HTMLInputElement | null>(null);
   const [businessForm, setBusinessForm] = useState({
     name: '',
     email: '',
@@ -236,7 +244,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
   }, []);
 
   useEffect(() => {
-    if (activeTab !== 'general') {
+    if (activeTab !== 'general' && activeTab !== 'appearance') {
       return;
     }
 
@@ -341,6 +349,10 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
       isMounted = false;
     };
   }, [activeTab, hasLoadedPaymentSettings]);
+
+  useEffect(() => {
+    setProfilePhotoUrl(user?.photoUrl ?? '');
+  }, [user?.photoUrl]);
 
   function updateBusinessField(field: keyof typeof businessForm, value: string) {
     setBusinessForm((current) => ({
@@ -537,6 +549,72 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
     }
   }
 
+  async function saveProfilePhoto(photoUrl: string | null, successMessage: string) {
+    if (!user?.id) {
+      toast.error('Usuario autenticado nao encontrado.');
+      return;
+    }
+
+    const updatedUser = await updateProfilePhoto(user.id, photoUrl);
+
+    updateUser({
+      ...user,
+      ...updatedUser,
+      photoUrl: updatedUser.photoUrl ?? '',
+    });
+    setProfilePhotoUrl(updatedUser.photoUrl ?? '');
+    toast.success(successMessage);
+  }
+
+  async function uploadProfilePhotoFile(file: File) {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecione apenas arquivos de imagem.');
+      return;
+    }
+
+    setIsUploadingProfilePhoto(true);
+
+    try {
+      const secureUrl = await uploadProfilePhoto(file);
+      await saveProfilePhoto(secureUrl, 'Foto de perfil atualizada com sucesso.');
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      toast.error(message || 'Erro ao atualizar foto de perfil.');
+    } finally {
+      setIsUploadingProfilePhoto(false);
+      if (profilePhotoFileInputRef.current) {
+        profilePhotoFileInputRef.current.value = '';
+      }
+    }
+  }
+
+  function handleProfilePhotoFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    void uploadProfilePhotoFile(file);
+  }
+
+  async function removeProfilePhoto() {
+    if (isUploadingProfilePhoto) {
+      return;
+    }
+
+    setIsUploadingProfilePhoto(true);
+
+    try {
+      await saveProfilePhoto(null, 'Foto de perfil removida com sucesso.');
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      toast.error(message || 'Erro ao remover foto de perfil.');
+    } finally {
+      setIsUploadingProfilePhoto(false);
+    }
+  }
+
   function removeHeroImage(imageUrl: string) {
     setHeroForm((current) => ({
       ...current,
@@ -677,6 +755,61 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
     } catch (error) {
       const message = getApiErrorMessage(error);
       toast.error(message || 'Erro ao salvar configuracoes gerais.');
+    } finally {
+      setIsSavingGeneralSettings(false);
+    }
+  }
+
+  async function saveAppearanceSettings() {
+    const trimmedHeroImages = heroForm.hero_images
+      .map((image) => image.trim())
+      .filter(Boolean)
+      .filter((image, index, allImages) => allImages.indexOf(image) === index)
+      .slice(0, MAX_HERO_IMAGES);
+    const trimmedHeroForm = {
+      hero_title: heroForm.hero_title.trim(),
+      hero_subtitle: heroForm.hero_subtitle.trim(),
+      hero_image: trimmedHeroImages[0] ?? '',
+      hero_images: trimmedHeroImages,
+    };
+
+    setIsSavingGeneralSettings(true);
+
+    try {
+      const [profile, updatedHomeInfo] = await Promise.all([
+        updateBarbershopProfile({
+          name: businessForm.name,
+          email: businessForm.email,
+          phone: businessForm.phone,
+          cnpj: businessForm.cnpj,
+          logoUrl: businessLogoUrl,
+        }),
+        updateHomeInfo({
+          ...(homeInfo ?? {}),
+          ...trimmedHeroForm,
+        }),
+      ]);
+
+      setBusinessForm({
+        name: profile.name ?? '',
+        email: profile.email ?? '',
+        phone: profile.phone ?? '',
+        cnpj: profile.cnpj ?? '',
+      });
+      setBusinessSlug(profile.slug ?? '');
+      setBusinessLogoUrl(profile.logoUrl ?? '');
+      persistStoredBarbershop(profile);
+      setHomeInfo(updatedHomeInfo);
+      setHeroForm({
+        hero_title: updatedHomeInfo.hero_title ?? '',
+        hero_subtitle: updatedHomeInfo.hero_subtitle ?? '',
+        hero_images: getHeroImages(updatedHomeInfo),
+      });
+      setHeroImageUrl('');
+      toast.success('Aparencia salva com sucesso.');
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      toast.error(message || 'Erro ao salvar configuracoes de aparencia.');
     } finally {
       setIsSavingGeneralSettings(false);
     }
@@ -892,219 +1025,6 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
                   className="w-full bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
-            </div>
-          </div>
-
-          <div className="bg-card rounded-xl border border-border p-6">
-            <h3 className="text-lg font-medium text-foreground mb-4">Business Logo</h3>
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-              <div className="relative h-24 w-24 overflow-hidden rounded-xl border border-border bg-secondary">
-                {businessLogoUrl ? (
-                  <img
-                    src={businessLogoUrl}
-                    alt="Logo da barbearia"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <Store size={30} className="text-primary" />
-                  </div>
-                )}
-                {isUploadingBusinessLogo && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-background/70">
-                    <Spinner />
-                  </div>
-                )}
-              </div>
-              <div className="space-y-3">
-                <input
-                  ref={businessLogoFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleBusinessLogoFileChange}
-                />
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="gap-2"
-                    onClick={() => businessLogoFileInputRef.current?.click()}
-                    disabled={isLoadingBusinessProfile || isUploadingBusinessLogo}
-                  >
-                    {isUploadingBusinessLogo ? <Spinner /> : <Upload size={14} />}
-                    {businessLogoUrl ? 'Substituir Logo' : 'Upload New Logo'}
-                  </Button>
-                  {businessLogoUrl && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="gap-2"
-                      onClick={removeBusinessLogo}
-                      disabled={isLoadingBusinessProfile || isUploadingBusinessLogo}
-                    >
-                      <X size={14} />
-                      Remover
-                    </Button>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Envie uma imagem para usar como identidade visual no sistema.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-card rounded-xl border border-border p-6">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-medium text-foreground">Banner de Inicio</h3>
-                <p className="text-sm text-muted-foreground">
-                  Configure o texto e ate 5 imagens por URL para o banner inicial.
-                </p>
-              </div>
-              <Badge variant="outline">
-                {heroForm.hero_images.length}/{MAX_HERO_IMAGES}
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Titulo do banner</label>
-                  <input
-                    type="text"
-                    value={heroForm.hero_title}
-                    onChange={(event) =>
-                      updateHeroField('hero_title', event.target.value)
-                    }
-                    disabled={isLoadingHomeInfo || isSavingGeneralSettings}
-                    placeholder="BarberOne"
-                    className="w-full bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Subtitulo do banner</label>
-                  <input
-                    type="text"
-                    value={heroForm.hero_subtitle}
-                    onChange={(event) =>
-                      updateHeroField('hero_subtitle', event.target.value)
-                    }
-                    disabled={isLoadingHomeInfo || isSavingGeneralSettings}
-                    placeholder="Agende seu horario com praticidade"
-                    className="w-full bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">URL da imagem</label>
-                <div className="flex flex-col gap-3 md:flex-row">
-                  <input
-                    type="url"
-                    value={heroImageUrl}
-                    onChange={(event) => setHeroImageUrl(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        addHeroImage();
-                      }
-                    }}
-                    disabled={
-                      isLoadingHomeInfo ||
-                      isSavingGeneralSettings ||
-                      isUploadingHeroImage ||
-                      heroForm.hero_images.length >= MAX_HERO_IMAGES
-                    }
-                    placeholder="https://exemplo.com/banner.jpg"
-                    className="h-10 flex-1 rounded-md border border-border bg-secondary px-3 text-sm text-foreground outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="gap-2"
-                    onClick={addHeroImage}
-                    disabled={
-                      isLoadingHomeInfo ||
-                      isSavingGeneralSettings ||
-                      isUploadingHeroImage ||
-                      heroForm.hero_images.length >= MAX_HERO_IMAGES
-                    }
-                  >
-                    <Plus size={14} />
-                    Adicionar
-                  </Button>
-                  <input
-                    ref={heroImageFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleHeroImageFileChange}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="gap-2"
-                    onClick={() => heroImageFileInputRef.current?.click()}
-                    disabled={
-                      isLoadingHomeInfo ||
-                      isSavingGeneralSettings ||
-                      isUploadingHeroImage ||
-                      heroForm.hero_images.length >= MAX_HERO_IMAGES
-                    }
-                  >
-                    {isUploadingHeroImage ? <Spinner /> : <Upload size={14} />}
-                    {isUploadingHeroImage ? 'Enviando...' : 'Enviar foto'}
-                  </Button>
-                </div>
-              </div>
-
-              {heroForm.hero_images.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {heroForm.hero_images.map((imageUrl, index) => (
-                    <div
-                      key={imageUrl}
-                      className="overflow-hidden rounded-lg border border-border bg-secondary"
-                    >
-                      <div className="relative aspect-video bg-background">
-                        <img
-                          src={imageUrl}
-                          alt={`Imagem ${index + 1} do banner`}
-                          className="h-full w-full object-cover"
-                        />
-                        {index === 0 && (
-                          <Badge className="absolute left-2 top-2">
-                            Principal
-                          </Badge>
-                        )}
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="icon"
-                          onClick={() => removeHeroImage(imageUrl)}
-                          disabled={
-                            isLoadingHomeInfo ||
-                            isSavingGeneralSettings ||
-                            isUploadingHeroImage
-                          }
-                          className="absolute right-2 top-2 h-8 w-8"
-                          aria-label="Remover imagem do banner"
-                        >
-                          <X size={14} />
-                        </Button>
-                      </div>
-                      <p className="truncate px-3 py-2 text-xs text-muted-foreground">
-                        {imageUrl}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-lg border border-dashed border-border bg-secondary/40 px-4 py-6 text-center text-sm text-muted-foreground">
-                  Nenhuma imagem adicionada ao banner.
-                </div>
-              )}
             </div>
           </div>
 
@@ -1326,7 +1246,9 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
           </div>
 
           <div className="flex justify-end">
-            <Button className="gap-2">
+            <Button
+              className="gap-2"
+            >
               <Save size={14} />
               Salvar Configurações
             </Button>
@@ -1555,7 +1477,9 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
           </div>
 
           <div className="flex justify-end">
-            <Button className="gap-2">
+            <Button
+              className="gap-2"
+            >
               <Save size={14} />
               Salvar Configurações
             </Button>
@@ -1564,6 +1488,279 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
 
         {/* Appearance */}
         <TabsContent value="appearance" className="space-y-6">
+          <div className="bg-card rounded-xl border border-border p-6">
+            <h3 className="text-lg font-medium text-foreground mb-4">Foto de perfil</h3>
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+              <div className="relative h-24 w-24 overflow-hidden rounded-full border border-border bg-secondary">
+                {profilePhotoUrl ? (
+                  <img
+                    src={profilePhotoUrl}
+                    alt="Foto de perfil"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <CircleUserRound size={36} className="text-primary" />
+                  </div>
+                )}
+                {isUploadingProfilePhoto && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/70">
+                    <Spinner />
+                  </div>
+                )}
+              </div>
+              <div className="space-y-3">
+                <input
+                  ref={profilePhotoFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleProfilePhotoFileChange}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => profilePhotoFileInputRef.current?.click()}
+                    disabled={isUploadingProfilePhoto}
+                  >
+                    {isUploadingProfilePhoto ? <Spinner /> : <Upload size={14} />}
+                    {profilePhotoUrl ? 'Substituir foto' : 'Enviar foto'}
+                  </Button>
+                  {profilePhotoUrl && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={removeProfilePhoto}
+                      disabled={isUploadingProfilePhoto}
+                    >
+                      <X size={14} />
+                      Remover
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Esta imagem aparece no perfil do usuario e no cabecalho do sistema.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-card rounded-xl border border-border p-6">
+            <h3 className="text-lg font-medium text-foreground mb-4">Logo da empresa</h3>
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+              <div className="relative h-24 w-24 overflow-hidden rounded-xl border border-border bg-secondary">
+                {businessLogoUrl ? (
+                  <img
+                    src={businessLogoUrl}
+                    alt="Logo da barbearia"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <Store size={30} className="text-primary" />
+                  </div>
+                )}
+                {isUploadingBusinessLogo && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/70">
+                    <Spinner />
+                  </div>
+                )}
+              </div>
+              <div className="space-y-3">
+                <input
+                  ref={businessLogoFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleBusinessLogoFileChange}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => businessLogoFileInputRef.current?.click()}
+                    disabled={isLoadingBusinessProfile || isUploadingBusinessLogo}
+                  >
+                    {isUploadingBusinessLogo ? <Spinner /> : <Upload size={14} />}
+                    {businessLogoUrl ? 'Substituir Logo' : 'Upload New Logo'}
+                  </Button>
+                  {businessLogoUrl && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={removeBusinessLogo}
+                      disabled={isLoadingBusinessProfile || isUploadingBusinessLogo}
+                    >
+                      <X size={14} />
+                      Remover
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Envie uma imagem para usar como identidade visual no sistema.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-card rounded-xl border border-border p-6">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-medium text-foreground">Banner de Inicio</h3>
+                <p className="text-sm text-muted-foreground">
+                  Configure o texto e ate 5 imagens por URL para o banner inicial.
+                </p>
+              </div>
+              <Badge variant="outline">
+                {heroForm.hero_images.length}/{MAX_HERO_IMAGES}
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Titulo do banner</label>
+                  <input
+                    type="text"
+                    value={heroForm.hero_title}
+                    onChange={(event) =>
+                      updateHeroField('hero_title', event.target.value)
+                    }
+                    disabled={isLoadingHomeInfo || isSavingGeneralSettings}
+                    placeholder="BarberOne"
+                    className="w-full bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Subtitulo do banner</label>
+                  <input
+                    type="text"
+                    value={heroForm.hero_subtitle}
+                    onChange={(event) =>
+                      updateHeroField('hero_subtitle', event.target.value)
+                    }
+                    disabled={isLoadingHomeInfo || isSavingGeneralSettings}
+                    placeholder="Agende seu horario com praticidade"
+                    className="w-full bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">URL da imagem</label>
+                <div className="flex flex-col gap-3 md:flex-row">
+                  <input
+                    type="url"
+                    value={heroImageUrl}
+                    onChange={(event) => setHeroImageUrl(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        addHeroImage();
+                      }
+                    }}
+                    disabled={
+                      isLoadingHomeInfo ||
+                      isSavingGeneralSettings ||
+                      isUploadingHeroImage ||
+                      heroForm.hero_images.length >= MAX_HERO_IMAGES
+                    }
+                    placeholder="https://exemplo.com/banner.jpg"
+                    className="h-10 flex-1 rounded-md border border-border bg-secondary px-3 text-sm text-foreground outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={addHeroImage}
+                    disabled={
+                      isLoadingHomeInfo ||
+                      isSavingGeneralSettings ||
+                      isUploadingHeroImage ||
+                      heroForm.hero_images.length >= MAX_HERO_IMAGES
+                    }
+                  >
+                    <Plus size={14} />
+                    Adicionar
+                  </Button>
+                  <input
+                    ref={heroImageFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleHeroImageFileChange}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => heroImageFileInputRef.current?.click()}
+                    disabled={
+                      isLoadingHomeInfo ||
+                      isSavingGeneralSettings ||
+                      isUploadingHeroImage ||
+                      heroForm.hero_images.length >= MAX_HERO_IMAGES
+                    }
+                  >
+                    {isUploadingHeroImage ? <Spinner /> : <Upload size={14} />}
+                    {isUploadingHeroImage ? 'Enviando...' : 'Enviar foto'}
+                  </Button>
+                </div>
+              </div>
+
+              {heroForm.hero_images.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {heroForm.hero_images.map((imageUrl, index) => (
+                    <div
+                      key={imageUrl}
+                      className="overflow-hidden rounded-lg border border-border bg-secondary"
+                    >
+                      <div className="relative aspect-video bg-background">
+                        <img
+                          src={imageUrl}
+                          alt={`Imagem ${index + 1} do banner`}
+                          className="h-full w-full object-cover"
+                        />
+                        {index === 0 && (
+                          <Badge className="absolute left-2 top-2">
+                            Principal
+                          </Badge>
+                        )}
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="icon"
+                          onClick={() => removeHeroImage(imageUrl)}
+                          disabled={
+                            isLoadingHomeInfo ||
+                            isSavingGeneralSettings ||
+                            isUploadingHeroImage
+                          }
+                          className="absolute right-2 top-2 h-8 w-8"
+                          aria-label="Remover imagem do banner"
+                        >
+                          <X size={14} />
+                        </Button>
+                      </div>
+                      <p className="truncate px-3 py-2 text-xs text-muted-foreground">
+                        {imageUrl}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border bg-secondary/40 px-4 py-6 text-center text-sm text-muted-foreground">
+                  Nenhuma imagem adicionada ao banner.
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="bg-card rounded-xl border border-border p-6">
             <h3 className="text-lg font-medium text-foreground mb-4">Theme Settings</h3>
             <div className="space-y-4">
@@ -1636,8 +1833,19 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
           </div>
 
           <div className="flex justify-end">
-            <Button className="gap-2">
-              <Save size={14} />
+            <Button
+              className="gap-2"
+              onClick={saveAppearanceSettings}
+              disabled={
+                isLoadingBusinessProfile ||
+                isLoadingHomeInfo ||
+                isSavingGeneralSettings ||
+                isUploadingProfilePhoto ||
+                isUploadingBusinessLogo ||
+                isUploadingHeroImage
+              }
+            >
+              {isSavingGeneralSettings ? <Spinner /> : <Save size={14} />}
               Salvar Configurações
             </Button>
           </div>
