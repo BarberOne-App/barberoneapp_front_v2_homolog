@@ -4,11 +4,7 @@ interface CloudinaryUploadResponse {
   secure_url?: string;
 }
 
-export async function uploadImage(file: File) {
-  if (!file.type.startsWith('image/')) {
-    throw new Error('Selecione apenas arquivos de imagem.');
-  }
-
+function getCloudinaryConfig() {
   const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
   const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
@@ -16,12 +12,17 @@ export async function uploadImage(file: File) {
     throw new Error('Configuracao do Cloudinary nao encontrada.');
   }
 
+  return { cloudName, uploadPreset };
+}
+
+async function uploadCloudinaryFile(file: File, resourceType: 'image' | 'raw') {
+  const { cloudName, uploadPreset } = getCloudinaryConfig();
   const formData = new FormData();
   formData.append('file', file);
   formData.append('upload_preset', uploadPreset);
 
   const response = await axios.post<CloudinaryUploadResponse>(
-    `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+    `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
     formData
   );
 
@@ -30,6 +31,26 @@ export async function uploadImage(file: File) {
   }
 
   return response.data.secure_url;
+}
+
+export async function uploadImage(file: File) {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Selecione apenas arquivos de imagem.');
+  }
+
+  return uploadCloudinaryFile(file, 'image');
+}
+
+export async function uploadPdf(file: File) {
+  const isPdf =
+    file.type === 'application/pdf' ||
+    file.name.toLowerCase().endsWith('.pdf');
+
+  if (!isPdf) {
+    throw new Error('Selecione apenas arquivos PDF.');
+  }
+
+  return uploadCloudinaryFile(file, 'raw');
 }
 
 export async function uploadHeroImage(file: File) {
