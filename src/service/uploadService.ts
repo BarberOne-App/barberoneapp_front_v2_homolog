@@ -39,3 +39,7 @@ export async function uploadHeroImage(file: File) {
 export async function uploadBusinessLogo(file: File) {
   return uploadImage(file);
 }
+
+export async function uploadProfilePhoto(file: File) {
+  return uploadImage(file);
+}

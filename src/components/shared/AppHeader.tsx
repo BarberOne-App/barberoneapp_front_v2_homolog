@@ -54,6 +54,7 @@ export function AppHeader({
     .slice(0, 2)
     .map((item) => item[0]?.toUpperCase())
     .join("");
+  const profilePhotoUrl = user?.photoUrl?.trim() || "";
 
   useEffect(() => {
     function refreshBarbershop() {
@@ -123,7 +124,7 @@ export function AppHeader({
         <div className="flex items-center gap-3 border-l border-border pl-3">
           <Avatar className="h-9 w-9">
             <AvatarImage
-              src={`https://i.pravatar.cc/150?u=${user?.id || user?.email || "barberone"}`}
+              src={profilePhotoUrl}
               alt={userName}
             />
             <AvatarFallback className="bg-primary/10 text-sm text-primary">

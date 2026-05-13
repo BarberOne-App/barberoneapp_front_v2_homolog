@@ -8,6 +8,7 @@ export interface User {
   name: string;
   email: string;
   role?: string;
+  photoUrl?: string | null;
 }
 
 export interface AuthContextData {
@@ -17,6 +18,7 @@ export interface AuthContextData {
 
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  updateUser: (user: User) => void;
 }
 
 interface Props {
@@ -85,6 +87,12 @@ export function AuthProvider({ children }: Props) {
     setUser(null);
   }
 
+  function updateUser(updatedUser: User) {
+    localStorage.setItem("user", JSON.stringify(updatedUser));
+    setUser(updatedUser);
+    window.dispatchEvent(new Event("user:updated"));
+  }
+
   const signed = Boolean(user && localStorage.getItem("token"));
 
   return (
@@ -95,6 +103,7 @@ export function AuthProvider({ children }: Props) {
         loading: false,
         login,
         logout,
+        updateUser,
       }}
     >
       {children}
