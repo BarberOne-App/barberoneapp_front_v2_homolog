@@ -1,168 +1,809 @@
-import { Search, Filter, Plus, MoreHorizontal, Phone, Mail, Calendar } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useTableSelection } from '@/hooks/useTableSelection';
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  Calendar,
+  Edit,
+  Filter,
+  Loader2,
+  Mail,
+  MoreHorizontal,
+  Phone,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
+import { toast } from "sonner";
 
-interface Customer {
-  id: number;
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AppCalendar } from "@/components/AppCalendar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useTableSelection } from "@/hooks/useTableSelection";
+import {
+  createUser,
+  deleteUser,
+  listUsers,
+  updateUser,
+  type UserProfile,
+} from "@/service/userService";
+
+type CustomerStatus = "active" | "inactive" | "new";
+type CustomerFilter = "all" | CustomerStatus | "missing-phone";
+
+interface CustomerFormState {
   name: string;
   email: string;
   phone: string;
-  visits: number;
-  lastVisit: string;
-  status: 'active' | 'inactive';
-  avatar: string;
+  cpf: string;
+  birthDate: string;
+  password: string;
 }
 
-const customers: Customer[] = [
-  { id: 1, name: 'Liam Thompson', email: 'liam@email.com', phone: '(11) 98765-4321', visits: 24, lastVisit: 'May 15, 2025', status: 'active', avatar: 'https://i.pravatar.cc/150?u=liam' },
-  { id: 2, name: 'Noah Johnson', email: 'noah@email.com', phone: '(11) 98765-4322', visits: 18, lastVisit: 'May 22, 2025', status: 'active', avatar: 'https://i.pravatar.cc/150?u=noah' },
-  { id: 3, name: 'Ethan Davis', email: 'ethan@email.com', phone: '(11) 98765-4323', visits: 32, lastVisit: 'May 18, 2025', status: 'active', avatar: 'https://i.pravatar.cc/150?u=ethan' },
-  { id: 4, name: 'Lucas Miller', email: 'lucas@email.com', phone: '(11) 98765-4324', visits: 8, lastVisit: 'Apr 20, 2025', status: 'inactive', avatar: 'https://i.pravatar.cc/150?u=lucas' },
-  { id: 5, name: 'Mason Wilson', email: 'mason@email.com', phone: '(11) 98765-4325', visits: 45, lastVisit: 'May 25, 2025', status: 'active', avatar: 'https://i.pravatar.cc/150?u=mason' },
-  { id: 6, name: 'James Anderson', email: 'james@email.com', phone: '(11) 98765-4326', visits: 12, lastVisit: 'May 10, 2025', status: 'active', avatar: 'https://i.pravatar.cc/150?u=james2' },
-  { id: 7, name: 'Benjamin Moore', email: 'benjamin@email.com', phone: '(11) 98765-4327', visits: 6, lastVisit: 'Mar 15, 2025', status: 'inactive', avatar: 'https://i.pravatar.cc/150?u=benjamin' },
-  { id: 8, name: 'William Taylor', email: 'william@email.com', phone: '(11) 98765-4328', visits: 28, lastVisit: 'May 28, 2025', status: 'active', avatar: 'https://i.pravatar.cc/150?u=william' },
-];
+const emptyForm: CustomerFormState = {
+  name: "",
+  email: "",
+  phone: "",
+  cpf: "",
+  birthDate: "",
+  password: "",
+};
+
+function onlyDigits(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function maskPhone(value: string) {
+  const digits = onlyDigits(value).slice(0, 11);
+
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+function maskCpf(value: string) {
+  const digits = onlyDigits(value).slice(0, 11);
+
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) {
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  }
+
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+function dateStringToDate(value: string) {
+  if (!value) return undefined;
+
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+
+  return new Date(year, month - 1, day);
+}
+
+function dateToDateString(date?: Date) {
+  if (!date) return "";
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "Sem visitas";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Sem visitas";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatPhone(value?: string | null) {
+  const digits = onlyDigits(value ?? "");
+
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+
+  return value || "Sem telefone";
+}
+
+function formatCpf(value?: string | null) {
+  const digits = onlyDigits(value ?? "");
+
+  if (digits.length !== 11) return value || "";
+
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+function getCustomerStatus(customer: UserProfile): CustomerStatus {
+  const visits = customer.visits ?? 0;
+
+  if (visits === 0) return "new";
+  if (!customer.lastVisit) return "inactive";
+
+  const lastVisit = new Date(customer.lastVisit);
+  if (Number.isNaN(lastVisit.getTime())) return "inactive";
+
+  const daysSinceLastVisit =
+    (Date.now() - lastVisit.getTime()) / (1000 * 60 * 60 * 24);
+
+  return daysSinceLastVisit <= 180 ? "active" : "inactive";
+}
+
+function statusLabel(status: CustomerStatus) {
+  const labels = {
+    active: "Ativo",
+    inactive: "Inativo",
+    new: "Novo",
+  };
+
+  return labels[status];
+}
+
+function statusClass(status: CustomerStatus) {
+  const classes = {
+    active: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+    inactive: "bg-gray-500/10 text-gray-500 border-gray-500/20",
+    new: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  };
+
+  return classes[status];
+}
+
+function getApiMessage(error: unknown) {
+  const responseData = (error as { response?: { data?: unknown } })?.response?.data;
+
+  if (Array.isArray(responseData)) return responseData.join(" ");
+
+  if (responseData && typeof responseData === "object") {
+    const message = (responseData as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+
+  if (error instanceof Error) return error.message;
+
+  return "Nao foi possivel concluir a operacao.";
+}
+
+function buildPasswordForm(): CustomerFormState {
+  return {
+    name: "",
+    email: "",
+    phone: "",
+    cpf: "",
+    birthDate: "",
+    password: "",
+  };
+}
 
 export function CustomersPage() {
+  const [customers, setCustomers] = useState<UserProfile[]>([]);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<CustomerFilter>("all");
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<UserProfile | null>(null);
+  const [form, setForm] = useState<CustomerFormState>(emptyForm);
+  const [customerToDelete, setCustomerToDelete] = useState<UserProfile | null>(null);
+
+  const limit = 20;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const result = await listUsers({
+          role: "client",
+          q: search.trim() || undefined,
+          page,
+          limit,
+        });
+
+        if (!controller.signal.aborted) {
+          setCustomers(result.items);
+          setTotal(result.total);
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(getApiMessage(err));
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [page, search]);
+
+  const filteredCustomers = useMemo(() => {
+    return customers.filter((customer) => {
+      const status = getCustomerStatus(customer);
+
+      if (filter === "all") return true;
+      if (filter === "missing-phone") return !customer.phone;
+
+      return status === filter;
+    });
+  }, [customers, filter]);
+
+  const stats = useMemo(() => {
+    const active = customers.filter(
+      (customer) => getCustomerStatus(customer) === "active",
+    ).length;
+    const newCustomers = customers.filter(
+      (customer) => getCustomerStatus(customer) === "new",
+    ).length;
+    const withPhone = customers.filter((customer) => Boolean(customer.phone)).length;
+
+    return { active, newCustomers, withPhone };
+  }, [customers]);
+
   const { selectedRows, toggleRow, toggleAll } = useTableSelection(
-    customers.map((customer) => customer.id)
+    filteredCustomers.map((customer) => customer.id),
   );
+
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  function openCreateDialog() {
+    setEditingCustomer(null);
+    setForm({ ...emptyForm, password: "123456" });
+    setDialogOpen(true);
+  }
+
+  function openEditDialog(customer: UserProfile) {
+    setEditingCustomer(customer);
+    setForm(buildPasswordForm());
+    setDialogOpen(true);
+  }
+
+  function setField(field: keyof CustomerFormState, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function validateForm() {
+    if (editingCustomer) {
+      if (form.password.trim().length < 4) {
+        return "Informe uma nova senha com no minimo 4 caracteres.";
+      }
+
+      return null;
+    }
+
+    if (!form.name.trim()) return "Informe o nome do cliente.";
+    if (!form.email.trim()) return "Informe o e-mail do cliente.";
+
+    const phone = onlyDigits(form.phone);
+    if (phone && (phone.length < 10 || phone.length > 15)) {
+      return "O telefone deve ter entre 10 e 15 digitos.";
+    }
+
+    const cpf = onlyDigits(form.cpf);
+    if (cpf && cpf.length !== 11) {
+      return "O CPF deve ter 11 digitos.";
+    }
+
+    if (!editingCustomer && form.password.trim().length < 4) {
+      return "A senha inicial deve ter no minimo 4 caracteres.";
+    }
+
+    return null;
+  }
+
+  async function reloadCurrentPage() {
+    const result = await listUsers({
+      role: "client",
+      q: search.trim() || undefined,
+      page,
+      limit,
+    });
+
+    setCustomers(result.items);
+    setTotal(result.total);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const validationMessage = validateForm();
+    if (validationMessage) {
+      toast.error(validationMessage);
+      return;
+    }
+
+    const payload = {
+      name: form.name.trim(),
+      email: form.email.trim().toLowerCase(),
+      phone: onlyDigits(form.phone) || null,
+      cpf: onlyDigits(form.cpf) || null,
+      birthDate: form.birthDate || null,
+      photoUrl: null,
+    };
+
+    setSaving(true);
+
+    try {
+      if (editingCustomer) {
+        await updateUser(editingCustomer.id, {
+          resetPassword: true,
+          newPassword: form.password.trim(),
+        });
+        toast.success("Senha do cliente atualizada.");
+      } else {
+        await createUser({
+          ...payload,
+          password: form.password.trim(),
+          role: "client",
+          isAdmin: false,
+        });
+        toast.success("Cliente cadastrado.");
+      }
+
+      setDialogOpen(false);
+      await reloadCurrentPage();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!customerToDelete) return;
+
+    try {
+      await deleteUser(customerToDelete.id);
+      toast.success("Cliente removido.");
+      setCustomerToDelete(null);
+      await reloadCurrentPage();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    }
+  }
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Total Clientes</p>
-          <h3 className="text-2xl font-semibold text-foreground">1.247</h3>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Total Clientes</p>
+          <h3 className="text-2xl font-semibold text-foreground">{total}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Clientes Ativos</p>
-          <h3 className="text-2xl font-semibold text-foreground">1.089</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Clientes Ativos</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.active}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Novos Clientes no mês</p>
-          <h3 className="text-2xl font-semibold text-foreground">86</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Novos Clientes</p>
+          <h3 className="text-2xl font-semibold text-foreground">
+            {stats.newCustomers}
+          </h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Taxa de Retenção</p>
-          <h3 className="text-2xl font-semibold text-foreground">87.3%</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Com Telefone</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.withPhone}</h3>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
           <h3 className="text-base font-medium text-foreground">Todos os Clientes</h3>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
-              <input 
-                type="text" 
-                placeholder="Buscar Clientes..."
-                className="w-56 bg-secondary text-sm text-foreground placeholder:text-muted-foreground rounded-md pl-9 pr-3 py-1.5 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                size={14}
+              />
+              <Input
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Buscar clientes..."
+                className="h-9 w-full bg-secondary pl-9 text-sm sm:w-60"
               />
             </div>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Filter size={14} />
-              Filtro
-            </Button>
-            <Button size="sm" className="gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Filter size={14} />
+                  Filtro
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuRadioGroup
+                  value={filter}
+                  onValueChange={(value) => setFilter(value as CustomerFilter)}
+                >
+                  <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="active">Ativos</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="new">Novos</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="inactive">Inativos</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="missing-phone">
+                    Sem telefone
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button size="sm" className="gap-2" onClick={openCreateDialog}>
               <Plus size={14} />
-              Adicionar Clientes
+              Adicionar Cliente
             </Button>
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="w-10 p-4">
-                  <Checkbox 
-                    checked={selectedRows.length === customers.length && customers.length > 0}
-                    onCheckedChange={toggleAll}
-                  />
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Cliente</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Contato</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Visitas</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Última Visita</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-                <th className="w-10 px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map((customer) => (
-                <tr 
-                  key={customer.id} 
-                  className="border-b border-border last:border-b-0 hover:bg-secondary/30 transition-colors"
-                >
-                  <td className="p-4">
-                    <Checkbox 
-                      checked={selectedRows.includes(customer.id)}
-                      onCheckedChange={() => toggleRow(customer.id)}
+        {error ? (
+          <div className="p-6 text-sm text-destructive">{error}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="w-10 p-4">
+                    <Checkbox
+                      checked={
+                        selectedRows.length === filteredCustomers.length &&
+                        filteredCustomers.length > 0
+                      }
+                      onCheckedChange={toggleAll}
                     />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10">
-                        <AvatarImage src={customer.avatar} alt={customer.name} />
-                        <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                          {customer.name.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm font-medium text-foreground">{customer.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Mail size={12} />
-                        {customer.email}
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Phone size={12} />
-                        {customer.phone}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-foreground">{customer.visits}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar size={14} />
-                      {customer.lastVisit}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge 
-                      variant="outline" 
-                      className={`text-xs capitalize px-2 py-0.5 rounded-full ${
-                        customer.status === 'active' 
-                          ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                          : 'bg-gray-500/10 text-gray-500 border-gray-500/20'
-                      }`}
-                    >
-                      {customer.status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button className="p-1 text-muted-foreground hover:text-foreground transition-colors">
-                      <MoreHorizontal size={16} />
-                    </button>
-                  </td>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Cliente
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Contato
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Visitas
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Ultima Visita
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Status
+                  </th>
+                  <th className="w-10 px-4 py-3" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
+                      <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+                      Carregando clientes...
+                    </td>
+                  </tr>
+                ) : filteredCustomers.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
+                      Nenhum cliente encontrado.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredCustomers.map((customer) => {
+                    const status = getCustomerStatus(customer);
+
+                    return (
+                      <tr
+                        key={customer.id}
+                        className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
+                      >
+                        <td className="p-4">
+                          <Checkbox
+                            checked={selectedRows.includes(customer.id)}
+                            onCheckedChange={() => toggleRow(customer.id)}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage
+                                src={customer.photoUrl ?? undefined}
+                                alt={customer.name}
+                              />
+                              <AvatarFallback className="bg-primary/10 text-sm text-primary">
+                                {getInitials(customer.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="text-sm font-medium text-foreground">
+                                {customer.name}
+                              </p>
+                              {customer.cpf ? (
+                                <p className="text-xs text-muted-foreground">
+                                  CPF {formatCpf(customer.cpf)}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Mail size={12} />
+                              {customer.email || "Sem e-mail"}
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Phone size={12} />
+                              {formatPhone(customer.phone)}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-foreground">
+                          {customer.visits ?? 0}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Calendar size={14} />
+                            {formatDate(customer.lastVisit)}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant="outline"
+                            className={`rounded-full px-2 py-0.5 text-xs ${statusClass(status)}`}
+                          >
+                            {statusLabel(status)}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
+                                <MoreHorizontal size={16} />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEditDialog(customer)}>
+                                <Edit size={14} />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() => setCustomerToDelete(customer)}
+                              >
+                                <Trash2 size={14} />
+                                Remover
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            Pagina {page} de {totalPages} - {total} clientes
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages || loading}
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            >
+              Proxima
+            </Button>
+          </div>
         </div>
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <DialogHeader>
+              <DialogTitle>
+                {editingCustomer ? "Editar Cliente" : "Adicionar Cliente"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingCustomer
+                  ? "Altere apenas a senha de acesso do cliente."
+                  : "Cadastre um cliente para esta barbearia."}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {!editingCustomer ? (
+                <>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="customer-name">Nome</Label>
+                    <Input
+                      id="customer-name"
+                      value={form.name}
+                      onChange={(event) => setField("name", event.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="customer-email">E-mail</Label>
+                    <Input
+                      id="customer-email"
+                      type="email"
+                      value={form.email}
+                      onChange={(event) => setField("email", event.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="customer-phone">Telefone</Label>
+                    <Input
+                      id="customer-phone"
+                      value={form.phone}
+                      onChange={(event) => setField("phone", maskPhone(event.target.value))}
+                      placeholder="(11) 99999-9999"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="customer-cpf">CPF</Label>
+                    <Input
+                      id="customer-cpf"
+                      value={form.cpf}
+                      onChange={(event) => setField("cpf", maskCpf(event.target.value))}
+                      placeholder="000.000.000-00"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="customer-birth-date">Data de nascimento</Label>
+                    <AppCalendar
+                      value={dateStringToDate(form.birthDate)}
+                      onChange={(date) => setField("birthDate", dateToDateString(date))}
+                      placeholder="Selecionar data"
+                      disableFuture
+                      className="h-9 rounded-md"
+                    />
+                  </div>
+                </>
+              ) : null}
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="customer-password">
+                  {editingCustomer ? "Nova senha" : "Senha inicial"}
+                </Label>
+                <Input
+                  id="customer-password"
+                  type="password"
+                  value={form.password}
+                  onChange={(event) => setField("password", event.target.value)}
+                  placeholder={
+                    editingCustomer
+                      ? "Preencha apenas se quiser redefinir"
+                      : "Minimo 4 caracteres"
+                  }
+                  required
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDialogOpen(false)}
+                disabled={saving}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando
+                  </>
+                ) : (
+                  "Salvar"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(customerToDelete)}
+        onOpenChange={(open) => {
+          if (!open) setCustomerToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover cliente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acao remove {customerToDelete?.name} do cadastro da barbearia.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
