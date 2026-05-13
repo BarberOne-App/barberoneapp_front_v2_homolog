@@ -16,6 +16,8 @@ import {
   Plus,
   X,
   CircleUserRound,
+  FileText,
+  ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -37,6 +39,7 @@ import {
 import {
   uploadBusinessLogo,
   uploadHeroImage,
+  uploadPdf,
   uploadProfilePhoto,
 } from '../../service/uploadService';
 import {
@@ -179,6 +182,10 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [isLoadingSecuritySettings, setIsLoadingSecuritySettings] = useState(false);
+  const [isSavingSecuritySettings, setIsSavingSecuritySettings] = useState(false);
+  const [isUploadingTermsDocument, setIsUploadingTermsDocument] = useState(false);
+  const termsDocumentFileInputRef = useRef<HTMLInputElement | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<
     Record<BookingPaymentMethod, boolean>
   >({
@@ -194,6 +201,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
   const [isLoadingPaymentSettings, setIsLoadingPaymentSettings] = useState(false);
   const [isSavingPaymentSettings, setIsSavingPaymentSettings] = useState(false);
   const barbershop = useMemo(() => getStoredBarbershop(), []);
+  const canManageSecurityDocuments = user?.role === 'admin' || user?.isAdmin === true;
   const registrationLink = useMemo(() => {
     const slug = businessSlug || barbershop?.slug;
 
@@ -349,6 +357,42 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
       isMounted = false;
     };
   }, [activeTab, hasLoadedPaymentSettings]);
+
+  useEffect(() => {
+    if (activeTab !== 'security' || settings) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadSecuritySettings() {
+      setIsLoadingSecuritySettings(true);
+
+      try {
+        const settingsData = await getSettings();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setSettings(settingsData);
+      } catch {
+        if (isMounted) {
+          toast.error('Erro ao carregar documento de termos.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingSecuritySettings(false);
+        }
+      }
+    }
+
+    loadSecuritySettings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, settings]);
 
   useEffect(() => {
     setProfilePhotoUrl(user?.photoUrl ?? '');
@@ -874,6 +918,82 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
     }
   }
 
+  async function saveTermsDocument(
+    termsDocumentUrl: string,
+    termsDocumentName: string,
+    successMessage: string
+  ) {
+    if (!canManageSecurityDocuments) {
+      toast.error('Apenas administradores podem alterar documentos.');
+      return;
+    }
+
+    setIsSavingSecuritySettings(true);
+
+    try {
+      const currentSettings = settings ?? await getSettings();
+      const updatedSettings = await updateSettings({
+        pixKey: currentSettings.pixKey ?? '',
+        termsDocumentUrl,
+        termsDocumentName,
+        hiddenBookingPaymentMethods:
+          currentSettings.hiddenBookingPaymentMethods ?? getHiddenBookingPaymentMethods(),
+      });
+
+      setSettings(updatedSettings);
+      toast.success(successMessage);
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      toast.error(message || 'Erro ao salvar documento.');
+    } finally {
+      setIsSavingSecuritySettings(false);
+    }
+  }
+
+  async function uploadTermsDocumentFile(file: File) {
+    const isPdf =
+      file.type === 'application/pdf' ||
+      file.name.toLowerCase().endsWith('.pdf');
+
+    if (!isPdf) {
+      toast.error('Selecione apenas arquivos PDF.');
+      return;
+    }
+
+    setIsUploadingTermsDocument(true);
+
+    try {
+      const secureUrl = await uploadPdf(file);
+      await saveTermsDocument(
+        secureUrl,
+        file.name,
+        'Documento de termos atualizado com sucesso.'
+      );
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      toast.error(message || 'Erro ao enviar PDF.');
+    } finally {
+      setIsUploadingTermsDocument(false);
+      if (termsDocumentFileInputRef.current) {
+        termsDocumentFileInputRef.current.value = '';
+      }
+    }
+  }
+
+  function handleTermsDocumentFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    void uploadTermsDocumentFile(file);
+  }
+
+  function removeTermsDocument() {
+    void saveTermsDocument('', '', 'Documento de termos removido com sucesso.');
+  }
+
   async function savePaymentSettings() {
     if (isSavingPaymentSettings || isLoadingPaymentSettings) {
       return;
@@ -1304,6 +1424,92 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
               </Button>
             </div>
           </div>
+
+          {canManageSecurityDocuments && (
+            <div className="bg-card rounded-xl border border-border p-6">
+              <div className="mb-4 flex items-start gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <FileText size={18} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium text-foreground">
+                    Termos e documentos
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Envie o PDF que sera usado como termo ou documento oficial da barbearia.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {settings?.termsDocumentUrl ? (
+                  <div className="flex flex-col gap-3 rounded-lg border border-border bg-secondary/40 p-4 md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {settings.termsDocumentName || 'Documento em PDF'}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {settings.termsDocumentUrl}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button asChild variant="outline" size="sm" className="gap-2">
+                        <a
+                          href={settings.termsDocumentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <ExternalLink size={14} />
+                          Abrir PDF
+                        </a>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={removeTermsDocument}
+                        disabled={isSavingSecuritySettings || isUploadingTermsDocument}
+                      >
+                        <X size={14} />
+                        Remover
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border bg-secondary/40 px-4 py-6 text-center text-sm text-muted-foreground">
+                    Nenhum PDF enviado.
+                  </div>
+                )}
+
+                <input
+                  ref={termsDocumentFileInputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={handleTermsDocumentFileChange}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => termsDocumentFileInputRef.current?.click()}
+                  disabled={
+                    isLoadingSecuritySettings ||
+                    isSavingSecuritySettings ||
+                    isUploadingTermsDocument
+                  }
+                >
+                  {isUploadingTermsDocument || isSavingSecuritySettings ? (
+                    <Spinner />
+                  ) : (
+                    <Upload size={14} />
+                  )}
+                  {settings?.termsDocumentUrl ? 'Substituir PDF' : 'Enviar PDF'}
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="bg-card rounded-xl border border-border p-6">
             <h3 className="text-lg font-medium text-foreground mb-4">Two-Factor Authentication</h3>
