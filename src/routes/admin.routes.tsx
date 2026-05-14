@@ -2,15 +2,12 @@ import { AdminDashboard } from "../pages/admin/AdminDashboard";
 import { AdminSettingsPage } from "../pages/admin/AdminSettingsPage";
 import { ProductsPage } from "../pages/admin/ProductsPage";
 import { PromotionsPage } from "../pages/admin/PromotionsPage";
-import { StaffPage } from "../pages/admin/StaffPage";
 import { BookingsPage } from "../pages/shared/BookingsPage";
 import { CustomersPage } from "../pages/shared/CustomersPage";
 import { HelpCenterPage } from "../pages/shared/HelpCenterPage";
 import { OverviewPage } from "../pages/shared/OverviewPage";
 import { PaymentsPage } from "../pages/shared/PaymentsPage";
-import { PermissionsPage } from "../pages/shared/PermissionsPage";
 import { ReviewsPage } from "../pages/shared/ReviewsPage";
-import { RolesPage } from "../pages/shared/RolesPage";
 import { SchedulesPage } from "../pages/shared/SchedulesPage";
 import { ServicesPage } from "../pages/shared/ServicesPage";
 import { UsersPage } from "../pages/shared/UsersPage";
@@ -30,12 +27,6 @@ export const adminRoutes: AppRoute[] = [
     Component: OverviewPage,
   },
   {
-    path: "/customers",
-    title: "Clientes",
-    breadcrumbs: ["Operacao", "Clientes"],
-    Component: CustomersPage,
-  },
-  {
     path: "/bookings",
     title: "Agendamentos",
     breadcrumbs: ["Operacao", "Agendamentos"],
@@ -48,10 +39,16 @@ export const adminRoutes: AppRoute[] = [
     Component: PaymentsPage,
   },
   {
-    path: "/staff",
+    path: "/users",
     title: "Funcionarios",
-    breadcrumbs: ["Gerenciar", "Funcionarios"],
-    Component: StaffPage,
+    breadcrumbs: ["Administracao", "Funcionarios"],
+    Component: UsersPage,
+  },
+  {
+    path: "/customers",
+    title: "Clientes",
+    breadcrumbs: ["Administracao", "Clientes"],
+    Component: CustomersPage,
   },
   {
     path: "/services",
@@ -82,24 +79,6 @@ export const adminRoutes: AppRoute[] = [
     title: "Avaliacoes",
     breadcrumbs: ["Relacionamento", "Avaliacoes"],
     Component: ReviewsPage,
-  },
-  {
-    path: "/users",
-    title: "Usuarios",
-    breadcrumbs: ["Administracao", "Usuarios"],
-    Component: UsersPage,
-  },
-  {
-    path: "/roles",
-    title: "Perfis",
-    breadcrumbs: ["Administracao", "Perfis"],
-    Component: RolesPage,
-  },
-  {
-    path: "/permissions",
-    title: "Permissoes",
-    breadcrumbs: ["Administracao", "Permissoes"],
-    Component: PermissionsPage,
   },
   {
     path: "/settings",
