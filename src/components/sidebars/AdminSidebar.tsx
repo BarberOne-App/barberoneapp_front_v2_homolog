@@ -4,14 +4,11 @@ import {
   CreditCard,
   HelpCircle,
   Home,
-  Lock,
   Package,
   Scissors,
   Settings,
-  Shield,
   Star,
   Tag,
-  User,
   UserCog,
   Users,
 } from "lucide-react";
@@ -29,7 +26,6 @@ const sections: SidebarSection[] = [
   {
     title: "Operacao",
     items: [
-      { icon: Users, label: "Clientes", href: "/customers" },
       { icon: Calendar, label: "Agendamentos", href: "/bookings" },
       { icon: CreditCard, label: "Pagamentos", href: "/payments" },
     ],
@@ -37,7 +33,6 @@ const sections: SidebarSection[] = [
   {
     title: "Gerenciar",
     items: [
-      { icon: UserCog, label: "Funcionarios", href: "/staff" },
       { icon: Scissors, label: "Servicos", href: "/services" },
       { icon: Package, label: "Produtos", href: "/products" },
       { icon: Calendar, label: "Calendario", href: "/schedules" },
@@ -48,9 +43,8 @@ const sections: SidebarSection[] = [
   {
     title: "Administracao",
     items: [
-      { icon: User, label: "Usuarios", href: "/users" },
-      { icon: Shield, label: "Perfis", href: "/roles" },
-      { icon: Lock, label: "Permissoes", href: "/permissions" },
+      { icon: UserCog, label: "Funcionarios", href: "/users" },
+      { icon: Users, label: "Clientes", href: "/customers" },
       { icon: Settings, label: "Configuracoes", href: "/settings" },
     ],
   },

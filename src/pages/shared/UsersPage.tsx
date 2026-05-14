@@ -55,12 +55,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useTableSelection } from "@/hooks/useTableSelection";
 import {
   createUser,
   deleteUser,
   listUsers,
   updateUser,
+  updateUserPermissions,
   type ListUsersParams,
   type UserProfile,
 } from "@/service/userService";
@@ -68,6 +70,53 @@ import {
 type UserRole = NonNullable<ListUsersParams["role"]>;
 type ManagedUserRole = Exclude<UserRole, "client">;
 type RoleFilter = "all" | ManagedUserRole;
+type PermissionKey =
+  | "viewAdmin"
+  | "manageEmployees"
+  | "manageProducts"
+  | "addProducts"
+  | "editProducts"
+  | "manageServices"
+  | "addServices"
+  | "editServices"
+  | "managePayments"
+  | "managePayroll"
+  | "manageAgendamentos"
+  | "manageOffScheduleAppointments"
+  | "manageBlockedDates"
+  | "manageBenefits"
+  | "manageSettings"
+  | "manageGallery";
+
+type UserPermissions = Record<PermissionKey, boolean>;
+
+const permissionOptions: Array<{
+  key: PermissionKey;
+  label: string;
+  description: string;
+}> = [
+  { key: "viewAdmin", label: "Acessar painel admin", description: "Permite entrar nas areas administrativas." },
+  { key: "manageEmployees", label: "Gerenciar funcionarios", description: "Permite cadastrar, editar e remover funcionarios." },
+  { key: "manageAgendamentos", label: "Gerenciar agendamentos", description: "Permite criar, alterar e cancelar agendamentos." },
+  { key: "manageOffScheduleAppointments", label: "Agendamentos fora do horario", description: "Permite encaixes fora da grade configurada." },
+  { key: "manageBlockedDates", label: "Bloquear agenda", description: "Permite criar e remover bloqueios de agenda." },
+  { key: "manageServices", label: "Gerenciar servicos", description: "Permite administrar servicos." },
+  { key: "addServices", label: "Adicionar servicos", description: "Permite cadastrar novos servicos." },
+  { key: "editServices", label: "Editar servicos", description: "Permite alterar servicos existentes." },
+  { key: "manageProducts", label: "Gerenciar produtos", description: "Permite administrar produtos." },
+  { key: "addProducts", label: "Adicionar produtos", description: "Permite cadastrar novos produtos." },
+  { key: "editProducts", label: "Editar produtos", description: "Permite alterar produtos existentes." },
+  { key: "managePayments", label: "Gerenciar pagamentos", description: "Permite acessar e administrar pagamentos." },
+  { key: "managePayroll", label: "Gerenciar pagamentos de equipe", description: "Permite controlar vales e repasses." },
+  { key: "manageBenefits", label: "Gerenciar beneficios", description: "Permite administrar planos e assinaturas." },
+  { key: "manageGallery", label: "Gerenciar galeria", description: "Permite alterar imagens da barbearia." },
+  { key: "manageSettings", label: "Gerenciar configuracoes", description: "Permite alterar configuracoes gerais." },
+];
+
+const emptyPermissions = permissionOptions.reduce((acc, permission) => {
+  acc[permission.key] = false;
+  return acc;
+}, {} as UserPermissions);
 
 interface UserFormState {
   name: string;
@@ -170,6 +219,17 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
+function normalizePermissions(permissions?: Record<string, boolean> | null): UserPermissions {
+  return permissionOptions.reduce((acc, permission) => {
+    acc[permission.key] = permissions?.[permission.key] === true;
+    return acc;
+  }, {} as UserPermissions);
+}
+
+function countEnabledPermissions(permissions?: Record<string, boolean> | null) {
+  return permissionOptions.filter((permission) => permissions?.[permission.key] === true).length;
+}
+
 function getApiMessage(error: unknown) {
   const responseData = (error as { response?: { data?: unknown } })?.response?.data;
 
@@ -220,10 +280,16 @@ export function UsersPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingPermissions, setSavingPermissions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [form, setForm] = useState<UserFormState>(emptyForm);
+  const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false);
+  const [permissionsUser, setPermissionsUser] = useState<UserProfile | null>(null);
+  const [permissionsForm, setPermissionsForm] = useState<UserPermissions>({
+    ...emptyPermissions,
+  });
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
 
   const limit = 20;
@@ -291,9 +357,31 @@ export function UsersPage() {
     setDialogOpen(true);
   }
 
+  function openPermissionsDialog(user: UserProfile) {
+    setPermissionsUser(user);
+    setPermissionsForm(normalizePermissions(user.permissions));
+    setPermissionsDialogOpen(true);
+  }
+
+  function setPermission(permission: PermissionKey, checked: boolean) {
+    setPermissionsForm((current) => ({
+      ...current,
+      [permission]: checked,
+    }));
+  }
+
+  function setAllPermissions(checked: boolean) {
+    setPermissionsForm(
+      permissionOptions.reduce((acc, permission) => {
+        acc[permission.key] = checked;
+        return acc;
+      }, {} as UserPermissions),
+    );
+  }
+
   function validateForm() {
-    if (!form.name.trim()) return "Informe o nome do usuario.";
-    if (!form.email.trim()) return "Informe o e-mail do usuario.";
+    if (!form.name.trim()) return "Informe o nome do funcionario.";
+    if (!form.email.trim()) return "Informe o e-mail do funcionario.";
 
     const phone = onlyDigits(form.phone);
     if (phone && (phone.length < 10 || phone.length > 15)) {
@@ -344,13 +432,13 @@ export function UsersPage() {
           resetPassword: form.resetPassword,
           newPassword: form.resetPassword ? form.password.trim() : undefined,
         });
-        toast.success("Usuario atualizado.");
+        toast.success("Funcionario atualizado.");
       } else {
         await createUser({
           ...payload,
           password: form.password.trim(),
         });
-        toast.success("Usuario cadastrado.");
+        toast.success("Funcionario cadastrado.");
       }
 
       setDialogOpen(false);
@@ -367,7 +455,7 @@ export function UsersPage() {
 
     try {
       await deleteUser(userToDelete.id);
-      toast.success("Usuario removido.");
+      toast.success("Funcionario removido.");
       setUserToDelete(null);
 
       if (users.length === 1 && page > 1) {
@@ -380,11 +468,34 @@ export function UsersPage() {
     }
   }
 
+  async function handlePermissionsSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!permissionsUser) return;
+
+    const role = roleFromUser(permissionsUser);
+    const permissions = role === "admin" ? { ...emptyPermissions } : permissionsForm;
+
+    setSavingPermissions(true);
+
+    try {
+      await updateUserPermissions(permissionsUser.id, permissions);
+      toast.success("Permissoes atualizadas.");
+      setPermissionsDialogOpen(false);
+      setPermissionsUser(null);
+      await loadUsers();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSavingPermissions(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <div className="rounded-xl border border-border bg-card p-5">
-          <p className="mb-1 text-sm text-muted-foreground">Usuarios internos</p>
+          <p className="mb-1 text-sm text-muted-foreground">Funcionarios internos</p>
           <h3 className="text-2xl font-semibold text-foreground">{total}</h3>
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
@@ -403,7 +514,7 @@ export function UsersPage() {
 
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
-          <h3 className="text-base font-medium text-foreground">Todos os Usuarios</h3>
+          <h3 className="text-base font-medium text-foreground">Todos os Funcionarios</h3>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative">
               <Search
@@ -416,7 +527,7 @@ export function UsersPage() {
                   setSearch(event.target.value);
                   setPage(1);
                 }}
-                placeholder="Buscar usuarios..."
+                placeholder="Buscar funcionarios..."
                 className="h-9 w-full bg-secondary pl-9 text-sm sm:w-60"
               />
             </div>
@@ -446,7 +557,7 @@ export function UsersPage() {
             </DropdownMenu>
             <Button size="sm" className="gap-2" onClick={openCreateDialog}>
               <Plus size={14} />
-              Adicionar Usuario
+              Adicionar Funcionario
             </Button>
           </div>
         </div>
@@ -465,10 +576,13 @@ export function UsersPage() {
                     />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Usuario
+                    Funcionario
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Perfil
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Permissoes
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Contato
@@ -485,15 +599,15 @@ export function UsersPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
-                      Carregando usuarios...
+                      Carregando funcionarios...
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
-                      Nenhum usuario encontrado.
+                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                      Nenhum funcionario encontrado.
                     </td>
                   </tr>
                 ) : (
@@ -540,6 +654,29 @@ export function UsersPage() {
                           </Badge>
                         </td>
                         <td className="px-4 py-3">
+                          {role === "admin" ? (
+                            <Badge variant="outline" className="rounded-full px-2 py-0.5 text-xs">
+                              Acesso total
+                            </Badge>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-muted-foreground">
+                                {countEnabledPermissions(user.permissions)} ativas
+                              </span>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-2"
+                                onClick={() => openPermissionsDialog(user)}
+                              >
+                                <Shield size={14} />
+                                Alterar
+                              </Button>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Phone size={12} />
                             {formatPhone(user.phone)}
@@ -566,6 +703,10 @@ export function UsersPage() {
                                 <Edit size={14} />
                                 Editar
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openPermissionsDialog(user)}>
+                                <Shield size={14} />
+                                Permissoes
+                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 variant="destructive"
@@ -588,7 +729,7 @@ export function UsersPage() {
 
         <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>
-            Pagina {page} de {totalPages} - {total} usuarios
+            Pagina {page} de {totalPages} - {total} funcionarios
           </span>
           <div className="flex gap-2">
             <Button
@@ -616,12 +757,12 @@ export function UsersPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <DialogHeader>
               <DialogTitle>
-                {editingUser ? "Editar Usuario" : "Adicionar Usuario"}
+                {editingUser ? "Editar Funcionario" : "Adicionar Funcionario"}
               </DialogTitle>
               <DialogDescription>
                 {editingUser
-                  ? "Atualize os dados de acesso e perfil deste usuario."
-                  : "Cadastre um usuario vinculado a esta barbearia."}
+                  ? "Atualize os dados de acesso e perfil deste funcionario."
+                  : "Cadastre um funcionario vinculado a esta barbearia."}
               </DialogDescription>
             </DialogHeader>
 
@@ -691,7 +832,7 @@ export function UsersPage() {
                     checked={form.resetPassword}
                     onCheckedChange={(checked) => setField("resetPassword", checked === true)}
                   />
-                  Redefinir senha deste usuario
+                  Redefinir senha deste funcionario
                 </label>
               ) : null}
 
@@ -736,6 +877,98 @@ export function UsersPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={permissionsDialogOpen}
+        onOpenChange={(open) => {
+          setPermissionsDialogOpen(open);
+          if (!open) setPermissionsUser(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-3xl">
+          <form onSubmit={handlePermissionsSubmit} className="space-y-5">
+            <DialogHeader>
+              <DialogTitle>Permissoes do funcionario</DialogTitle>
+              <DialogDescription>
+                {permissionsUser
+                  ? `Defina os acessos de ${permissionsUser.name}.`
+                  : "Defina os acessos deste funcionario."}
+              </DialogDescription>
+            </DialogHeader>
+
+            {permissionsUser && roleFromUser(permissionsUser) === "admin" ? (
+              <div className="rounded-md border border-border bg-secondary/50 p-4 text-sm text-muted-foreground">
+                Administradores possuem acesso total automaticamente.
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setAllPermissions(true)}>
+                    Marcar todas
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setAllPermissions(false)}>
+                    Limpar
+                  </Button>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  {permissionOptions.map((permission) => (
+                    <div
+                      key={permission.key}
+                      className="flex items-start justify-between gap-3 rounded-md border border-border p-3"
+                    >
+                      <div className="min-w-0">
+                        <Label
+                          htmlFor={`permission-dialog-${permission.key}`}
+                          className="text-sm font-medium"
+                        >
+                          {permission.label}
+                        </Label>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {permission.description}
+                        </p>
+                      </div>
+                      <Switch
+                        id={`permission-dialog-${permission.key}`}
+                        checked={permissionsForm[permission.key]}
+                        onCheckedChange={(checked) => setPermission(permission.key, checked)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPermissionsDialogOpen(false)}
+                disabled={savingPermissions}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  savingPermissions ||
+                  !permissionsUser ||
+                  roleFromUser(permissionsUser) === "admin"
+                }
+              >
+                {savingPermissions ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando
+                  </>
+                ) : (
+                  "Salvar permissoes"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog
         open={Boolean(userToDelete)}
         onOpenChange={(open) => {
@@ -744,7 +977,7 @@ export function UsersPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover usuario?</AlertDialogTitle>
+            <AlertDialogTitle>Remover funcionario?</AlertDialogTitle>
             <AlertDialogDescription>
               Esta acao remove {userToDelete?.name} do cadastro da barbearia.
             </AlertDialogDescription>
