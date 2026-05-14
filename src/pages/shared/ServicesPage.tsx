@@ -1,167 +1,832 @@
-import { Search, Filter, Plus, MoreHorizontal, Clock, DollarSign, TrendingUp } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useTableSelection } from '@/hooks/useTableSelection';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
+import {
+  AlertCircle,
+  Archive,
+  Clock,
+  Edit,
+  Filter,
+  Image as ImageIcon,
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  RotateCcw,
+  Scissors,
+  Search,
+  ShieldCheck,
+  Tag,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
 
-interface Service {
-  id: number;
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/useAuth";
+import { useTableSelection } from "@/hooks/useTableSelection";
+import {
+  createService,
+  deleteService,
+  listServices,
+  reactivateService,
+  updateService,
+  type Service,
+} from "@/service/serviceService";
+import { uploadImage } from "@/service/uploadService";
+
+type ServiceFilter = "all" | "active" | "inactive" | "covered";
+
+interface ServiceFormState {
   name: string;
-  description: string;
-  duration: number;
-  price: number;
-  category: string;
-  bookings: number;
-  status: 'active' | 'inactive';
+  basePrice: string;
+  durationMinutes: string;
+  commissionPercent: string;
+  promotionalPrice: string;
+  imageUrl: string;
+  coveredByPlan: boolean;
+  active: boolean;
 }
 
-const services: Service[] = [
-  { id: 1, name: 'Fade Masterpiece', description: 'Precision fade with styling', duration: 45, price: 45.00, category: 'Haircut', bookings: 234, status: 'active' },
-  { id: 2, name: 'Buzz Cut Bliss', description: 'Clean buzz cut with trimmer', duration: 20, price: 35.00, category: 'Haircut', bookings: 189, status: 'active' },
-  { id: 3, name: 'Beard Trim', description: 'Professional beard grooming', duration: 30, price: 25.00, category: 'Beard', bookings: 156, status: 'active' },
-  { id: 4, name: 'Classic Cut', description: 'Traditional haircut with scissors', duration: 40, price: 40.00, category: 'Haircut', bookings: 145, status: 'active' },
-  { id: 5, name: 'Hot Towel Shave', description: 'Luxury straight razor shave', duration: 35, price: 55.00, category: 'Shave', bookings: 98, status: 'active' },
-  { id: 6, name: 'Hair Coloring', description: 'Full hair coloring service', duration: 90, price: 85.00, category: 'Color', bookings: 67, status: 'active' },
-  { id: 7, name: 'Kids Cut', description: 'Haircut for children under 12', duration: 25, price: 30.00, category: 'Haircut', bookings: 112, status: 'active' },
-  { id: 8, name: 'Full Service', description: 'Haircut, beard trim and facial', duration: 75, price: 120.00, category: 'Package', bookings: 89, status: 'active' },
-];
+const emptyForm: ServiceFormState = {
+  name: "",
+  basePrice: "",
+  durationMinutes: "30",
+  commissionPercent: "",
+  promotionalPrice: "0",
+  imageUrl: "",
+  coveredByPlan: false,
+  active: true,
+};
+
+const statusStyles = {
+  active: "border-emerald-500/20 bg-emerald-500/10 text-emerald-600",
+  inactive: "border-muted-foreground/20 bg-muted text-muted-foreground",
+};
+
+function getApiMessage(error: unknown) {
+  const responseData = (error as { response?: { data?: unknown } })?.response?.data;
+
+  if (Array.isArray(responseData)) return responseData.join(" ");
+
+  if (responseData && typeof responseData === "object") {
+    const message = (responseData as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+
+  if (typeof responseData === "string") return responseData;
+  if (error instanceof Error) return error.message;
+
+  return "Nao foi possivel concluir a operacao.";
+}
+
+function parseCurrencyInput(value: string) {
+  const normalized = value.replace(/\./g, "").replace(",", ".");
+  const parsed = Number(normalized);
+
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function formatCurrency(value?: number | null) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value || 0);
+}
+
+function getCommission(service: Service) {
+  return service.commissionPercent ?? service.comissionPercent ?? service.commission_percent ?? null;
+}
+
+function serviceToForm(service: Service): ServiceFormState {
+  return {
+    name: service.name ?? "",
+    basePrice: String(service.basePrice ?? ""),
+    durationMinutes: String(service.durationMinutes ?? 30),
+    commissionPercent: getCommission(service) == null ? "" : String(getCommission(service)),
+    promotionalPrice: String(service.promotionalPrice ?? 0),
+    imageUrl: service.imageUrl ?? "",
+    coveredByPlan: service.covered_by_plan === true,
+    active: service.active !== false,
+  };
+}
 
 export function ServicesPage() {
+  const { user } = useAuth();
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const isAdmin = user?.role === "admin" || user?.isAdmin === true;
+  const [services, setServices] = useState<Service[]>([]);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<ServiceFilter>("all");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [serviceToDeactivate, setServiceToDeactivate] = useState<Service | null>(null);
+  const [serviceToReactivate, setServiceToReactivate] = useState<Service | null>(null);
+  const [form, setForm] = useState<ServiceFormState>(emptyForm);
+
+  const filteredServices = useMemo(() => {
+    return services.filter((service) => {
+      if (filter === "active" && !service.active) return false;
+      if (filter === "inactive" && service.active) return false;
+      if (filter === "covered" && !service.covered_by_plan) return false;
+      return true;
+    });
+  }, [filter, services]);
+
   const { selectedRows, toggleRow, toggleAll } = useTableSelection(
-    services.map((service) => service.id)
+    filteredServices.map((service) => service.id),
   );
+
+  const stats = useMemo(() => {
+    const active = services.filter((service) => service.active).length;
+    const inactive = services.filter((service) => !service.active).length;
+    const covered = services.filter((service) => service.covered_by_plan).length;
+
+    return {
+      total: services.length,
+      active,
+      inactive,
+      covered,
+    };
+  }, [services]);
+
+  const loadServices = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await listServices({
+        q: search.trim() || undefined,
+        includeInactive: isAdmin ? true : undefined,
+        limit: 100,
+      });
+      setServices(result.items);
+    } catch (err) {
+      setError(getApiMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [isAdmin, search]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadServices();
+    }, 300);
+
+    return () => window.clearTimeout(timeout);
+  }, [loadServices]);
+
+  function setField<TField extends keyof ServiceFormState>(
+    field: TField,
+    value: ServiceFormState[TField],
+  ) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function resetImageInput() {
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  }
+
+  function openCreateDialog() {
+    setEditingService(null);
+    setForm(emptyForm);
+    resetImageInput();
+    setDialogOpen(true);
+  }
+
+  function openEditDialog(service: Service) {
+    setEditingService(service);
+    setForm(serviceToForm(service));
+    resetImageInput();
+    setDialogOpen(true);
+  }
+
+  async function handleImageFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+
+    try {
+      const imageUrl = await uploadImage(file);
+      setField("imageUrl", imageUrl);
+      toast.success("Imagem do servico enviada.");
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setUploadingImage(false);
+      resetImageInput();
+    }
+  }
+
+  function removeServiceImage() {
+    setField("imageUrl", "");
+    resetImageInput();
+  }
+
+  function validateForm() {
+    const basePrice = parseCurrencyInput(form.basePrice);
+    const durationMinutes = Number(form.durationMinutes);
+    const commissionPercent = form.commissionPercent.trim()
+      ? Number(form.commissionPercent)
+      : null;
+    const promotionalPrice = parseCurrencyInput(form.promotionalPrice || "0");
+
+    if (!form.name.trim()) return "Informe o nome do servico.";
+    if (!Number.isFinite(basePrice) || basePrice <= 0) return "Informe um preco maior que zero.";
+    if (!Number.isInteger(durationMinutes) || durationMinutes < 1) {
+      return "Informe uma duracao valida.";
+    }
+    if (
+      commissionPercent !== null &&
+      (!Number.isFinite(commissionPercent) || commissionPercent < 0 || commissionPercent > 100)
+    ) {
+      return "A comissao deve estar entre 0 e 100.";
+    }
+    if (!Number.isFinite(promotionalPrice) || promotionalPrice < 0) {
+      return "Informe um preco promocional valido.";
+    }
+
+    return null;
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const validationMessage = validateForm();
+    if (validationMessage) {
+      toast.error(validationMessage);
+      return;
+    }
+
+    const commissionPercent = form.commissionPercent.trim()
+      ? Number(form.commissionPercent)
+      : null;
+
+    const payload = {
+      name: form.name.trim(),
+      basePrice: parseCurrencyInput(form.basePrice),
+      durationMinutes: Number(form.durationMinutes),
+      commissionPercent,
+      promotionalPrice: parseCurrencyInput(form.promotionalPrice || "0"),
+      covered_by_plan: form.coveredByPlan,
+      imageUrl: form.imageUrl || null,
+      active: form.active,
+    };
+
+    setSaving(true);
+
+    try {
+      if (editingService) {
+        await updateService(editingService.id, payload);
+        toast.success("Servico atualizado.");
+      } else {
+        await createService(payload);
+        toast.success("Servico cadastrado.");
+      }
+
+      setDialogOpen(false);
+      await loadServices();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeactivate() {
+    if (!serviceToDeactivate) return;
+
+    try {
+      await deleteService(serviceToDeactivate.id);
+      toast.success("Servico desativado.");
+      setServiceToDeactivate(null);
+      await loadServices();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    }
+  }
+
+  async function handleReactivate() {
+    if (!serviceToReactivate) return;
+
+    try {
+      await reactivateService(serviceToReactivate.id);
+      toast.success("Servico reativado.");
+      setServiceToReactivate(null);
+      await loadServices();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    }
+  }
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Total Services</p>
-          <h3 className="text-2xl font-semibold text-foreground">27</h3>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Servicos cadastrados</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.total}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Active</p>
-          <h3 className="text-2xl font-semibold text-foreground">24</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Ativos</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.active}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Total Bookings</p>
-          <h3 className="text-2xl font-semibold text-foreground">1,090</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Cobertos pelo plano</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.covered}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Avg Price</p>
-          <h3 className="text-2xl font-semibold text-foreground">$54.38</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Inativos</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.inactive}</h3>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="text-base font-medium text-foreground">All Services</h3>
-          <div className="flex items-center gap-2">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
+          <h3 className="text-base font-medium text-foreground">Servicos</h3>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
-              <input 
-                type="text" 
-                placeholder="Search services..."
-                className="w-56 bg-secondary text-sm text-foreground placeholder:text-muted-foreground rounded-md pl-9 pr-3 py-1.5 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                size={14}
+              />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar servicos..."
+                className="h-9 w-full bg-secondary pl-9 text-sm sm:w-60"
               />
             </div>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Filter size={14} />
-              Filter
-            </Button>
-            <Button size="sm" className="gap-2">
-              <Plus size={14} />
-              Add Service
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Filter size={14} />
+                  Filtro
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuRadioGroup
+                  value={filter}
+                  onValueChange={(value) => setFilter(value as ServiceFilter)}
+                >
+                  <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="active">Ativos</DropdownMenuRadioItem>
+                  {isAdmin ? (
+                    <DropdownMenuRadioItem value="inactive">Inativos</DropdownMenuRadioItem>
+                  ) : null}
+                  <DropdownMenuRadioItem value="covered">Cobertos pelo plano</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {isAdmin ? (
+              <Button size="sm" className="gap-2" onClick={openCreateDialog}>
+                <Plus size={14} />
+                Adicionar Servico
+              </Button>
+            ) : null}
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="w-10 p-4">
-                  <Checkbox 
-                    checked={selectedRows.length === services.length && services.length > 0}
-                    onCheckedChange={toggleAll}
-                  />
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Service</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Category</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Duration</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Price</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Bookings</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-                <th className="w-10 px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {services.map((service) => (
-                <tr 
-                  key={service.id} 
-                  className="border-b border-border last:border-b-0 hover:bg-secondary/30 transition-colors"
-                >
-                  <td className="p-4">
-                    <Checkbox 
-                      checked={selectedRows.includes(service.id)}
-                      onCheckedChange={() => toggleRow(service.id)}
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{service.name}</p>
-                      <p className="text-xs text-muted-foreground">{service.description}</p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant="secondary" className="text-xs">
-                      {service.category}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                      <Clock size={14} className="text-muted-foreground" />
-                      {service.duration} min
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      <DollarSign size={14} className="text-emerald-500" />
-                      {service.price.toFixed(2)}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                      <TrendingUp size={14} className="text-primary" />
-                      {service.bookings}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge 
-                      variant="outline" 
-                      className={`text-xs capitalize px-2 py-0.5 rounded-full ${
-                        service.status === 'active' 
-                          ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                          : 'bg-gray-500/10 text-gray-500 border-gray-500/20'
-                      }`}
-                    >
-                      {service.status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button className="p-1 text-muted-foreground hover:text-foreground transition-colors">
-                      <MoreHorizontal size={16} />
-                    </button>
-                  </td>
+        {error ? (
+          <div className="p-6 text-sm text-destructive">{error}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  {isAdmin ? (
+                    <th className="w-10 p-4">
+                      <Checkbox
+                        checked={
+                          selectedRows.length === filteredServices.length &&
+                          filteredServices.length > 0
+                        }
+                        onCheckedChange={toggleAll}
+                      />
+                    </th>
+                  ) : null}
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Servico
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Duracao
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Preco
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Comissao
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Plano
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Status
+                  </th>
+                  {isAdmin ? <th className="w-10 px-4 py-3" /> : null}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td
+                      colSpan={isAdmin ? 8 : 6}
+                      className="p-8 text-center text-sm text-muted-foreground"
+                    >
+                      <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+                      Carregando servicos...
+                    </td>
+                  </tr>
+                ) : filteredServices.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={isAdmin ? 8 : 6}
+                      className="p-8 text-center text-sm text-muted-foreground"
+                    >
+                      Nenhum servico encontrado.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredServices.map((service) => {
+                    const commission = getCommission(service);
+
+                    return (
+                      <tr
+                        key={service.id}
+                        className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
+                      >
+                        {isAdmin ? (
+                          <td className="p-4">
+                            <Checkbox
+                              checked={selectedRows.includes(service.id)}
+                              onCheckedChange={() => toggleRow(service.id)}
+                            />
+                          </td>
+                        ) : null}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-secondary">
+                              {service.imageUrl ? (
+                                <img
+                                  src={service.imageUrl}
+                                  alt={service.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <Scissors size={18} className="text-muted-foreground" />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {service.name}
+                              </p>
+                              {service.promotionalPrice && service.promotionalPrice > 0 ? (
+                                <p className="text-xs text-muted-foreground">
+                                  Promocional: {formatCurrency(service.promotionalPrice)}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-sm text-foreground">
+                            <Clock size={14} className="text-muted-foreground" />
+                            {service.durationMinutes} min
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-foreground">
+                          {formatCurrency(service.basePrice)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">
+                          {commission == null ? "-" : `${commission}%`}
+                        </td>
+                        <td className="px-4 py-3">
+                          {service.covered_by_plan ? (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 border-primary/20 bg-primary/10 text-primary"
+                            >
+                              <ShieldCheck size={12} />
+                              Incluso
+                            </Badge>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Avulso</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant="outline"
+                            className={`rounded-full px-2 py-0.5 text-xs ${
+                              service.active ? statusStyles.active : statusStyles.inactive
+                            }`}
+                          >
+                            {!service.active ? (
+                              <AlertCircle size={12} className="mr-1" />
+                            ) : null}
+                            {service.active ? "Ativo" : "Inativo"}
+                          </Badge>
+                        </td>
+                        {isAdmin ? (
+                          <td className="px-4 py-3">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
+                                  <MoreHorizontal size={16} />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openEditDialog(service)}>
+                                  <Edit size={14} />
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                {service.active ? (
+                                  <DropdownMenuItem
+                                    variant="destructive"
+                                    onClick={() => setServiceToDeactivate(service)}
+                                  >
+                                    <Trash2 size={14} />
+                                    Desativar
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem
+                                    onClick={() => setServiceToReactivate(service)}
+                                  >
+                                    <RotateCcw size={14} />
+                                    Reativar
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        ) : null}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <DialogHeader>
+              <DialogTitle>
+                {editingService ? "Editar Servico" : "Adicionar Servico"}
+              </DialogTitle>
+              <DialogDescription>
+                Configure preco, duracao, comissao e exibicao do servico.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="service-name">Nome</Label>
+                <Input
+                  id="service-name"
+                  value={form.name}
+                  onChange={(event) => setField("name", event.target.value)}
+                  placeholder="Ex: Corte degradê"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="service-price">Preco base</Label>
+                <Input
+                  id="service-price"
+                  value={form.basePrice}
+                  onChange={(event) => setField("basePrice", event.target.value)}
+                  placeholder="50,00"
+                  inputMode="decimal"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="service-promotional-price">Preco promocional</Label>
+                <Input
+                  id="service-promotional-price"
+                  value={form.promotionalPrice}
+                  onChange={(event) => setField("promotionalPrice", event.target.value)}
+                  placeholder="0"
+                  inputMode="decimal"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="service-duration">Duracao em minutos</Label>
+                <Input
+                  id="service-duration"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={form.durationMinutes}
+                  onChange={(event) => setField("durationMinutes", event.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="service-commission">Comissao (%)</Label>
+                <Input
+                  id="service-commission"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.01}
+                  value={form.commissionPercent}
+                  onChange={(event) => setField("commissionPercent", event.target.value)}
+                  placeholder="Opcional"
+                />
+              </div>
+              <div className="space-y-3 md:col-span-2">
+                <Label htmlFor="service-image-file">Imagem do servico</Label>
+                <input
+                  ref={imageInputRef}
+                  id="service-image-file"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageFileChange}
+                />
+                <div className="flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center">
+                  <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
+                    {form.imageUrl ? (
+                      <img
+                        src={form.imageUrl}
+                        alt="Imagem do servico"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={saving || uploadingImage}
+                    >
+                      {uploadingImage ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Upload className="h-4 w-4" />
+                      )}
+                      {form.imageUrl ? "Substituir imagem" : "Enviar imagem"}
+                    </Button>
+                    {form.imageUrl ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="gap-2 text-muted-foreground"
+                        onClick={removeServiceImage}
+                        disabled={saving || uploadingImage}
+                      >
+                        <X className="h-4 w-4" />
+                        Remover imagem
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
+                <Checkbox
+                  checked={form.coveredByPlan}
+                  onCheckedChange={(checked) => setField("coveredByPlan", checked === true)}
+                />
+                <Tag className="h-4 w-4 text-muted-foreground" />
+                Coberto pelo plano
+              </label>
+              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm">
+                <Checkbox
+                  checked={form.active}
+                  onCheckedChange={(checked) => setField("active", checked === true)}
+                />
+                Servico ativo
+              </label>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDialogOpen(false)}
+                disabled={saving || uploadingImage}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={saving || uploadingImage}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando
+                  </>
+                ) : uploadingImage ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Enviando imagem
+                  </>
+                ) : (
+                  "Salvar"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(serviceToDeactivate)}
+        onOpenChange={(open) => {
+          if (!open) setServiceToDeactivate(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar servico?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O servico {serviceToDeactivate?.name} ficara inativo, mas o historico sera
+              mantido.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeactivate}
+            >
+              <Archive className="mr-2 h-4 w-4" />
+              Desativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(serviceToReactivate)}
+        onOpenChange={(open) => {
+          if (!open) setServiceToReactivate(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reativar servico?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O servico {serviceToReactivate?.name} voltara a aparecer como ativo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReactivate}>
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Reativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
