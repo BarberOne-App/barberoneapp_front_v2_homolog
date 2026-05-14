@@ -20,7 +20,7 @@ export function AdminDashboard() {
     {
       label: "Funcionarios",
       description: "Equipe e barbeiros.",
-      href: "/staff",
+      href: "/users",
       icon: UserCog,
     },
     {

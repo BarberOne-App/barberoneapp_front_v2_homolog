@@ -27,6 +27,7 @@ export interface UserProfile {
   birth_date?: string | null;
   role?: string;
   isAdmin?: boolean;
+  permissions?: Record<string, boolean> | null;
   photoUrl?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -59,6 +60,7 @@ export interface CreateUserPayload {
   password: string;
   role: "admin" | "barber" | "receptionist" | "client";
   isAdmin?: boolean;
+  permissions?: Record<string, boolean>;
   photoUrl?: string | null;
 }
 
@@ -89,6 +91,17 @@ export async function createUser(data: CreateUserPayload) {
 
 export async function updateUser(userId: string, data: UpdateUserPayload) {
   const response = await api.patch<UserProfile>(`/users/${userId}`, data);
+
+  return response.data;
+}
+
+export async function updateUserPermissions(
+  userId: string,
+  permissions: Record<string, boolean>
+) {
+  const response = await api.patch<UserProfile>(`/users/${userId}/permissions`, {
+    permissions,
+  });
 
   return response.data;
 }
