@@ -1,5 +1,6 @@
 import { AdminDashboard } from "../pages/admin/AdminDashboard";
 import { AdminSettingsPage } from "../pages/admin/AdminSettingsPage";
+import { GalleryPage } from "../pages/admin/GalleryPage";
 import { ProductsPage } from "../pages/admin/ProductsPage";
 import { PromotionsPage } from "../pages/admin/PromotionsPage";
 import { BookingsPage } from "../pages/shared/BookingsPage";
@@ -61,6 +62,12 @@ export const adminRoutes: AppRoute[] = [
     title: "Produtos",
     breadcrumbs: ["Gerenciar", "Produtos"],
     Component: ProductsPage,
+  },
+  {
+    path: "/gallery",
+    title: "Galeria",
+    breadcrumbs: ["Gerenciar", "Galeria"],
+    Component: GalleryPage,
   },
   {
     path: "/schedules",
