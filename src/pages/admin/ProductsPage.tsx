@@ -1,175 +1,789 @@
-import { Search, Filter, Plus, MoreHorizontal, Package, DollarSign, TrendingUp, AlertCircle } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useTableSelection } from '@/hooks/useTableSelection';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
+import {
+  AlertCircle,
+  Archive,
+  Edit,
+  Filter,
+  Loader2,
+  MoreHorizontal,
+  Package,
+  Plus,
+  RotateCcw,
+  Search,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
 
-interface Product {
-  id: number;
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useTableSelection } from "@/hooks/useTableSelection";
+import {
+  createProduct,
+  deleteProduct,
+  listProducts,
+  reactivateProduct,
+  updateProduct,
+  type Product,
+} from "@/service/productService";
+import { uploadImage } from "@/service/uploadService";
+
+type ProductFilter = "all" | "active" | "inactive" | "low" | "out";
+
+interface ProductFormState {
   name: string;
   description: string;
-  price: number;
-  stock: number;
   category: string;
-  sold: number;
-  status: 'in_stock' | 'low_stock' | 'out_of_stock';
+  price: string;
+  stock: string;
+  subscriberDiscount: string;
+  imageUrl: string;
+  active: boolean;
 }
 
-const products: Product[] = [
-  { id: 1, name: 'Pomade Matte', description: 'Matte finish hair pomade', price: 35.00, stock: 45, category: 'Styling', sold: 123, status: 'in_stock' },
-  { id: 2, name: 'Beard Oil', description: 'Natural beard conditioning oil', price: 28.00, stock: 32, category: 'Beard Care', sold: 89, status: 'in_stock' },
-  { id: 3, name: 'Hair Wax', description: 'Strong hold hair wax', price: 25.00, stock: 8, category: 'Styling', sold: 156, status: 'low_stock' },
-  { id: 4, name: 'Shaving Cream', description: 'Premium shaving cream', price: 22.00, stock: 0, category: 'Shave', sold: 67, status: 'out_of_stock' },
-  { id: 5, name: 'After Shave', description: 'Refreshing after shave lotion', price: 30.00, stock: 28, category: 'Shave', sold: 78, status: 'in_stock' },
-  { id: 6, name: 'Beard Balm', description: 'Beard styling balm', price: 32.00, stock: 15, category: 'Beard Care', sold: 45, status: 'in_stock' },
-  { id: 7, name: 'Hair Shampoo', description: 'Daily use hair shampoo', price: 18.00, stock: 52, category: 'Hair Care', sold: 234, status: 'in_stock' },
-  { id: 8, name: 'Comb Set', description: 'Professional comb set', price: 15.00, stock: 5, category: 'Tools', sold: 89, status: 'low_stock' },
-];
-
-const statusStyles = {
-  in_stock: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  low_stock: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  out_of_stock: 'bg-red-500/10 text-red-500 border-red-500/20',
+const emptyForm: ProductFormState = {
+  name: "",
+  description: "",
+  category: "",
+  price: "",
+  stock: "0",
+  subscriberDiscount: "0",
+  imageUrl: "",
+  active: true,
 };
 
+const statusLabels = {
+  in: "Em estoque",
+  low: "Estoque baixo",
+  out: "Sem estoque",
+  inactive: "Inativo",
+};
+
+const statusStyles = {
+  in: "border-emerald-500/20 bg-emerald-500/10 text-emerald-600",
+  low: "border-amber-500/20 bg-amber-500/10 text-amber-600",
+  out: "border-red-500/20 bg-red-500/10 text-red-600",
+  inactive: "border-muted-foreground/20 bg-muted text-muted-foreground",
+};
+
+function getApiMessage(error: unknown) {
+  const responseData = (error as { response?: { data?: unknown } })?.response?.data;
+
+  if (Array.isArray(responseData)) return responseData.join(" ");
+
+  if (responseData && typeof responseData === "object") {
+    const message = (responseData as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+
+  if (error instanceof Error) return error.message;
+
+  return "Nao foi possivel concluir a operacao.";
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value || 0);
+}
+
+function parseCurrencyInput(value: string) {
+  const normalized = value.replace(/\./g, "").replace(",", ".");
+  const parsed = Number(normalized);
+
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function getStockStatus(product: Product): keyof typeof statusLabels {
+  if (!product.active) return "inactive";
+  if (product.stock <= 0) return "out";
+  if (product.stock <= 10) return "low";
+  return "in";
+}
+
+function productToForm(product: Product): ProductFormState {
+  return {
+    name: product.name ?? "",
+    description: product.description ?? "",
+    category: product.category ?? "",
+    price: String(product.price ?? ""),
+    stock: String(product.stock ?? 0),
+    subscriberDiscount: String(product.subscriberDiscount ?? product.subscriber_discount ?? 0),
+    imageUrl: product.imageUrl ?? product.image_url ?? "",
+    active: product.active !== false,
+  };
+}
+
 export function ProductsPage() {
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<ProductFilter>("all");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [form, setForm] = useState<ProductFormState>(emptyForm);
+  const [productToDeactivate, setProductToDeactivate] = useState<Product | null>(null);
+  const [productToReactivate, setProductToReactivate] = useState<Product | null>(null);
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const status = getStockStatus(product);
+
+      if (filter === "active" && !product.active) return false;
+      if (filter === "inactive" && product.active) return false;
+      if (filter === "low" && status !== "low") return false;
+      if (filter === "out" && status !== "out") return false;
+
+      return true;
+    });
+  }, [filter, products]);
+
   const { selectedRows, toggleRow, toggleAll } = useTableSelection(
-    products.map((product) => product.id)
+    filteredProducts.map((product) => product.id),
   );
+
+  const stats = useMemo(() => {
+    const active = products.filter((product) => product.active).length;
+    const inactive = products.filter((product) => !product.active).length;
+    const low = products.filter((product) => getStockStatus(product) === "low").length;
+
+    return {
+      total: products.length,
+      active,
+      inactive,
+      low,
+    };
+  }, [products]);
+
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await listProducts({
+        q: search.trim() || undefined,
+      });
+      setProducts(result);
+    } catch (err) {
+      setError(getApiMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [search]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadProducts();
+    }, 300);
+
+    return () => window.clearTimeout(timeout);
+  }, [loadProducts]);
+
+  function setField<TField extends keyof ProductFormState>(
+    field: TField,
+    value: ProductFormState[TField],
+  ) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function openCreateDialog() {
+    setEditingProduct(null);
+    setForm(emptyForm);
+    if (imageInputRef.current) imageInputRef.current.value = "";
+    setDialogOpen(true);
+  }
+
+  function openEditDialog(product: Product) {
+    setEditingProduct(product);
+    setForm(productToForm(product));
+    if (imageInputRef.current) imageInputRef.current.value = "";
+    setDialogOpen(true);
+  }
+
+  async function handleImageFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+
+    try {
+      const imageUrl = await uploadImage(file);
+      setField("imageUrl", imageUrl);
+      toast.success("Imagem do produto enviada.");
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setUploadingImage(false);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    }
+  }
+
+  function removeProductImage() {
+    setField("imageUrl", "");
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  }
+
+  function validateForm() {
+    const price = parseCurrencyInput(form.price);
+    const stock = Number(form.stock);
+    const subscriberDiscount = Number(form.subscriberDiscount);
+
+    if (!form.name.trim()) return "Informe o nome do produto.";
+    if (!Number.isFinite(price) || price <= 0) return "Informe um preco maior que zero.";
+    if (!Number.isInteger(stock) || stock < 0) return "Informe um estoque valido.";
+    if (
+      !Number.isInteger(subscriberDiscount) ||
+      subscriberDiscount < 0 ||
+      subscriberDiscount > 100
+    ) {
+      return "O desconto para assinantes deve estar entre 0 e 100.";
+    }
+
+    return null;
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const validationMessage = validateForm();
+    if (validationMessage) {
+      toast.error(validationMessage);
+      return;
+    }
+
+    const payload = {
+      name: form.name.trim(),
+      description: form.description.trim() || null,
+      category: form.category.trim() || null,
+      price: parseCurrencyInput(form.price),
+      stock: Number(form.stock),
+      subscriberDiscount: Number(form.subscriberDiscount),
+      imageUrl: form.imageUrl || null,
+      active: form.active,
+    };
+
+    setSaving(true);
+
+    try {
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, payload);
+        toast.success("Produto atualizado.");
+      } else {
+        await createProduct(payload);
+        toast.success("Produto cadastrado.");
+      }
+
+      setDialogOpen(false);
+      await loadProducts();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeactivate() {
+    if (!productToDeactivate) return;
+
+    try {
+      await deleteProduct(productToDeactivate.id);
+      toast.success("Produto desativado.");
+      setProductToDeactivate(null);
+      await loadProducts();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    }
+  }
+
+  async function handleReactivate() {
+    if (!productToReactivate) return;
+
+    try {
+      await reactivateProduct(productToReactivate.id);
+      toast.success("Produto reativado.");
+      setProductToReactivate(null);
+      await loadProducts();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    }
+  }
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Total Products</p>
-          <h3 className="text-2xl font-semibold text-foreground">48</h3>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Produtos cadastrados</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.total}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">In Stock</p>
-          <h3 className="text-2xl font-semibold text-foreground">42</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Ativos</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.active}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Low Stock</p>
-          <h3 className="text-2xl font-semibold text-foreground">4</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Estoque baixo</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.low}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Out of Stock</p>
-          <h3 className="text-2xl font-semibold text-foreground">2</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Inativos</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.inactive}</h3>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="text-base font-medium text-foreground">All Products</h3>
-          <div className="flex items-center gap-2">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
+          <h3 className="text-base font-medium text-foreground">Produtos</h3>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
-              <input 
-                type="text" 
-                placeholder="Search products..."
-                className="w-56 bg-secondary text-sm text-foreground placeholder:text-muted-foreground rounded-md pl-9 pr-3 py-1.5 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                size={14}
+              />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar produtos..."
+                className="h-9 w-full bg-secondary pl-9 text-sm sm:w-60"
               />
             </div>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Filter size={14} />
-              Filter
-            </Button>
-            <Button size="sm" className="gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Filter size={14} />
+                  Filtro
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuRadioGroup
+                  value={filter}
+                  onValueChange={(value) => setFilter(value as ProductFilter)}
+                >
+                  <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="active">Ativos</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="inactive">Inativos</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="low">Estoque baixo</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="out">Sem estoque</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button size="sm" className="gap-2" onClick={openCreateDialog}>
               <Plus size={14} />
-              Add Product
+              Adicionar Produto
             </Button>
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="w-10 p-4">
-                  <Checkbox 
-                    checked={selectedRows.length === products.length && products.length > 0}
-                    onCheckedChange={toggleAll}
-                  />
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Product</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Category</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Price</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Stock</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Sold</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-                <th className="w-10 px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((product) => (
-                <tr 
-                  key={product.id} 
-                  className="border-b border-border last:border-b-0 hover:bg-secondary/30 transition-colors"
-                >
-                  <td className="p-4">
-                    <Checkbox 
-                      checked={selectedRows.includes(product.id)}
-                      onCheckedChange={() => toggleRow(product.id)}
+        {error ? (
+          <div className="p-6 text-sm text-destructive">{error}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="w-10 p-4">
+                    <Checkbox
+                      checked={
+                        selectedRows.length === filteredProducts.length &&
+                        filteredProducts.length > 0
+                      }
+                      onCheckedChange={toggleAll}
                     />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center">
-                        <Package size={18} className="text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{product.name}</p>
-                        <p className="text-xs text-muted-foreground">{product.description}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant="secondary" className="text-xs">
-                      {product.category}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      <DollarSign size={14} className="text-emerald-500" />
-                      {product.price.toFixed(2)}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                      <Package size={14} className="text-muted-foreground" />
-                      {product.stock} units
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                      <TrendingUp size={14} className="text-primary" />
-                      {product.sold}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge 
-                      variant="outline" 
-                      className={`text-xs capitalize px-2 py-0.5 rounded-full ${statusStyles[product.status]}`}
-                    >
-                      {product.status === 'low_stock' && <AlertCircle size={12} className="mr-1 inline" />}
-                      {product.status.replace('_', ' ')}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button className="p-1 text-muted-foreground hover:text-foreground transition-colors">
-                      <MoreHorizontal size={16} />
-                    </button>
-                  </td>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Produto
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Categoria
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Preco
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Estoque
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Desconto
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Status
+                  </th>
+                  <th className="w-10 px-4 py-3" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                      <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+                      Carregando produtos...
+                    </td>
+                  </tr>
+                ) : filteredProducts.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                      Nenhum produto encontrado.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredProducts.map((product) => {
+                    const status = getStockStatus(product);
+                    const imageUrl = product.imageUrl ?? product.image_url;
+                    const discount =
+                      product.subscriberDiscount ?? product.subscriber_discount ?? 0;
+
+                    return (
+                      <tr
+                        key={product.id}
+                        className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
+                      >
+                        <td className="p-4">
+                          <Checkbox
+                            checked={selectedRows.includes(product.id)}
+                            onCheckedChange={() => toggleRow(product.id)}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-secondary">
+                              {imageUrl ? (
+                                <img
+                                  src={imageUrl}
+                                  alt={product.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <Package size={18} className="text-muted-foreground" />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {product.name}
+                              </p>
+                              <p className="max-w-xs truncate text-xs text-muted-foreground">
+                                {product.description || "Sem descricao"}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant="secondary" className="text-xs">
+                            {product.category || "Sem categoria"}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-foreground">
+                          {formatCurrency(product.price)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-foreground">
+                          {product.stock} un.
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">
+                          {discount}%
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant="outline"
+                            className={`rounded-full px-2 py-0.5 text-xs ${statusStyles[status]}`}
+                          >
+                            {status === "low" ? <AlertCircle size={12} className="mr-1" /> : null}
+                            {statusLabels[status]}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
+                                <MoreHorizontal size={16} />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEditDialog(product)}>
+                                <Edit size={14} />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {product.active ? (
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onClick={() => setProductToDeactivate(product)}
+                                >
+                                  <Trash2 size={14} />
+                                  Desativar
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem onClick={() => setProductToReactivate(product)}>
+                                  <RotateCcw size={14} />
+                                  Reativar
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <DialogHeader>
+              <DialogTitle>
+                {editingProduct ? "Editar Produto" : "Adicionar Produto"}
+              </DialogTitle>
+              <DialogDescription>
+                Cadastre produtos vendidos pela barbearia e controle estoque.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="product-name">Nome</Label>
+                <Input
+                  id="product-name"
+                  value={form.name}
+                  onChange={(event) => setField("name", event.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="product-description">Descricao</Label>
+                <Input
+                  id="product-description"
+                  value={form.description}
+                  onChange={(event) => setField("description", event.target.value)}
+                  placeholder="Ex: Pomada modeladora matte"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product-category">Categoria</Label>
+                <Input
+                  id="product-category"
+                  value={form.category}
+                  onChange={(event) => setField("category", event.target.value)}
+                  placeholder="Ex: Finalizadores"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product-price">Preco</Label>
+                <Input
+                  id="product-price"
+                  value={form.price}
+                  onChange={(event) => setField("price", event.target.value)}
+                  placeholder="35,00"
+                  inputMode="decimal"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product-stock">Estoque</Label>
+                <Input
+                  id="product-stock"
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.stock}
+                  onChange={(event) => setField("stock", event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product-discount">Desconto assinante (%)</Label>
+                <Input
+                  id="product-discount"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={form.subscriberDiscount}
+                  onChange={(event) => setField("subscriberDiscount", event.target.value)}
+                />
+              </div>
+              <div className="space-y-3 md:col-span-2">
+                <Label htmlFor="product-image-file">Foto do produto</Label>
+                <input
+                  ref={imageInputRef}
+                  id="product-image-file"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageFileChange}
+                />
+                <div className="flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center">
+                  <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
+                    {form.imageUrl ? (
+                      <img
+                        src={form.imageUrl}
+                        alt="Foto do produto"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <Package className="h-8 w-8 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={saving || uploadingImage}
+                    >
+                      {uploadingImage ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Upload className="h-4 w-4" />
+                      )}
+                      {form.imageUrl ? "Substituir foto" : "Enviar foto"}
+                    </Button>
+                    {form.imageUrl ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="gap-2 text-muted-foreground"
+                        onClick={removeProductImage}
+                        disabled={saving || uploadingImage}
+                      >
+                        <X className="h-4 w-4" />
+                        Remover foto
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm md:col-span-2">
+                <Checkbox
+                  checked={form.active}
+                  onCheckedChange={(checked) => setField("active", checked === true)}
+                />
+                Produto ativo
+              </label>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDialogOpen(false)}
+                disabled={saving || uploadingImage}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={saving || uploadingImage}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando
+                  </>
+                ) : uploadingImage ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Enviando foto
+                  </>
+                ) : (
+                  "Salvar"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(productToDeactivate)}
+        onOpenChange={(open) => {
+          if (!open) setProductToDeactivate(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar produto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O produto {productToDeactivate?.name} ficara inativo, mas o historico sera
+              mantido.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeactivate}
+            >
+              <Archive className="mr-2 h-4 w-4" />
+              Desativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(productToReactivate)}
+        onOpenChange={(open) => {
+          if (!open) setProductToReactivate(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reativar produto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O produto {productToReactivate?.name} voltara a aparecer como ativo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReactivate}>
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Reativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
