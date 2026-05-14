@@ -1,175 +1,765 @@
-import { Search, Filter, Plus, MoreHorizontal, Mail, Shield, Calendar } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useTableSelection } from '@/hooks/useTableSelection';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  Calendar,
+  Edit,
+  Filter,
+  Loader2,
+  Mail,
+  MoreHorizontal,
+  Phone,
+  Plus,
+  Search,
+  Shield,
+  Trash2,
+  UserCog,
+} from "lucide-react";
+import { toast } from "sonner";
 
-interface User {
-  id: number;
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useTableSelection } from "@/hooks/useTableSelection";
+import {
+  createUser,
+  deleteUser,
+  listUsers,
+  updateUser,
+  type ListUsersParams,
+  type UserProfile,
+} from "@/service/userService";
+
+type UserRole = NonNullable<ListUsersParams["role"]>;
+type ManagedUserRole = Exclude<UserRole, "client">;
+type RoleFilter = "all" | ManagedUserRole;
+
+interface UserFormState {
   name: string;
   email: string;
-  role: string;
-  lastLogin: string;
-  status: 'active' | 'inactive';
-  avatar: string;
+  phone: string;
+  cpf: string;
+  role: ManagedUserRole;
+  password: string;
+  resetPassword: boolean;
 }
 
-const users: User[] = [
-  { id: 1, name: 'Robert Johnson', email: 'robert@barberone.com', role: 'Admin', lastLogin: 'May 28, 2025 - 09:30 AM', status: 'active', avatar: 'https://i.pravatar.cc/150?u=robert' },
-  { id: 2, name: 'Sarah Williams', email: 'sarah@barberone.com', role: 'Admin-Restricted', lastLogin: 'May 28, 2025 - 08:15 AM', status: 'active', avatar: 'https://i.pravatar.cc/150?u=sarah' },
-  { id: 3, name: 'David Brown', email: 'david@barberone.com', role: 'Manager', lastLogin: 'May 27, 2025 - 05:45 PM', status: 'active', avatar: 'https://i.pravatar.cc/150?u=david' },
-  { id: 4, name: 'Jennifer Lee', email: 'jennifer@barberone.com', role: 'Receptionist', lastLogin: 'May 28, 2025 - 10:00 AM', status: 'active', avatar: 'https://i.pravatar.cc/150?u=jennifer' },
-  { id: 5, name: 'Mark Davis', email: 'mark@barberone.com', role: 'Accountant', lastLogin: 'May 26, 2025 - 03:20 PM', status: 'inactive', avatar: 'https://i.pravatar.cc/150?u=mark' },
-  { id: 6, name: 'Lisa Anderson', email: 'lisa@barberone.com', role: 'Marketing', lastLogin: 'May 28, 2025 - 11:30 AM', status: 'active', avatar: 'https://i.pravatar.cc/150?u=lisa' },
-];
-
-const roleColors: Record<string, string> = {
-  'Admin': 'bg-purple-500/10 text-purple-500 border-purple-500/20',
-  'Admin-Restricted': 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  'Manager': 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  'Receptionist': 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  'Accountant': 'bg-pink-500/10 text-pink-500 border-pink-500/20',
-  'Marketing': 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20',
+const emptyForm: UserFormState = {
+  name: "",
+  email: "",
+  phone: "",
+  cpf: "",
+  role: "barber",
+  password: "",
+  resetPassword: false,
 };
 
+const roleLabels: Record<UserRole, string> = {
+  admin: "Administrador",
+  barber: "Barbeiro",
+  receptionist: "Recepcionista",
+  client: "Cliente",
+};
+
+const roleClasses: Record<UserRole, string> = {
+  admin: "bg-purple-500/10 text-purple-600 border-purple-500/20",
+  barber: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  receptionist: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  client: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+};
+
+function onlyDigits(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function maskPhone(value: string) {
+  const digits = onlyDigits(value).slice(0, 11);
+
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+function maskCpf(value: string) {
+  const digits = onlyDigits(value).slice(0, 11);
+
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) {
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  }
+
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+function formatPhone(value?: string | null) {
+  const digits = onlyDigits(value ?? "");
+
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+
+  return value || "Sem telefone";
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "Nunca";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Nunca";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+function getApiMessage(error: unknown) {
+  const responseData = (error as { response?: { data?: unknown } })?.response?.data;
+
+  if (Array.isArray(responseData)) return responseData.join(" ");
+
+  if (responseData && typeof responseData === "object") {
+    const message = (responseData as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+
+  if (error instanceof Error) return error.message;
+
+  return "Nao foi possivel concluir a operacao.";
+}
+
+function roleFromUser(user: UserProfile): UserRole {
+  if (
+    user.role === "admin" ||
+    user.role === "barber" ||
+    user.role === "receptionist" ||
+    user.role === "client"
+  ) {
+    return user.role;
+  }
+
+  return user.isAdmin ? "admin" : "client";
+}
+
+function userToForm(user: UserProfile): UserFormState {
+  const role = roleFromUser(user);
+
+  return {
+    name: user.name ?? "",
+    email: user.email ?? "",
+    phone: maskPhone(user.phone ?? ""),
+    cpf: maskCpf(user.cpf ?? ""),
+    role: role === "client" ? "barber" : role,
+    password: "",
+    resetPassword: false,
+  };
+}
+
 export function UsersPage() {
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [form, setForm] = useState<UserFormState>(emptyForm);
+  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+
+  const limit = 20;
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await listUsers({
+        role: roleFilter === "all" ? undefined : roleFilter,
+        excludeRole: roleFilter === "all" ? "client" : undefined,
+        q: search.trim() || undefined,
+        page,
+        limit,
+      });
+
+      setUsers(result.items);
+      setTotal(result.total);
+    } catch (err) {
+      setError(getApiMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [limit, page, roleFilter, search]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadUsers();
+    }, 300);
+
+    return () => window.clearTimeout(timeout);
+  }, [loadUsers]);
+
+  const stats = useMemo(() => {
+    const admins = users.filter((user) => roleFromUser(user) === "admin").length;
+    const barbers = users.filter((user) => roleFromUser(user) === "barber").length;
+    const receptionists = users.filter((user) => roleFromUser(user) === "receptionist").length;
+
+    return { admins, barbers, receptionists };
+  }, [users]);
+
   const { selectedRows, toggleRow, toggleAll } = useTableSelection(
-    users.map((user) => user.id)
+    users.map((user) => user.id),
   );
+
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  function setField<TField extends keyof UserFormState>(
+    field: TField,
+    value: UserFormState[TField],
+  ) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function openCreateDialog() {
+    setEditingUser(null);
+    setForm({ ...emptyForm, password: "123456" });
+    setDialogOpen(true);
+  }
+
+  function openEditDialog(user: UserProfile) {
+    setEditingUser(user);
+    setForm(userToForm(user));
+    setDialogOpen(true);
+  }
+
+  function validateForm() {
+    if (!form.name.trim()) return "Informe o nome do usuario.";
+    if (!form.email.trim()) return "Informe o e-mail do usuario.";
+
+    const phone = onlyDigits(form.phone);
+    if (phone && (phone.length < 10 || phone.length > 15)) {
+      return "O telefone deve ter entre 10 e 15 digitos.";
+    }
+
+    const cpf = onlyDigits(form.cpf);
+    if (cpf && cpf.length !== 11) {
+      return "O CPF deve ter 11 digitos.";
+    }
+
+    if (!editingUser && form.password.trim().length < 4) {
+      return "A senha inicial deve ter no minimo 4 caracteres.";
+    }
+
+    if (editingUser && form.resetPassword && form.password.trim().length < 4) {
+      return "A nova senha deve ter no minimo 4 caracteres.";
+    }
+
+    return null;
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const validationMessage = validateForm();
+    if (validationMessage) {
+      toast.error(validationMessage);
+      return;
+    }
+
+    const payload = {
+      name: form.name.trim(),
+      email: form.email.trim().toLowerCase(),
+      phone: onlyDigits(form.phone) || null,
+      cpf: onlyDigits(form.cpf) || null,
+      role: form.role,
+      isAdmin: form.role === "admin",
+      photoUrl: null,
+    };
+
+    setSaving(true);
+
+    try {
+      if (editingUser) {
+        await updateUser(editingUser.id, {
+          ...payload,
+          resetPassword: form.resetPassword,
+          newPassword: form.resetPassword ? form.password.trim() : undefined,
+        });
+        toast.success("Usuario atualizado.");
+      } else {
+        await createUser({
+          ...payload,
+          password: form.password.trim(),
+        });
+        toast.success("Usuario cadastrado.");
+      }
+
+      setDialogOpen(false);
+      await loadUsers();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!userToDelete) return;
+
+    try {
+      await deleteUser(userToDelete.id);
+      toast.success("Usuario removido.");
+      setUserToDelete(null);
+
+      if (users.length === 1 && page > 1) {
+        setPage((current) => current - 1);
+      } else {
+        await loadUsers();
+      }
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    }
+  }
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Total Users</p>
-          <h3 className="text-2xl font-semibold text-foreground">12</h3>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Usuarios internos</p>
+          <h3 className="text-2xl font-semibold text-foreground">{total}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Active</p>
-          <h3 className="text-2xl font-semibold text-foreground">10</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Barbeiros nesta pagina</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.barbers}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Admins</p>
-          <h3 className="text-2xl font-semibold text-foreground">2</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Admins nesta pagina</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.admins}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Online Now</p>
-          <h3 className="text-2xl font-semibold text-foreground">4</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Recepcionistas nesta pagina</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.receptionists}</h3>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="text-base font-medium text-foreground">All Users</h3>
-          <div className="flex items-center gap-2">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
+          <h3 className="text-base font-medium text-foreground">Todos os Usuarios</h3>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
-              <input 
-                type="text" 
-                placeholder="Search users..."
-                className="w-56 bg-secondary text-sm text-foreground placeholder:text-muted-foreground rounded-md pl-9 pr-3 py-1.5 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                size={14}
+              />
+              <Input
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Buscar usuarios..."
+                className="h-9 w-full bg-secondary pl-9 text-sm sm:w-60"
               />
             </div>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Filter size={14} />
-              Filter
-            </Button>
-            <Button size="sm" className="gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Filter size={14} />
+                  Perfil
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuRadioGroup
+                  value={roleFilter}
+                  onValueChange={(value) => {
+                    setRoleFilter(value as RoleFilter);
+                    setPage(1);
+                  }}
+                >
+                  <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="admin">Administradores</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="barber">Barbeiros</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="receptionist">
+                    Recepcionistas
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button size="sm" className="gap-2" onClick={openCreateDialog}>
               <Plus size={14} />
-              Add User
+              Adicionar Usuario
             </Button>
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="w-10 p-4">
-                  <Checkbox 
-                    checked={selectedRows.length === users.length && users.length > 0}
-                    onCheckedChange={toggleAll}
-                  />
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">User</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Role</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Last Login</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-                <th className="w-10 px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <tr 
-                  key={user.id} 
-                  className="border-b border-border last:border-b-0 hover:bg-secondary/30 transition-colors"
-                >
-                  <td className="p-4">
-                    <Checkbox 
-                      checked={selectedRows.includes(user.id)}
-                      onCheckedChange={() => toggleRow(user.id)}
+        {error ? (
+          <div className="p-6 text-sm text-destructive">{error}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="w-10 p-4">
+                    <Checkbox
+                      checked={selectedRows.length === users.length && users.length > 0}
+                      onCheckedChange={toggleAll}
                     />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10">
-                        <AvatarImage src={user.avatar} alt={user.name} />
-                        <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                          {user.name.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{user.name}</p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Mail size={10} />
-                          {user.email}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge 
-                      variant="outline" 
-                      className={`text-xs px-2 py-0.5 rounded-full ${roleColors[user.role] || 'bg-gray-500/10 text-gray-500'}`}
-                    >
-                      <Shield size={10} className="mr-1" />
-                      {user.role}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar size={14} />
-                      {user.lastLogin}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge 
-                      variant="outline" 
-                      className={`text-xs capitalize px-2 py-0.5 rounded-full ${
-                        user.status === 'active' 
-                          ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                          : 'bg-gray-500/10 text-gray-500 border-gray-500/20'
-                      }`}
-                    >
-                      {user.status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button className="p-1 text-muted-foreground hover:text-foreground transition-colors">
-                      <MoreHorizontal size={16} />
-                    </button>
-                  </td>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Usuario
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Perfil
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Contato
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Ultima atividade
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Criado em
+                  </th>
+                  <th className="w-10 px-4 py-3" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
+                      <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+                      Carregando usuarios...
+                    </td>
+                  </tr>
+                ) : users.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
+                      Nenhum usuario encontrado.
+                    </td>
+                  </tr>
+                ) : (
+                  users.map((user) => {
+                    const role = roleFromUser(user);
+
+                    return (
+                      <tr
+                        key={user.id}
+                        className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
+                      >
+                        <td className="p-4">
+                          <Checkbox
+                            checked={selectedRows.includes(user.id)}
+                            onCheckedChange={() => toggleRow(user.id)}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage src={user.photoUrl ?? undefined} alt={user.name} />
+                              <AvatarFallback className="bg-primary/10 text-sm text-primary">
+                                {getInitials(user.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="text-sm font-medium text-foreground">
+                                {user.name}
+                              </p>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Mail size={10} />
+                                {user.email || "Sem e-mail"}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant="outline"
+                            className={`rounded-full px-2 py-0.5 text-xs ${roleClasses[role]}`}
+                          >
+                            <Shield size={10} className="mr-1" />
+                            {roleLabels[role]}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Phone size={12} />
+                            {formatPhone(user.phone)}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Calendar size={14} />
+                            {formatDate(user.lastVisit)}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">
+                          {formatDate(user.createdAt)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
+                                <MoreHorizontal size={16} />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEditDialog(user)}>
+                                <Edit size={14} />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() => setUserToDelete(user)}
+                              >
+                                <Trash2 size={14} />
+                                Remover
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            Pagina {page} de {totalPages} - {total} usuarios
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages || loading}
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            >
+              Proxima
+            </Button>
+          </div>
         </div>
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <DialogHeader>
+              <DialogTitle>
+                {editingUser ? "Editar Usuario" : "Adicionar Usuario"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingUser
+                  ? "Atualize os dados de acesso e perfil deste usuario."
+                  : "Cadastre um usuario vinculado a esta barbearia."}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="user-name">Nome</Label>
+                <Input
+                  id="user-name"
+                  value={form.name}
+                  onChange={(event) => setField("name", event.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="user-email">E-mail</Label>
+                <Input
+                  id="user-email"
+                  type="email"
+                  value={form.email}
+                  onChange={(event) => setField("email", event.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="user-role">Perfil</Label>
+                <Select
+                  value={form.role}
+                  onValueChange={(value) => setField("role", value as ManagedUserRole)}
+                >
+                  <SelectTrigger id="user-role" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">
+                      <UserCog size={14} />
+                      Administrador
+                    </SelectItem>
+                    <SelectItem value="barber">Barbeiro</SelectItem>
+                    <SelectItem value="receptionist">Recepcionista</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="user-phone">Telefone</Label>
+                <Input
+                  id="user-phone"
+                  value={form.phone}
+                  onChange={(event) => setField("phone", maskPhone(event.target.value))}
+                  placeholder="(11) 99999-9999"
+                  inputMode="numeric"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="user-cpf">CPF</Label>
+                <Input
+                  id="user-cpf"
+                  value={form.cpf}
+                  onChange={(event) => setField("cpf", maskCpf(event.target.value))}
+                  placeholder="000.000.000-00"
+                  inputMode="numeric"
+                />
+              </div>
+
+              {editingUser ? (
+                <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm md:col-span-2">
+                  <Checkbox
+                    checked={form.resetPassword}
+                    onCheckedChange={(checked) => setField("resetPassword", checked === true)}
+                  />
+                  Redefinir senha deste usuario
+                </label>
+              ) : null}
+
+              {editingUser && !form.resetPassword ? null : (
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="user-password">
+                    {editingUser ? "Nova senha" : "Senha inicial"}
+                  </Label>
+                  <Input
+                    id="user-password"
+                    type="password"
+                    value={form.password}
+                    onChange={(event) => setField("password", event.target.value)}
+                    placeholder="Minimo 4 caracteres"
+                    required={!editingUser || form.resetPassword}
+                  />
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDialogOpen(false)}
+                disabled={saving}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando
+                  </>
+                ) : (
+                  "Salvar"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(userToDelete)}
+        onOpenChange={(open) => {
+          if (!open) setUserToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover usuario?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acao remove {userToDelete?.name} do cadastro da barbearia.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -37,6 +37,7 @@ export interface UserProfile {
 
 export interface ListUsersParams {
   role?: "admin" | "barber" | "receptionist" | "client";
+  excludeRole?: "admin" | "barber" | "receptionist" | "client";
   q?: string;
   page?: number;
   limit?: number;
