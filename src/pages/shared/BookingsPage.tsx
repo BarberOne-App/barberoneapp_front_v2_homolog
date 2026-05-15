@@ -1,176 +1,890 @@
-import { Search, Filter, Plus, MoreHorizontal, Calendar, Clock, User, Scissors } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useTableSelection } from '@/hooks/useTableSelection';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Filter,
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Scissors,
+  User,
+  XCircle,
+} from "lucide-react";
+import { toast } from "sonner";
 
-interface Booking {
-  id: number;
-  customerName: string;
-  service: string;
+import { AppCalendar } from "@/components/AppCalendar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useTableSelection } from "@/hooks/useTableSelection";
+import {
+  cancelAppointment,
+  createAppointment,
+  getAvailableSlots,
+  listAppointments,
+  updateAppointment,
+  type Appointment,
+  type AppointmentStatus,
+} from "@/service/appointmentService";
+import { listBarbers, type Barber } from "@/service/barberService";
+import { listServices, type Service } from "@/service/serviceService";
+import { listUsers, type UserProfile } from "@/service/userService";
+
+type StatusFilter = "all" | AppointmentStatus;
+
+interface BookingFormState {
+  clientId: string;
+  barberId: string;
   date: string;
   time: string;
-  staffName: string;
-  status: 'pendente' | 'confirmado' | 'completado' | 'cancelado';
-  avatar: string;
+  serviceIds: string[];
+  notes: string;
+  allowOutsideBusinessHours: boolean;
 }
 
-const bookings: Booking[] = [
-  { id: 1, customerName: 'Liam Thompson', service: 'Corte e Barba', date: 'May 15, 2025', time: '2:45 PM', staffName: 'Rodrigues', status: 'pendente', avatar: 'https://i.pravatar.cc/150?u=lucas' },
-  { id: 2, customerName: 'Noah Johnson', service: 'Corte Clássico', date: 'May 22, 2025', time: '11:15 AM', staffName: 'Pedro', status: 'confirmado', avatar: 'https://i.pravatar.cc/150?u=daniel' },
-  { id: 3, customerName: 'Ethan Davis', service: 'Luzes', date: 'May 18, 2025', time: '3:30 PM', staffName: 'Rodrigues', status: 'completado', avatar: 'https://i.pravatar.cc/150?u=lucas' },
-  { id: 4, customerName: 'Lucas Miller', service: 'Corte e Barba', date: 'May 20, 2025', time: '10:00 AM', staffName: 'Rodrigues', status: 'cancelado', avatar: 'https://i.pravatar.cc/150?u=lucas' },
-  { id: 5, customerName: 'Mason Wilson', service: 'Corte Clássico', date: 'May 25, 2025', time: '4:00 PM', staffName: 'Pedro', status: 'confirmado', avatar: 'https://i.pravatar.cc/150?u=daniel' },
-  { id: 6, customerName: 'James Anderson', service: 'Corte e Barba', date: 'May 28, 2025', time: '1:30 PM', staffName: 'Rodrigues', status: 'pendente', avatar: 'https://i.pravatar.cc/150?u=lucas' },
-  { id: 7, customerName: 'Benjamin Moore', service: 'Barba', date: 'May 30, 2025', time: '9:00 AM', staffName: 'Pedro', status: 'confirmado', avatar: 'https://i.pravatar.cc/150?u=daniel' },
-  { id: 8, customerName: 'William Taylor', service: 'Luzes', date: 'Jun 1, 2025', time: '5:00 PM', staffName: 'Rodrigues', status: 'pendente', avatar: 'https://i.pravatar.cc/150?u=lucas' },
-];
-
-const statusStyles = {
-  pendente: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  confirmado: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  completado: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  cancelado: 'bg-red-500/10 text-red-500 border-red-500/20',
+const emptyForm: BookingFormState = {
+  clientId: "",
+  barberId: "",
+  date: dateToDateString(new Date()),
+  time: "",
+  serviceIds: [],
+  notes: "",
+  allowOutsideBusinessHours: false,
 };
 
+const statusLabels: Record<AppointmentStatus, string> = {
+  scheduled: "Agendado",
+  confirmed: "Confirmado",
+  completed: "Finalizado",
+  cancelled: "Cancelado",
+  no_show: "Nao compareceu",
+};
+
+const statusStyles: Record<AppointmentStatus, string> = {
+  scheduled: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  confirmed: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  completed: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  cancelled: "bg-red-500/10 text-red-600 border-red-500/20",
+  no_show: "bg-gray-500/10 text-gray-500 border-gray-500/20",
+};
+
+function dateToDateString(date?: Date) {
+  if (!date) return "";
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function dateStringToDate(value: string) {
+  if (!value) return undefined;
+
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+
+  return new Date(year, month - 1, day);
+}
+
+function getInitials(name?: string | null) {
+  return String(name || "?")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return { date: "-", time: "-" };
+  }
+
+  return {
+    date: new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(date),
+    time: new Intl.DateTimeFormat("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date),
+  };
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value || 0);
+}
+
+function getApiMessage(error: unknown) {
+  const responseData = (error as { response?: { data?: unknown } })?.response?.data;
+
+  if (Array.isArray(responseData)) return responseData.join(" ");
+
+  if (responseData && typeof responseData === "object") {
+    const message = (responseData as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+
+  if (error instanceof Error) return error.message;
+
+  return "Nao foi possivel concluir a operacao.";
+}
+
+function normalizeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function getServiceDuration(service: Service) {
+  return Number(service.durationMinutes ?? 30);
+}
+
 export function BookingsPage() {
-  const { selectedRows, toggleRow, toggleAll } = useTableSelection(
-    bookings.map((booking) => booking.id)
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState<BookingFormState>(emptyForm);
+  const [customers, setCustomers] = useState<UserProfile[]>([]);
+  const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [slots, setSlots] = useState<string[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+
+  const limit = 20;
+
+  const loadAppointments = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await listAppointments({
+        allAppointments: true,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        page,
+        limit,
+      });
+
+      setAppointments(result.items);
+      setTotal(result.total);
+    } catch (err) {
+      setError(getApiMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [page, statusFilter]);
+
+  useEffect(() => {
+    void loadAppointments();
+  }, [loadAppointments]);
+
+  useEffect(() => {
+    if (!dialogOpen) return;
+
+    async function loadFormOptions() {
+      try {
+        const [customersResult, barbersResult, servicesResult] = await Promise.all([
+          listUsers({ role: "client", page: 1, limit: 100 }),
+          listBarbers({ page: 1, limit: 100 }),
+          listServices({ includeInactive: false, page: 1, limit: 100 }),
+        ]);
+
+        setCustomers(customersResult.items);
+        setBarbers(barbersResult.items);
+        setServices(servicesResult.items.filter((service) => service.active));
+      } catch (err) {
+        toast.error(getApiMessage(err));
+      }
+    }
+
+    void loadFormOptions();
+  }, [dialogOpen]);
+
+  const selectedServices = useMemo(
+    () => services.filter((service) => form.serviceIds.includes(service.id)),
+    [form.serviceIds, services],
   );
+
+  const totalDuration = useMemo(
+    () => selectedServices.reduce((sum, service) => sum + getServiceDuration(service), 0),
+    [selectedServices],
+  );
+
+  useEffect(() => {
+    if (
+      !dialogOpen ||
+      !form.barberId ||
+      !form.date ||
+      totalDuration <= 0 ||
+      form.allowOutsideBusinessHours
+    ) {
+      setSlots([]);
+      return;
+    }
+
+    let active = true;
+    setSlotsLoading(true);
+
+    getAvailableSlots({
+      barberId: form.barberId,
+      date: form.date,
+      duration: totalDuration,
+    })
+      .then((availableSlots) => {
+        if (active) setSlots(availableSlots);
+      })
+      .catch((err) => {
+        if (active) toast.error(getApiMessage(err));
+      })
+      .finally(() => {
+        if (active) setSlotsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [dialogOpen, form.allowOutsideBusinessHours, form.barberId, form.date, totalDuration]);
+
+  const filteredAppointments = useMemo(() => {
+    const term = normalizeText(search.trim());
+
+    if (!term) return appointments;
+
+    return appointments.filter((appointment) => {
+      const serviceNames = appointment.services
+        .map((service) => service.serviceName)
+        .join(" ");
+      const haystack = normalizeText(
+        [
+          appointment.client?.name,
+          appointment.barber?.displayName,
+          serviceNames,
+          appointment.notes,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      );
+
+      return haystack.includes(term);
+    });
+  }, [appointments, search]);
+
+  const stats = useMemo(() => {
+    const today = dateToDateString(new Date());
+
+    return {
+      today: appointments.filter((appointment) => appointment.startAt.slice(0, 10) === today)
+        .length,
+      scheduled: appointments.filter((appointment) => appointment.status === "scheduled").length,
+      confirmed: appointments.filter((appointment) => appointment.status === "confirmed").length,
+    };
+  }, [appointments]);
+
+  const { selectedRows, toggleRow, toggleAll } = useTableSelection(
+    filteredAppointments.map((appointment) => appointment.id),
+  );
+
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  function openCreateDialog(allowOutsideBusinessHours = false) {
+    setForm({
+      ...emptyForm,
+      date: dateToDateString(new Date()),
+      allowOutsideBusinessHours,
+    });
+    setDialogOpen(true);
+  }
+
+  function setField<TField extends keyof BookingFormState>(
+    field: TField,
+    value: BookingFormState[TField],
+  ) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function toggleService(serviceId: string, checked: boolean) {
+    setForm((current) => ({
+      ...current,
+      serviceIds: checked
+        ? [...current.serviceIds, serviceId]
+        : current.serviceIds.filter((id) => id !== serviceId),
+      time: "",
+    }));
+  }
+
+  function validateForm() {
+    if (!form.clientId) return "Selecione o cliente.";
+    if (!form.barberId) return "Selecione o barbeiro.";
+    if (!form.date) return "Selecione a data.";
+    if (!form.time) return "Selecione ou informe o horario.";
+    if (form.serviceIds.length === 0) return "Selecione pelo menos um servico.";
+    if (!/^\d{2}:\d{2}$/.test(form.time)) return "Informe o horario no formato HH:MM.";
+
+    return null;
+  }
+
+  async function handleCreateSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const validationMessage = validateForm();
+    if (validationMessage) {
+      toast.error(validationMessage);
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      await createAppointment({
+        clientId: form.clientId,
+        barberId: form.barberId,
+        date: form.date,
+        time: form.time,
+        notes: form.notes.trim() || null,
+        allowOutsideBusinessHours: form.allowOutsideBusinessHours,
+        services: selectedServices.map((service) => ({
+          id: service.id,
+          name: service.name,
+          basePrice: service.basePrice,
+          durationMinutes: service.durationMinutes,
+          quantity: 1,
+        })),
+        products: [],
+      });
+
+      toast.success("Agendamento criado.");
+      setDialogOpen(false);
+      await loadAppointments();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function changeStatus(appointment: Appointment, status: AppointmentStatus) {
+    try {
+      await updateAppointment(appointment.id, { status });
+      toast.success("Agendamento atualizado.");
+      await loadAppointments();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    }
+  }
+
+  async function handleCancel(appointment: Appointment) {
+    try {
+      await cancelAppointment(appointment.id);
+      toast.success("Agendamento cancelado.");
+      await loadAppointments();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    }
+  }
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Total Agendamentos</p>
-          <h3 className="text-2xl font-semibold text-foreground">2.095</h3>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Total Agendamentos</p>
+          <h3 className="text-2xl font-semibold text-foreground">{total}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Hoje</p>
-          <h3 className="text-2xl font-semibold text-foreground">24</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Hoje</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.today}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Esta Semana</p>
-          <h3 className="text-2xl font-semibold text-foreground">156</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Agendados</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.scheduled}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Pendentes</p>
-          <h3 className="text-2xl font-semibold text-foreground">18</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Confirmados</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.confirmed}</h3>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
           <h3 className="text-base font-medium text-foreground">Todos Agendamentos</h3>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
-              <input 
-                type="text" 
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                size={14}
+              />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
                 placeholder="Buscar..."
-                className="w-56 bg-secondary text-sm text-foreground placeholder:text-muted-foreground rounded-md pl-9 pr-3 py-1.5 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+                className="h-9 w-full bg-secondary pl-9 text-sm sm:w-56"
               />
             </div>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Filter size={14} />
-              Filtros
-            </Button>
-            <Button size="sm" className="gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Filter size={14} />
+                  Status
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuRadioGroup
+                  value={statusFilter}
+                  onValueChange={(value) => {
+                    setStatusFilter(value as StatusFilter);
+                    setPage(1);
+                  }}
+                >
+                  <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="scheduled">Agendados</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="confirmed">Confirmados</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="completed">Finalizados</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="cancelled">Cancelados</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="no_show">Nao compareceu</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button size="sm" className="gap-2" onClick={() => openCreateDialog(false)}>
               <Plus size={14} />
               Novo Agendamento
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              onClick={() => openCreateDialog(true)}
+            >
+              <Clock size={14} />
+              Fora do horario
             </Button>
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="w-10 p-4">
-                  <Checkbox 
-                    checked={selectedRows.length === bookings.length && bookings.length > 0}
-                    onCheckedChange={toggleAll}
-                  />
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Customer</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Service</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Date & Time</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Staff</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-                <th className="w-10 px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {bookings.map((booking) => (
-                <tr 
-                  key={booking.id} 
-                  className="border-b border-border last:border-b-0 hover:bg-secondary/30 transition-colors"
-                >
-                  <td className="p-4">
-                    <Checkbox 
-                      checked={selectedRows.includes(booking.id)}
-                      onCheckedChange={() => toggleRow(booking.id)}
+        {error ? (
+          <div className="p-6 text-sm text-destructive">{error}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="w-10 p-4">
+                    <Checkbox
+                      checked={
+                        selectedRows.length === filteredAppointments.length &&
+                        filteredAppointments.length > 0
+                      }
+                      onCheckedChange={toggleAll}
                     />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10">
-                        <AvatarImage src={booking.avatar} alt={booking.customerName} />
-                        <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                          {booking.customerName.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm font-medium text-foreground">{booking.customerName}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                      <Scissors size={14} className="text-muted-foreground" />
-                      {booking.service}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm text-foreground">
-                        <Calendar size={14} className="text-muted-foreground" />
-                        {booking.date}
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock size={14} />
-                        {booking.time}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                      <User size={14} className="text-muted-foreground" />
-                      {booking.staffName}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge 
-                      variant="outline" 
-                      className={`text-xs capitalize px-2 py-0.5 rounded-full ${statusStyles[booking.status]}`}
-                    >
-                      {booking.status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button className="p-1 text-muted-foreground hover:text-foreground transition-colors">
-                      <MoreHorizontal size={16} />
-                    </button>
-                  </td>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Cliente
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Servico
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Data e Hora
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Barbeiro
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Valor
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Status
+                  </th>
+                  <th className="w-10 px-4 py-3" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                      <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+                      Carregando agendamentos...
+                    </td>
+                  </tr>
+                ) : filteredAppointments.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                      Nenhum agendamento encontrado.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredAppointments.map((appointment) => {
+                    const start = formatDateTime(appointment.startAt);
+                    const serviceText =
+                      appointment.services.map((service) => service.serviceName).join(", ") ||
+                      "Sem servico";
+                    const clientName = appointment.dependent?.name || appointment.client?.name || "Cliente";
+                    const barberName = appointment.barber?.displayName || "Sem barbeiro";
+
+                    return (
+                      <tr
+                        key={appointment.id}
+                        className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
+                      >
+                        <td className="p-4">
+                          <Checkbox
+                            checked={selectedRows.includes(appointment.id)}
+                            onCheckedChange={() => toggleRow(appointment.id)}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarFallback className="bg-primary/10 text-sm text-primary">
+                                {getInitials(clientName)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="text-sm font-medium text-foreground">
+                                {clientName}
+                              </p>
+                              {appointment.dependent ? (
+                                <p className="text-xs text-muted-foreground">
+                                  Dependente de {appointment.client?.name}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-sm text-foreground">
+                            <Scissors size={14} className="text-muted-foreground" />
+                            <span className="max-w-56 truncate">{serviceText}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-sm text-foreground">
+                              <Calendar size={14} className="text-muted-foreground" />
+                              {start.date}
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Clock size={14} />
+                              {start.time}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-sm text-foreground">
+                            <User size={14} className="text-muted-foreground" />
+                            {barberName}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-foreground">
+                          {formatCurrency(appointment.totalAmount)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant="outline"
+                            className={`rounded-full px-2 py-0.5 text-xs ${statusStyles[appointment.status]}`}
+                          >
+                            {statusLabels[appointment.status]}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
+                                <MoreHorizontal size={16} />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                disabled={appointment.status === "confirmed"}
+                                onClick={() => changeStatus(appointment, "confirmed")}
+                              >
+                                <CheckCircle2 size={14} />
+                                Confirmar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={appointment.status === "completed"}
+                                onClick={() => changeStatus(appointment, "completed")}
+                              >
+                                <CheckCircle2 size={14} />
+                                Finalizar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={appointment.status === "no_show"}
+                                onClick={() => changeStatus(appointment, "no_show")}
+                              >
+                                <XCircle size={14} />
+                                Nao compareceu
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                disabled={appointment.status === "cancelled"}
+                                onClick={() => handleCancel(appointment)}
+                              >
+                                <XCircle size={14} />
+                                Cancelar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            Pagina {page} de {totalPages} - {total} agendamentos
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages || loading}
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            >
+              Proxima
+            </Button>
+          </div>
         </div>
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <form onSubmit={handleCreateSubmit} className="space-y-5">
+            <DialogHeader>
+              <DialogTitle>
+                {form.allowOutsideBusinessHours
+                  ? "Agendamento fora do horario"
+                  : "Novo Agendamento"}
+              </DialogTitle>
+              <DialogDescription>
+                {form.allowOutsideBusinessHours
+                  ? "Informe manualmente um horario fora da grade comercial."
+                  : "Escolha um dos horarios disponiveis para o barbeiro selecionado."}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Cliente</Label>
+                <Select
+                  value={form.clientId}
+                  onValueChange={(value) => setField("clientId", value)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecionar cliente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {customers.map((customer) => (
+                      <SelectItem key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Barbeiro</Label>
+                <Select
+                  value={form.barberId}
+                  onValueChange={(value) => {
+                    setField("barberId", value);
+                    setField("time", "");
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecionar barbeiro" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {barbers.map((barber) => (
+                      <SelectItem key={barber.id} value={barber.id}>
+                        {barber.displayName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Data</Label>
+                <AppCalendar
+                  value={dateStringToDate(form.date)}
+                  onChange={(date) => {
+                    setField("date", dateToDateString(date));
+                    setField("time", "");
+                  }}
+                  fromYear={new Date().getFullYear()}
+                  toYear={new Date().getFullYear() + 1}
+                  className="h-9 rounded-md"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Horario</Label>
+                {form.allowOutsideBusinessHours ? (
+                  <Input
+                    type="time"
+                    value={form.time}
+                    onChange={(event) => setField("time", event.target.value)}
+                    className="h-9"
+                  />
+                ) : (
+                  <Select
+                    value={form.time}
+                    onValueChange={(value) => setField("time", value)}
+                    disabled={!form.barberId || !form.date || totalDuration <= 0 || slotsLoading}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue
+                        placeholder={slotsLoading ? "Carregando horarios" : "Selecionar horario"}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {slots.map((slot) => (
+                        <SelectItem key={slot} value={slot}>
+                          {slot}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {!form.allowOutsideBusinessHours && !slotsLoading && totalDuration > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {slots.length} horarios disponiveis para {totalDuration} min.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-3 md:col-span-2">
+                <Label>Servicos</Label>
+                <div className="grid max-h-56 gap-2 overflow-y-auto rounded-md border border-border p-3 md:grid-cols-2">
+                  {services.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhum servico ativo.</p>
+                  ) : (
+                    services.map((service) => (
+                      <label
+                        key={service.id}
+                        className="flex items-start gap-3 rounded-md p-2 text-sm hover:bg-secondary/60"
+                      >
+                        <Checkbox
+                          checked={form.serviceIds.includes(service.id)}
+                          onCheckedChange={(checked) =>
+                            toggleService(service.id, checked === true)
+                          }
+                        />
+                        <span className="min-w-0">
+                          <span className="block font-medium text-foreground">
+                            {service.name}
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            {getServiceDuration(service)} min - {formatCurrency(service.basePrice)}
+                          </span>
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {form.allowOutsideBusinessHours ? (
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 md:col-span-2">
+                  Este agendamento sera criado fora do horario comercial e ainda respeita conflitos
+                  de agenda do barbeiro.
+                </div>
+              ) : null}
+
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="booking-notes">Observacoes</Label>
+                <Textarea
+                  id="booking-notes"
+                  value={form.notes}
+                  onChange={(event) => setField("notes", event.target.value)}
+                  placeholder="Opcional"
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDialogOpen(false)}
+                disabled={saving}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando
+                  </>
+                ) : (
+                  "Criar agendamento"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
