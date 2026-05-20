@@ -1,0 +1,98 @@
+import api from "./api";
+
+export type PaymentMethod = "pix" | "debito" | "credito" | "dinheiro" | "local" | "subscription";
+export type PaymentStatus = "pending" | "approved" | "paid" | "failed" | "refunded" | "covered";
+export type PaymentType = "appointment" | "subscription";
+
+export interface PaymentRecord {
+  id: string;
+  barbershopId: string;
+  userId?: string | null;
+  user?: {
+    id: string;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+  } | null;
+  appointmentId?: string | null;
+  appointment?: {
+    id: string;
+    startAt: string;
+    endAt: string;
+    status: string;
+    barber?: {
+      id: string;
+      displayName: string;
+    } | null;
+    services?: Array<{
+      id: string;
+      serviceName: string;
+      unitPrice: number;
+      quantity: number;
+      totalPrice: number;
+    }>;
+  } | null;
+  subscriptionId?: string | null;
+  subscription?: {
+    id: string;
+    status: string;
+    plan?: {
+      id: string;
+      name: string;
+    } | null;
+  } | null;
+  amount: number;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  statusRaw?: string | null;
+  paidAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListPaymentsParams {
+  userId?: string;
+  status?: PaymentStatus;
+  method?: PaymentMethod;
+  page?: number;
+  limit?: number;
+}
+
+export interface ListPaymentsResponse {
+  page: number;
+  limit: number;
+  total: number;
+  items: PaymentRecord[];
+}
+
+export interface PaymentListResult extends ListPaymentsResponse {
+  items: Array<PaymentRecord & { paymentType: PaymentType }>;
+}
+
+export async function listSubscriptionPayments(params: ListPaymentsParams = {}) {
+  const response = await api.get<ListPaymentsResponse>("/payments", { params });
+
+  return response.data;
+}
+
+export async function listAppointmentPayments(params: ListPaymentsParams = {}) {
+  const response = await api.get<ListPaymentsResponse>("/appointmentPayments", { params });
+
+  return response.data;
+}
+
+export async function listAllPayments(params: ListPaymentsParams = {}): Promise<PaymentListResult> {
+  const response = await api.get<PaymentListResult>("/payments/all", { params });
+
+  return response.data;
+}
+
+export async function updatePayment(
+  payment: Pick<PaymentRecord, "id" | "appointmentId">,
+  data: { status?: PaymentStatus; method?: PaymentMethod; paidAt?: string; noShow?: boolean },
+) {
+  const endpoint = payment.appointmentId ? "/appointmentPayments" : "/payments";
+  const response = await api.patch<PaymentRecord>(`${endpoint}/${payment.id}`, data);
+
+  return response.data;
+}
