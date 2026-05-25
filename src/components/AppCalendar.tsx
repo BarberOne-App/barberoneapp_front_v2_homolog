@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CalendarIcon, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import type { DateRange } from "react-day-picker";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -12,14 +13,19 @@ import {
 import { cn } from "@/lib/utils";
 
 interface AppCalendarProps {
+  mode?: "single" | "range";
   value?: Date;
-  onChange: (date?: Date) => void;
+  onChange?: (date?: Date) => void;
+  rangeValue?: DateRange;
+  onRangeChange?: (range?: DateRange) => void;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
   fromYear?: number;
   toYear?: number;
   disableFuture?: boolean;
+  rangeStart?: Date;
+  rangeEnd?: Date;
 }
 
 const months = [
@@ -38,20 +44,41 @@ const months = [
 ];
 
 export function AppCalendar({
+  mode = "single",
   value,
   onChange,
+  rangeValue,
+  onRangeChange,
   placeholder = "Selecionar data",
   disabled = false,
   className,
   fromYear = new Date().getFullYear() - 100,
   toYear = new Date().getFullYear(),
   disableFuture = false,
+  rangeStart,
+  rangeEnd,
 }: AppCalendarProps) {
   const today = new Date();
 
   const [month, setMonth] = useState<Date>(value ?? today);
+  const [open, setOpen] = useState(false);
   const [openMonth, setOpenMonth] = useState(false);
   const [openYear, setOpenYear] = useState(false);
+  const isRangeMode = mode === "range";
+  const selectedRange = rangeValue ?? { from: rangeStart, to: rangeEnd };
+  const selectedRangeFromTime = selectedRange.from?.getTime();
+  const displayValue =
+    isRangeMode && selectedRange.from
+      ? selectedRange.to
+        ? `${format(selectedRange.from, "dd/MM/yyyy", { locale: ptBR })} - ${format(
+            selectedRange.to,
+            "dd/MM/yyyy",
+            { locale: ptBR }
+          )}`
+        : format(selectedRange.from, "dd/MM/yyyy", { locale: ptBR })
+      : value
+        ? format(value, "dd/MM/yyyy", { locale: ptBR })
+        : "";
 
   const years = Array.from(
     { length: toYear - fromYear + 1 },
@@ -63,6 +90,12 @@ export function AppCalendar({
       setMonth(value);
     }
   }, [value]);
+
+  useEffect(() => {
+    if (isRangeMode && selectedRange.from && month.getTime() !== selectedRangeFromTime) {
+      setMonth(selectedRange.from);
+    }
+  }, [isRangeMode, month, selectedRange.from, selectedRangeFromTime]);
 
   function handleMonthChange(monthIndex: number) {
     const newDate = new Date(month);
@@ -78,8 +111,69 @@ export function AppCalendar({
     setOpenYear(false);
   }
 
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    setOpenMonth(false);
+    setOpenYear(false);
+
+    if (nextOpen) {
+      setMonth((isRangeMode ? selectedRange.from : value) ?? today);
+    }
+  }
+
+  function handleSelect(date?: Date) {
+    onChange?.(date);
+    if (date) {
+      setMonth(date);
+      setOpen(false);
+    }
+  }
+
+  function handleRangeSelect(range?: DateRange) {
+    onRangeChange?.(range);
+    if (range?.from) {
+      setMonth(range.from);
+    }
+    if (range?.from && range?.to) {
+      setOpen(false);
+    }
+  }
+
+  function isSameLocalDay(a?: Date, b?: Date) {
+    if (!a || !b) return false;
+
+    return (
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate()
+    );
+  }
+
+  function isInsideLocalRange(date: Date) {
+    if (!rangeStart || !rangeEnd) return false;
+    if (isSameLocalDay(date, rangeStart) || isSameLocalDay(date, rangeEnd)) {
+      return false;
+    }
+
+    const current = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const start = new Date(
+      rangeStart.getFullYear(),
+      rangeStart.getMonth(),
+      rangeStart.getDate()
+    ).getTime();
+    const end = new Date(
+      rangeEnd.getFullYear(),
+      rangeEnd.getMonth(),
+      rangeEnd.getDate()
+    ).getTime();
+    const min = Math.min(start, end);
+    const max = Math.max(start, end);
+
+    return current > min && current < max;
+  }
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -93,8 +187,8 @@ export function AppCalendar({
         >
           <CalendarIcon className="mr-3 h-4 w-4 text-primary" />
 
-          {value ? (
-            format(value, "dd/MM/yyyy", { locale: ptBR })
+          {displayValue ? (
+            displayValue
           ) : (
             <span>{placeholder}</span>
           )}
@@ -173,17 +267,75 @@ export function AppCalendar({
           </div>
         </div>
 
-        <Calendar
-          mode="single"
-          selected={value}
-          onSelect={onChange}
-          locale={ptBR}
-          month={month}
-          onMonthChange={setMonth}
-          disabled={disableFuture ? { after: today } : undefined}
-          initialFocus
-          className="w-full bg-card text-foreground"
-          classNames={{
+        {isRangeMode ? (
+          <Calendar
+            mode="range"
+            selected={selectedRange}
+            onSelect={handleRangeSelect}
+            locale={ptBR}
+            month={month}
+            onMonthChange={setMonth}
+            disabled={disableFuture ? { after: today } : undefined}
+            initialFocus
+            className="w-full bg-card text-foreground"
+            classNames={{
+              months: "flex w-full flex-col",
+              month: "w-full space-y-5",
+              caption: "hidden",
+              caption_label: "hidden",
+              nav: "hidden",
+
+              table: "w-full border-collapse",
+              head_row: "grid grid-cols-7 gap-2",
+              head_cell:
+                "flex h-9 items-center justify-center rounded-lg text-xs font-semibold text-muted-foreground",
+
+              row: "mt-2 grid grid-cols-7 gap-2",
+              cell:
+                "relative flex h-11 w-11 items-center justify-center text-center text-sm",
+
+              day:
+                "flex h-11 w-11 items-center justify-center rounded-xl text-sm font-medium text-foreground transition-colors hover:bg-secondary focus:bg-secondary focus:outline-none",
+
+              day_selected:
+                "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+
+              range_start:
+                "rounded-l-xl bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+              range_end:
+                "rounded-r-xl bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+              range_middle:
+                "rounded-none bg-primary/15 text-foreground hover:bg-primary/20",
+
+              day_today: "border border-primary/50 text-primary",
+              day_outside: "text-muted-foreground/40 opacity-50",
+              day_disabled:
+                "cursor-not-allowed text-muted-foreground/30 opacity-40",
+              day_hidden: "invisible",
+            }}
+          />
+        ) : (
+          <Calendar
+            mode="single"
+            selected={value}
+            onSelect={handleSelect}
+            locale={ptBR}
+            month={month}
+            onMonthChange={setMonth}
+            disabled={disableFuture ? { after: today } : undefined}
+            modifiers={{
+              range_start: rangeStart
+                ? (date) => isSameLocalDay(date, rangeStart)
+                : undefined,
+              range_end: rangeEnd
+                ? (date) => isSameLocalDay(date, rangeEnd)
+                : undefined,
+              range_middle:
+                rangeStart && rangeEnd ? (date) => isInsideLocalRange(date) : undefined,
+            }}
+            initialFocus
+            className="w-full bg-card text-foreground"
+            classNames={{
             months: "flex w-full flex-col",
             month: "w-full space-y-5",
             caption: "hidden",
@@ -205,13 +357,21 @@ export function AppCalendar({
             day_selected:
               "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
 
-            day_today: "border border-primary text-primary",
+            range_start:
+              "rounded-l-xl bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+            range_end:
+              "rounded-r-xl bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+            range_middle:
+              "rounded-none bg-primary/15 text-foreground hover:bg-primary/20",
+
+            day_today: "border border-primary/50 text-primary",
             day_outside: "text-muted-foreground/40 opacity-50",
             day_disabled:
               "cursor-not-allowed text-muted-foreground/30 opacity-40",
             day_hidden: "invisible",
-          }}
-        />
+            }}
+          />
+        )}
       </PopoverContent>
     </Popover>
   );
