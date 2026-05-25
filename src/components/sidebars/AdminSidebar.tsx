@@ -2,6 +2,7 @@ import {
   BarChart3,
   Calendar,
   CreditCard,
+  HandCoins,
   HelpCircle,
   Home,
   Image,
@@ -46,6 +47,7 @@ const sections: SidebarSection[] = [
     title: "Administracao",
     items: [
       { icon: UserCog, label: "Funcionarios", href: "/users" },
+      { icon: HandCoins, label: "Pagamento Funcionário", href: "/employee-payroll" },
       { icon: Users, label: "Clientes", href: "/customers" },
       { icon: Settings, label: "Configuracoes", href: "/settings" },
     ],
