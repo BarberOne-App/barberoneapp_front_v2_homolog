@@ -6,6 +6,7 @@ import {
   HelpCircle,
   Home,
   Image,
+  LayoutList,
   Package,
   Scissors,
   Settings,
@@ -37,6 +38,7 @@ const sections: SidebarSection[] = [
     items: [
       { icon: Scissors, label: "Servicos", href: "/services" },
       { icon: Package, label: "Produtos", href: "/products" },
+      { icon: LayoutList, label: "Planos", href: "/plans" },
       { icon: Image, label: "Galeria", href: "/gallery" },
       { icon: Calendar, label: "Calendario", href: "/schedules" },
       { icon: Tag, label: "Promocoes", href: "/promotions" },
