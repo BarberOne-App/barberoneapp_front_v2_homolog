@@ -1,153 +1,105 @@
-import { Search, Filter, ArrowUpDown, MoreHorizontal } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
-import { useTableSelection } from '@/hooks/useTableSelection';
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import type { DashboardAppointment } from "@/service/dashboardService";
 
-interface Booking {
-  id: number;
-  customerName: string;
-  service: string;
-  bookingDate: string;
-  staffName: string;
-  status: 'pendente' | 'confirmado' | 'completado' | 'cancelado';
+interface Props {
+  appointments: DashboardAppointment[];
 }
 
-const bookings: Booking[] = [
-  { 
-    id: 1, 
-    customerName: 'Thompson', 
-    service: 'Corte e Barba', 
-    bookingDate: '06 de Abril de 2026 - 14:45', 
-    staffName: 'Rodrigues', 
-    status: 'pendente' 
-  },
-  { 
-    id: 2, 
-    customerName: 'Noah Johnson', 
-    service: 'Corte Clássico', 
-    bookingDate: '06 de Abril de 2026 - 11:15', 
-    staffName: 'Pedro', 
-    status: 'confirmado' 
-  },
-  { 
-    id: 3, 
-    customerName: 'Ethan Davis', 
-    service: 'Barba', 
-    bookingDate: '06 de Abril de 2026 - 15:30', 
-    staffName: 'Pedro', 
-    status: 'completado' 
-  },
-  { 
-    id: 4, 
-    customerName: 'Lucas Miller', 
-    service: 'Corte Clássico', 
-    bookingDate: '06 de Abril de 2026 - 10:00', 
-    staffName: 'Rodrigues', 
-    status: 'cancelado' 
-  },
-  { 
-    id: 5, 
-    customerName: 'Wilson', 
-    service: 'Luzes', 
-    bookingDate: '06 de Abril de 2026 - 16:00', 
-    staffName: 'Rodrigues', 
-    status: 'confirmado' 
-  },
-];
+type AppointmentStatus = "scheduled" | "confirmed" | "completed" | "cancelled" | "no_show";
 
-const statusStyles = {
-  pendente: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  confirmado: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  completado: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  cancelado: 'bg-red-500/10 text-red-500 border-red-500/20',
+const statusConfig: Record<AppointmentStatus, { label: string; className: string }> = {
+  scheduled:  { label: "Agendado",   className: "bg-amber-500/10  text-amber-500  border-amber-500/20"  },
+  confirmed:  { label: "Confirmado", className: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" },
+  completed:  { label: "Concluído",  className: "bg-blue-500/10   text-blue-500   border-blue-500/20"   },
+  cancelled:  { label: "Cancelado",  className: "bg-red-500/10    text-red-500    border-red-500/20"    },
+  no_show:    { label: "Não veio",   className: "bg-zinc-500/10   text-zinc-400   border-zinc-500/20"   },
 };
 
-export function RecentBookings() {
-  const { selectedRows, toggleRow, toggleAll } = useTableSelection(
-    bookings.map((booking) => booking.id)
-  );
+function formatDateTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function RecentBookings({ appointments }: Props) {
+  const cfg = (status: string) =>
+    statusConfig[status as AppointmentStatus] ?? { label: status, className: "" };
 
   return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-border">
-        <h3 className="text-base font-medium text-foreground">Agendamento Recentes</h3>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
-            <input 
-              type="text" 
-              placeholder="Search"
-              className="w-48 bg-secondary text-sm text-foreground placeholder:text-muted-foreground rounded-md pl-9 pr-3 py-1.5 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-          <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-foreground bg-secondary rounded-md border border-border hover:bg-secondary/80 transition-colors">
-            <Filter size={14} />
-            Filtro
-          </button>
-          <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-foreground bg-secondary rounded-md border border-border hover:bg-secondary/80 transition-colors">
-            <ArrowUpDown size={14} />
-            Sort by
-          </button>
-        </div>
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex items-center justify-between border-b border-border p-4">
+        <h3 className="text-base font-medium text-foreground">Agendamentos Recentes</h3>
+        <span className="text-xs text-muted-foreground">últimos 8</span>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border">
-              <th className="w-10 p-4">
-                <Checkbox 
-                  checked={selectedRows.length === bookings.length && bookings.length > 0}
-                  onCheckedChange={toggleAll}
-                />
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Cliente
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">ID</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Nome</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Serviços</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Data do Agendamento</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Nome do Funcionário</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-              <th className="w-10 px-4 py-3"></th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Serviço
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Data
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Barbeiro
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Status
+              </th>
             </tr>
           </thead>
           <tbody>
-            {bookings.map((booking, index) => (
-              <tr 
-                key={booking.id} 
-                className="border-b border-border last:border-b-0 hover:bg-secondary/30 transition-colors"
-              >
-                <td className="p-4">
-                  <Checkbox 
-                    checked={selectedRows.includes(booking.id)}
-                    onCheckedChange={() => toggleRow(booking.id)}
-                  />
-                </td>
-                <td className="px-4 py-3 text-sm text-muted-foreground">{index + 1}</td>
-                <td className="px-4 py-3 text-sm font-medium text-foreground">{booking.customerName}</td>
-                <td className="px-4 py-3 text-sm text-foreground">{booking.service}</td>
-                <td className="px-4 py-3 text-sm text-muted-foreground">{booking.bookingDate}</td>
-                <td className="px-4 py-3 text-sm text-foreground">{booking.staffName}</td>
-                <td className="px-4 py-3">
-                  <Badge 
-                    variant="outline" 
-                    className={cn(
-                      "text-xs capitalize px-2 py-0.5 rounded-full",
-                      statusStyles[booking.status]
-                    )}
-                  >
-                    {booking.status}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3">
-                  <button className="p-1 text-muted-foreground hover:text-foreground transition-colors">
-                    <MoreHorizontal size={16} />
-                  </button>
+            {appointments.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">
+                  Nenhum agendamento encontrado.
                 </td>
               </tr>
-            ))}
+            ) : (
+              appointments.map((booking) => {
+                const s = cfg(booking.status);
+                return (
+                  <tr
+                    key={booking.id}
+                    className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
+                  >
+                    <td className="px-4 py-3 text-sm font-medium text-foreground">
+                      {booking.clientName}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-foreground">
+                      {booking.serviceLabel}
+                      {booking.serviceCount > 1 && (
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          +{booking.serviceCount - 1}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground">
+                      {formatDateTime(booking.startAt)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-foreground">{booking.barberName}</td>
+                    <td className="px-4 py-3">
+                      <Badge
+                        variant="outline"
+                        className={cn("rounded-full px-2 py-0.5 text-xs capitalize", s.className)}
+                      >
+                        {s.label}
+                      </Badge>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>

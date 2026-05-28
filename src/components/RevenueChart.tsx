@@ -1,83 +1,78 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { TrendingDown, RefreshCw, ChevronDown } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { TrendingUp, TrendingDown } from "lucide-react";
+import type { DashboardRevenueDay } from "@/service/dashboardService";
 
-const data = [
-  // { day: 'Dom', value: 10000, fullDate: '06 de Abril de 2026' },
-  { day: 'Seg', value: 15000, fullDate: '07 de Abril de 2026', isHighlighted: true },
-  { day: 'Ter', value: 15647, fullDate: '08 de Abril de 2026' },
-  { day: 'Qua', value: 12000, fullDate: '09 de Abril de 2026' },
-  { day: 'Qui', value: 20000, fullDate: '10 de Abril de 2026' },
-  { day: 'Sex', value: 14000, fullDate: '11 de Abril de 2026' },
-  { day: 'Sab', value: 11000, fullDate: '12 de Abril de 2026' },
-];
+interface Props {
+  data: DashboardRevenueDay[];
+  totalRevenue: number;
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
 
 const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: any[] }) => {
   if (active && payload && payload.length) {
-    const data = payload[0].payload;
+    const item = payload[0].payload as DashboardRevenueDay;
     return (
-      <div className="bg-popover border border-border rounded-lg p-3 shadow-lg">
-        <p className="text-sm font-medium text-foreground">${payload[0].value.toLocaleString()}</p>
-        <p className="text-xs text-muted-foreground">{data.fullDate}</p>
+      <div className="rounded-lg border border-border bg-popover p-3 shadow-lg">
+        <p className="text-sm font-medium text-foreground">{formatCurrency(item.total)}</p>
+        <p className="text-xs text-muted-foreground">{item.date}</p>
       </div>
     );
   }
   return null;
 };
 
-export function RevenueChart() {
-  const chartType = 'Bar Chart';
-  const totalRevenue = 'R$ 23.249,00';
-  const changePercent = '4.5%';
+export function RevenueChart({ data, totalRevenue }: Props) {
+  const maxDay = data.reduce((best, d) => (d.total > best.total ? d : best), data[0] ?? { total: 0, day: "", date: "" });
+
+  // Variação: compara primeira metade com segunda metade dos 7 dias
+  const half = Math.floor(data.length / 2);
+  const firstHalf = data.slice(0, half).reduce((s, d) => s + d.total, 0);
+  const secondHalf = data.slice(half).reduce((s, d) => s + d.total, 0);
+  const changePositive = secondHalf >= firstHalf;
+  const changePct = firstHalf > 0 ? Math.abs(((secondHalf - firstHalf) / firstHalf) * 100).toFixed(1) : null;
 
   return (
-    <div className="bg-card rounded-xl p-5 border border-border">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-base font-medium text-foreground">Analise de Receitas</h3>
-        <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-foreground bg-secondary rounded-md border border-border hover:bg-secondary/80 transition-colors">
-            {chartType}
-            <ChevronDown size={14} />
-          </button>
-          <button className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
-            <RefreshCw size={16} />
-          </button>
-        </div>
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="mb-6 flex items-center justify-between">
+        <h3 className="text-base font-medium text-foreground">Receita — últimos 7 dias</h3>
       </div>
 
-      {/* Stats */}
-      <div className="flex items-center gap-4 mb-6">
-        <h2 className="text-2xl font-semibold text-foreground">{totalRevenue}</h2>
-        <div className="flex items-center gap-1 text-red-500">
-          <TrendingDown size={14} />
-          <span className="text-sm font-medium">{changePercent}</span>
-        </div>
-        <span className="text-xs text-muted-foreground">Ultima Atualização: 06/04/2026</span>
+      <div className="mb-6 flex items-center gap-4">
+        <h2 className="text-2xl font-semibold text-foreground">{formatCurrency(totalRevenue)}</h2>
+        {changePct !== null && (
+          <div className={`flex items-center gap-1 ${changePositive ? "text-emerald-500" : "text-red-500"}`}>
+            {changePositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+            <span className="text-sm font-medium">{changePct}%</span>
+          </div>
+        )}
+        <span className="text-xs text-muted-foreground">este mês</span>
       </div>
 
-      {/* Chart */}
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-            <XAxis 
-              dataKey="day" 
+            <XAxis
+              dataKey="day"
               axisLine={false}
               tickLine={false}
-              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
             />
-            <YAxis 
+            <YAxis
               axisLine={false}
               tickLine={false}
-              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-              tickFormatter={(value) => `${value / 1000}K`}
+              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+              tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v))}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }} />
-            <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={50}>
-              {data.map((entry, index) => (
-                <Cell 
-                  key={`cell-${index}`} 
-                  fill={entry.isHighlighted ? 'hsl(var(--primary))' : 'hsl(var(--primary) / 0.6)'} 
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }} />
+            <Bar dataKey="total" radius={[4, 4, 0, 0]} maxBarSize={50}>
+              {data.map((entry, i) => (
+                <Cell
+                  key={`cell-${i}`}
+                  fill={entry.date === maxDay.date ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.5)"}
                 />
               ))}
             </Bar>
