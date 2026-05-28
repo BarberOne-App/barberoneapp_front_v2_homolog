@@ -1,63 +1,60 @@
-import { Star, RefreshCw } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Calendar } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { DashboardStaffMember } from "@/service/dashboardService";
 
-interface StaffMember {
-  id: number;
-  name: string;
-  role: string;
-  rating: number;
-  avatar: string;
-  status?: 'online' | 'offline';
+interface Props {
+  staff: DashboardStaffMember[];
 }
 
-const staffMembers: StaffMember[] = [
-  { id: 1, name: 'Rodrigues', role: 'Barbeiro', rating: 4.7, avatar: 'https://i.pravatar.cc/150?u=daniel', status: 'online' },
-  { id: 2, name: 'Pedro', role: 'Barbeiro', rating: 4.7, avatar: 'https://i.pravatar.cc/150?u=daniel', status: 'online' }
-  
-];
+function initials(name: string) {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((n) => n[0]?.toUpperCase() ?? "")
+    .join("");
+}
 
-export function StaffPerformance() {
+export function StaffPerformance({ staff }: Props) {
+  const sorted = [...staff].sort((a, b) => b.appointmentsThisMonth - a.appointmentsThisMonth);
+
   return (
-    <div className="bg-card rounded-xl p-5 border border-border h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base font-medium text-foreground">Perfomance Barbeiros</h3>
-        <button className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
-          <RefreshCw size={16} />
-        </button>
+    <div className="h-full rounded-xl border border-border bg-card p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-base font-medium text-foreground">Barbeiros</h3>
+        <span className="text-xs text-muted-foreground">este mês</span>
       </div>
 
-      {/* Staff List */}
-      <div className="space-y-3">
-        {staffMembers.map((staff) => (
-          <div 
-            key={staff.id} 
-            className="flex items-center justify-between p-2 rounded-lg hover:bg-secondary/50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Avatar className="w-10 h-10">
-                  <AvatarImage src={staff.avatar} alt={staff.name} />
-                  <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                    {staff.name.split(' ').map(n => n[0]).join('')}
+      {sorted.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhum barbeiro cadastrado.</p>
+      ) : (
+        <div className="space-y-3">
+          {sorted.map((member) => (
+            <div
+              key={member.id}
+              className="flex items-center justify-between rounded-lg p-2 transition-colors hover:bg-secondary/50"
+            >
+              <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={member.photo ?? undefined} alt={member.name} />
+                  <AvatarFallback className="bg-primary/10 text-sm text-primary">
+                    {initials(member.name)}
                   </AvatarFallback>
                 </Avatar>
-                {staff.status === 'online' && (
-                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-card rounded-full" />
-                )}
+                <div>
+                  <p className="text-sm font-medium text-foreground">{member.name}</p>
+                  <p className="text-xs text-muted-foreground">{member.specialty ?? "Barbeiro"}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">{staff.name}</p>
-                <p className="text-xs text-muted-foreground">{staff.role}</p>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Calendar size={13} />
+                <span className="text-sm font-medium text-foreground">
+                  {member.appointmentsThisMonth}
+                </span>
               </div>
             </div>
-            <div className="flex items-center gap-1">
-              <Star size={14} className="text-amber-500 fill-amber-500" />
-              <span className="text-sm font-medium text-foreground">{staff.rating}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
