@@ -1,13 +1,36 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Calendar, CreditCard, History, Scissors } from "lucide-react";
 
 import { RecentBookings } from "@/components/RecentBookings";
 import { StatCard } from "@/components/StatCard";
 import { useAuth } from "../../hooks/useAuth";
+import { listAppointments } from "@/service/appointmentService";
+import type { DashboardAppointment } from "@/service/dashboardService";
 
 export function ClientDashboard() {
   const { user } = useAuth();
   const userName = user?.name?.trim() || "Usuario";
+
+  const [appointments, setAppointments] = useState<DashboardAppointment[]>([]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    listAppointments({ clientId: user.id, limit: 8 })
+      .then((res) => {
+        const mapped: DashboardAppointment[] = res.items.map((a) => ({
+          id: a.id,
+          startAt: a.startAt,
+          status: a.status,
+          clientName: a.client?.name ?? "—",
+          barberName: a.barber?.displayName ?? "—",
+          serviceLabel: a.services[0]?.serviceName ?? "—",
+          serviceCount: a.services.length,
+        }));
+        setAppointments(mapped);
+      })
+      .catch(() => setAppointments([]));
+  }, [user?.id]);
 
   const shortcuts = [
     {
@@ -71,7 +94,7 @@ export function ClientDashboard() {
         ))}
       </section>
 
-      <RecentBookings />
+      <RecentBookings appointments={appointments} />
     </div>
   );
 }

@@ -87,7 +87,7 @@ export function SuperAdminDashboard() {
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <h3 className="mb-3 text-base font-semibold text-foreground">Metricas gerais</h3>
-          <RevenueChart />
+          <RevenueChart data={[]} totalRevenue={0} />
         </div>
       </section>
     </div>
