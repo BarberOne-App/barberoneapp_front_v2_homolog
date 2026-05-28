@@ -6,7 +6,6 @@ import {
   Calendar,
   CreditCard,
   Loader2,
-  Scissors,
   TrendingUp,
   UserCog,
   Users,
