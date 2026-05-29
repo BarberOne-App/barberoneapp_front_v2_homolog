@@ -14,6 +14,7 @@ import {
   Tag,
   UserCog,
   Users,
+  Zap,
 } from "lucide-react";
 
 import { ProfileSidebar } from "../shared/ProfileSidebar";
@@ -30,6 +31,7 @@ const sections: SidebarSection[] = [
     title: "Operacao",
     items: [
       { icon: Calendar, label: "Agendamentos", href: "/bookings" },
+      { icon: Zap, label: "Encaixe", href: "/encaixe" },
       { icon: CreditCard, label: "Pagamentos", href: "/payments" },
     ],
   },

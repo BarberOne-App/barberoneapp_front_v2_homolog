@@ -6,6 +6,7 @@ import { PlansPage } from "../pages/admin/PlansPage";
 import { ProductsPage } from "../pages/admin/ProductsPage";
 import { PromotionsPage } from "../pages/admin/PromotionsPage";
 import { BookingsPage } from "../pages/shared/BookingsPage";
+import { FitAppointmentPage } from "../pages/shared/FitAppointmentPage";
 import { CustomersPage } from "../pages/shared/CustomersPage";
 import { HelpCenterPage } from "../pages/shared/HelpCenterPage";
 import { OverviewPage } from "../pages/shared/OverviewPage";
@@ -34,6 +35,12 @@ export const adminRoutes: AppRoute[] = [
     title: "Agendamentos",
     breadcrumbs: ["Operacao", "Agendamentos"],
     Component: BookingsPage,
+  },
+  {
+    path: "/encaixe",
+    title: "Encaixe",
+    breadcrumbs: ["Operacao", "Encaixe"],
+    Component: FitAppointmentPage,
   },
   {
     path: "/payments",
