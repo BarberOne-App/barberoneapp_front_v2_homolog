@@ -11,6 +11,7 @@ import {
   Scissors,
   User,
   XCircle,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -59,6 +60,7 @@ import {
 import { listBarbers, type Barber } from "@/service/barberService";
 import { listServices, type Service } from "@/service/serviceService";
 import { listUsers, type UserProfile } from "@/service/userService";
+import { cleanFitMarker, isFitAppointment } from "@/utils/fitAppointment";
 
 type StatusFilter = "all" | "active" | AppointmentStatus;
 
@@ -646,12 +648,23 @@ export function BookingsPage() {
                           {formatCurrency(appointment.totalAmount)}
                         </td>
                         <td className="px-4 py-3">
-                          <Badge
-                            variant="outline"
-                            className={`rounded-full px-2 py-0.5 text-xs ${statusStyles[appointment.status]}`}
-                          >
-                            {statusLabels[appointment.status]}
-                          </Badge>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge
+                              variant="outline"
+                              className={`rounded-full px-2 py-0.5 text-xs ${statusStyles[appointment.status]}`}
+                            >
+                              {statusLabels[appointment.status]}
+                            </Badge>
+                            {isFitAppointment(appointment.notes) && (
+                              <Badge
+                                variant="secondary"
+                                className="rounded-full px-2 py-0.5 text-xs bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+                              >
+                                <Zap size={10} className="mr-1" />
+                                Encaixe
+                              </Badge>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <DropdownMenu>
