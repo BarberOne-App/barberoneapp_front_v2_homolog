@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Calendar,
+  Cake,
   Edit,
   Filter,
   Loader2,
@@ -169,6 +170,34 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
+function formatBirthday(birthDate?: string | null) {
+  if (!birthDate) return null;
+  const date = new Date(birthDate);
+  if (Number.isNaN(date.getTime())) return null;
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}`;
+}
+
+function isBirthdayToday(birthDate?: string | null) {
+  if (!birthDate) return false;
+  const today = new Date();
+  const date = new Date(birthDate);
+  if (Number.isNaN(date.getTime())) return false;
+  return date.getDate() === today.getDate() && date.getMonth() === today.getMonth();
+}
+
+function isBirthdaySoon(birthDate?: string | null, withinDays = 7) {
+  if (!birthDate) return false;
+  const today = new Date();
+  const date = new Date(birthDate);
+  if (Number.isNaN(date.getTime())) return false;
+  const nextBirthday = new Date(today.getFullYear(), date.getMonth(), date.getDate());
+  if (nextBirthday < today) nextBirthday.setFullYear(today.getFullYear() + 1);
+  const diffDays = Math.floor((nextBirthday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return diffDays >= 0 && diffDays <= withinDays;
+}
+
 function getCustomerStatus(customer: UserProfile): CustomerStatus {
   const visits = customer.visits ?? 0;
 
@@ -300,8 +329,11 @@ export function CustomersPage() {
       (customer) => getCustomerStatus(customer) === "new",
     ).length;
     const withPhone = customers.filter((customer) => Boolean(customer.phone)).length;
+    const birthdayToday = customers.filter((customer) =>
+      isBirthdayToday(customer.birthDate ?? customer.birth_date),
+    ).length;
 
-    return { active, newCustomers, withPhone };
+    return { active, newCustomers, withPhone, birthdayToday };
   }, [customers]);
 
   const { selectedRows, toggleRow, toggleAll } = useTableSelection(
@@ -428,7 +460,7 @@ export function CustomersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-5">
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="mb-1 text-sm text-muted-foreground">Total Clientes</p>
           <h3 className="text-2xl font-semibold text-foreground">{total}</h3>
@@ -446,6 +478,15 @@ export function CustomersPage() {
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="mb-1 text-sm text-muted-foreground">Com Telefone</p>
           <h3 className="text-2xl font-semibold text-foreground">{stats.withPhone}</h3>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <div className="mb-1 flex items-center gap-1.5">
+            <Cake size={14} className="text-pink-500" />
+            <p className="text-sm text-muted-foreground">Aniversariantes Hoje</p>
+          </div>
+          <h3 className={`text-2xl font-semibold ${stats.birthdayToday > 0 ? "text-pink-500" : "text-foreground"}`}>
+            {stats.birthdayToday}
+          </h3>
         </div>
       </div>
 
@@ -528,20 +569,23 @@ export function CustomersPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Status
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Aniversário
+                  </th>
                   <th className="w-10 px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                       Carregando clientes...
                     </td>
                   </tr>
                 ) : filteredCustomers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
                       Nenhum cliente encontrado.
                     </td>
                   </tr>
@@ -613,6 +657,50 @@ export function CustomersPage() {
                           </Badge>
                         </td>
                         <td className="px-4 py-3">
+                          {(() => {
+                            const bd = customer.birthDate ?? customer.birth_date;
+                            const formatted = formatBirthday(bd);
+                            const isToday = isBirthdayToday(bd);
+                            const isSoon = !isToday && isBirthdaySoon(bd);
+                            if (!formatted) {
+                              return <span className="text-xs text-muted-foreground">—</span>;
+                            }
+                            return (
+                              <div className="flex items-center gap-1.5">
+                                <Cake
+                                  size={14}
+                                  className={
+                                    isToday
+                                      ? "text-pink-500"
+                                      : isSoon
+                                        ? "text-amber-500"
+                                        : "text-muted-foreground"
+                                  }
+                                />
+                                <span
+                                  className={`text-sm font-medium ${
+                                    isToday
+                                      ? "text-pink-500"
+                                      : isSoon
+                                        ? "text-amber-500"
+                                        : "text-foreground"
+                                  }`}
+                                >
+                                  {formatted}
+                                </span>
+                                {isToday && (
+                                  <Badge
+                                    variant="outline"
+                                    className="rounded-full border-pink-300 bg-pink-50 px-1.5 py-0 text-[10px] text-pink-600"
+                                  >
+                                    Hoje!
+                                  </Badge>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-4 py-3">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
@@ -620,6 +708,15 @@ export function CustomersPage() {
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              {isBirthdayToday(customer.birthDate ?? customer.birth_date) && (
+                                <>
+                                  <DropdownMenuItem className="text-pink-600 focus:text-pink-600" disabled>
+                                    <Cake size={14} />
+                                    Aniversário hoje!
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                </>
+                              )}
                               <DropdownMenuItem onClick={() => openEditDialog(customer)}>
                                 <Edit size={14} />
                                 Editar
