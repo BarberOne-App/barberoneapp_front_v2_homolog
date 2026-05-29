@@ -29,6 +29,7 @@ export interface UserProfile {
   isAdmin?: boolean;
   permissions?: Record<string, boolean> | null;
   photoUrl?: string | null;
+  salary?: number | null;
   createdAt?: string;
   updatedAt?: string;
   visits?: number;
@@ -73,6 +74,7 @@ export interface UpdateUserPayload {
   role?: "admin" | "barber" | "receptionist" | "client";
   isAdmin?: boolean;
   photoUrl?: string | null;
+  salary?: number | null;
   resetPassword?: boolean;
   newPassword?: string;
 }
