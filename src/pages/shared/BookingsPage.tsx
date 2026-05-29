@@ -60,7 +60,7 @@ import {
 import { listBarbers, type Barber } from "@/service/barberService";
 import { listServices, type Service } from "@/service/serviceService";
 import { listUsers, type UserProfile } from "@/service/userService";
-import { cleanFitMarker, isFitAppointment } from "@/utils/fitAppointment";
+import { isFitAppointment } from "@/utils/fitAppointment";
 
 type StatusFilter = "all" | "active" | AppointmentStatus;
 
