@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Calendar,
+  Camera,
   Edit,
   Filter,
   Loader2,
@@ -57,6 +58,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useTableSelection } from "@/hooks/useTableSelection";
+import { uploadProfilePhoto } from "@/service/uploadService";
 import {
   createUser,
   deleteUser,
@@ -126,6 +128,8 @@ interface UserFormState {
   role: ManagedUserRole;
   password: string;
   resetPassword: boolean;
+  photoUrl: string | null;
+  salary: string;
 }
 
 const emptyForm: UserFormState = {
@@ -136,6 +140,8 @@ const emptyForm: UserFormState = {
   role: "barber",
   password: "",
   resetPassword: false,
+  photoUrl: null,
+  salary: "",
 };
 
 const roleLabels: Record<UserRole, string> = {
@@ -166,6 +172,19 @@ function maskPhone(value: string) {
   }
 
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+function maskCurrency(value: string): string {
+  const digits = onlyDigits(value).slice(0, 13);
+  if (!digits) return "";
+  const cents = parseInt(digits, 10);
+  const reais = Math.floor(cents / 100);
+  const centavos = cents % 100;
+  return `${reais.toLocaleString("pt-BR")},${String(centavos).padStart(2, "0")}`;
+}
+
+function parseCurrency(masked: string): number {
+  return parseFloat(onlyDigits(masked)) / 100;
 }
 
 function maskCpf(value: string) {
@@ -269,6 +288,8 @@ function userToForm(user: UserProfile): UserFormState {
     role: role === "client" ? "barber" : role,
     password: "",
     resetPassword: false,
+    photoUrl: user.photoUrl ?? null,
+    salary: user.salary != null ? maskCurrency(String(Math.round(user.salary * 100))) : "",
   };
 }
 
@@ -291,6 +312,8 @@ export function UsersPage() {
     ...emptyPermissions,
   });
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const limit = 20;
 
@@ -363,6 +386,22 @@ export function UsersPage() {
     setPermissionsDialogOpen(true);
   }
 
+  async function handlePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingPhoto(true);
+    try {
+      const url = await uploadProfilePhoto(file);
+      setField("photoUrl", url);
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  }
+
   function setPermission(permission: PermissionKey, checked: boolean) {
     setPermissionsForm((current) => ({
       ...current,
@@ -420,7 +459,8 @@ export function UsersPage() {
       cpf: onlyDigits(form.cpf) || null,
       role: form.role,
       isAdmin: form.role === "admin",
-      photoUrl: null,
+      photoUrl: form.photoUrl,
+      salary: form.salary !== "" ? parseCurrency(form.salary) : null,
     };
 
     setSaving(true);
@@ -432,6 +472,7 @@ export function UsersPage() {
           resetPassword: form.resetPassword,
           newPassword: form.resetPassword ? form.password.trim() : undefined,
         });
+
         toast.success("Funcionario atualizado.");
       } else {
         await createUser({
@@ -752,7 +793,13 @@ export function UsersPage() {
         </div>
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) setUploadingPhoto(false);
+        }}
+      >
         <DialogContent className="sm:max-w-2xl">
           <form onSubmit={handleSubmit} className="space-y-5">
             <DialogHeader>
@@ -765,6 +812,56 @@ export function UsersPage() {
                   : "Cadastre um funcionario vinculado a esta barbearia."}
               </DialogDescription>
             </DialogHeader>
+
+            <div className="flex flex-col items-center gap-3">
+              <Avatar className="h-20 w-20 ring-2 ring-border">
+                <AvatarImage src={form.photoUrl ?? undefined} alt={form.name} />
+                <AvatarFallback className="bg-primary/10 text-lg text-primary">
+                  {getInitials(form.name || "?")}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex gap-2">
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoChange}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={uploadingPhoto}
+                >
+                  {uploadingPhoto ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Camera size={14} />
+                      Alterar foto
+                    </>
+                  )}
+                </Button>
+                {form.photoUrl ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground"
+                    onClick={() => setField("photoUrl", null)}
+                    disabled={uploadingPhoto}
+                  >
+                    Remover
+                  </Button>
+                ) : null}
+              </div>
+            </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
@@ -825,6 +922,19 @@ export function UsersPage() {
                   inputMode="numeric"
                 />
               </div>
+
+              {editingUser ? (
+                <div className="space-y-2">
+                  <Label htmlFor="user-salary">Salario fixo (R$)</Label>
+                  <Input
+                    id="user-salary"
+                    value={form.salary}
+                    onChange={(event) => setField("salary", maskCurrency(event.target.value))}
+                    placeholder="0,00"
+                    inputMode="numeric"
+                  />
+                </div>
+              ) : null}
 
               {editingUser ? (
                 <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm md:col-span-2">
