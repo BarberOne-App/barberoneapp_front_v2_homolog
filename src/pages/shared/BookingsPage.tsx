@@ -60,7 +60,7 @@ import { listBarbers, type Barber } from "@/service/barberService";
 import { listServices, type Service } from "@/service/serviceService";
 import { listUsers, type UserProfile } from "@/service/userService";
 
-type StatusFilter = "all" | AppointmentStatus;
+type StatusFilter = "all" | "active" | AppointmentStatus;
 
 interface BookingFormState {
   clientId: string;
@@ -184,7 +184,7 @@ export function BookingsPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -210,6 +210,9 @@ export function BookingsPage() {
         page,
         limit,
       });
+
+      // Backend retorna em start_at asc — garantir ordenação crescente no cliente também
+      result.items.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
 
       setAppointments(result.items);
       setTotal(result.total);
@@ -451,7 +454,23 @@ export function BookingsPage() {
 
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
-          <h3 className="text-base font-medium text-foreground">Todos Agendamentos</h3>
+          <h3 className="text-base font-medium text-foreground">
+            {statusFilter === "active"
+              ? "Agendamentos Ativos"
+              : statusFilter === "all"
+                ? "Todos Agendamentos"
+                : `Agendamentos — ${
+                    statusFilter === "scheduled"
+                      ? "Agendados"
+                      : statusFilter === "confirmed"
+                        ? "Confirmados"
+                        : statusFilter === "completed"
+                          ? "Finalizados"
+                          : statusFilter === "cancelled"
+                            ? "Cancelados"
+                            : "Nao compareceu"
+                  }`}
+          </h3>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative">
               <Search
@@ -480,12 +499,16 @@ export function BookingsPage() {
                     setPage(1);
                   }}
                 >
-                  <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="scheduled">Agendados</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="confirmed">Confirmados</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="active">Ativos (pendentes e confirmados)</DropdownMenuRadioItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuRadioItem value="completed">Finalizados</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="cancelled">Cancelados</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="no_show">Nao compareceu</DropdownMenuRadioItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuRadioItem value="scheduled">Somente agendados</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="confirmed">Somente confirmados</DropdownMenuRadioItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>

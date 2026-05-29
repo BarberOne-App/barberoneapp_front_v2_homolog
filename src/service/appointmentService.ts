@@ -57,7 +57,7 @@ export interface Appointment {
 export interface ListAppointmentsParams {
   barberId?: string;
   clientId?: string;
-  status?: AppointmentStatus;
+  status?: AppointmentStatus | "active";
   dateFrom?: string;
   dateTo?: string;
   page?: number;
