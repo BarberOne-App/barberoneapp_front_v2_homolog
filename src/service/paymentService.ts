@@ -96,3 +96,47 @@ export async function updatePayment(
 
   return response.data;
 }
+
+/* ═══════ Extra Payments ═══════ */
+
+export interface ExtraPaymentRecord extends PaymentRecord {
+  description?: string | null;
+}
+
+export interface CreateExtraPaymentPayload {
+  userId?: string | null;
+  amount: number;
+  method: Exclude<PaymentMethod, "subscription">;
+  status?: PaymentStatus;
+  description?: string | null;
+}
+
+export interface ListExtraPaymentsResponse {
+  page: number;
+  limit: number;
+  total: number;
+  items: ExtraPaymentRecord[];
+}
+
+export async function listExtraPayments(params: ListPaymentsParams = {}) {
+  const response = await api.get<ListExtraPaymentsResponse>("/extraPayments", { params });
+  return response.data;
+}
+
+export async function createExtraPayment(data: CreateExtraPaymentPayload) {
+  const response = await api.post<ExtraPaymentRecord>("/extraPayments", data);
+  return response.data;
+}
+
+export async function updateExtraPayment(
+  id: string,
+  data: { status?: PaymentStatus; method?: PaymentMethod; paidAt?: string },
+) {
+  const response = await api.patch<ExtraPaymentRecord>(`/extraPayments/${id}`, data);
+  return response.data;
+}
+
+export async function deleteExtraPayment(id: string) {
+  const response = await api.delete<{ ok: boolean }>(`/extraPayments/${id}`);
+  return response.data;
+}

@@ -125,3 +125,30 @@ export async function createEmployeePayment(data: CreateEmployeePaymentPayload) 
 
   return response.data;
 }
+
+/* ═══════ Extra Employee Payments ═══════ */
+
+export interface ExtraEmployeePayment {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  periodStart: string;
+  salarioFixo: number;
+  liquido: number;
+  paidByName?: string | null;
+  createdAt: string;
+}
+
+export async function listExtraEmployeePayments(): Promise<ExtraEmployeePayment[]> {
+  const response = await api.get<ExtraEmployeePayment[]>("/employeePayments/extra");
+  return response.data;
+}
+
+export async function createExtraEmployeePayment(data: {
+  employeeId: string;
+  amount: number;
+  date: string;
+}): Promise<ExtraEmployeePayment> {
+  const response = await api.post<ExtraEmployeePayment>("/employeePayments/extra", data);
+  return response.data;
+}

@@ -3,15 +3,12 @@ import {
   Calendar,
   CreditCard,
   HandCoins,
-  HelpCircle,
-  Home,
   Image,
   LayoutList,
   Package,
+  PlusCircle,
   Scissors,
   Settings,
-  Star,
-  Tag,
   UserCog,
   Users,
   Zap,
@@ -23,7 +20,6 @@ import type { SidebarSection } from "../shared/ProfileSidebar";
 const sections: SidebarSection[] = [
   {
     items: [
-      { icon: Home, label: "Home", href: "/home" },
       { icon: BarChart3, label: "Dashboard", href: "/overview" },
     ],
   },
@@ -43,8 +39,6 @@ const sections: SidebarSection[] = [
       { icon: LayoutList, label: "Planos", href: "/plans" },
       { icon: Image, label: "Galeria", href: "/gallery" },
       { icon: Calendar, label: "Calendario", href: "/schedules" },
-      { icon: Tag, label: "Promocoes", href: "/promotions" },
-      { icon: Star, label: "Avaliacoes", href: "/reviews" },
     ],
   },
   {
@@ -53,10 +47,10 @@ const sections: SidebarSection[] = [
       { icon: UserCog, label: "Funcionarios", href: "/users" },
       { icon: HandCoins, label: "Pagamento Funcionário", href: "/employee-payroll" },
       { icon: Users, label: "Clientes", href: "/customers" },
+      { icon: PlusCircle, label: "Pagamentos Extras", href: "/extra-payments" },
       { icon: Settings, label: "Configuracoes", href: "/settings" },
     ],
   },
-  { items: [{ icon: HelpCircle, label: "Ajuda", href: "/help" }] },
 ];
 
 export function AdminSidebar() {

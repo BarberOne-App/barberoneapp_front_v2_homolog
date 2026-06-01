@@ -1,6 +1,7 @@
 import { AdminDashboard } from "../pages/admin/AdminDashboard";
 import { AdminSettingsPage } from "../pages/admin/AdminSettingsPage";
 import { EmployeePayrollPage } from "../pages/admin/EmployeePayrollPage";
+import { ExtraPaymentsPage } from "../pages/admin/ExtraPaymentsPage";
 import { GalleryPage } from "../pages/admin/GalleryPage";
 import { PlansPage } from "../pages/admin/PlansPage";
 import { ProductsPage } from "../pages/admin/ProductsPage";
@@ -65,6 +66,12 @@ export const adminRoutes: AppRoute[] = [
     title: "Clientes",
     breadcrumbs: ["Administracao", "Clientes"],
     Component: CustomersPage,
+  },
+  {
+    path: "/extra-payments",
+    title: "Pagamentos Extras",
+    breadcrumbs: ["Administracao", "Pagamentos Extras"],
+    Component: ExtraPaymentsPage,
   },
   {
     path: "/services",
