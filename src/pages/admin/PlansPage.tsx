@@ -12,6 +12,7 @@ import {
   Filter,
   Loader2,
   MoreHorizontal,
+  Play,
   Plus,
   PowerOff,
   Search,
@@ -62,6 +63,7 @@ import {
 import { listServices, type Service } from "@/service/serviceService";
 import {
   listSubscriptions,
+  updateSubscription,
   type Subscription,
 } from "@/service/subscriptionService";
 
@@ -191,6 +193,7 @@ export function PlansPage() {
   const [loadingSubscriptions, setLoadingSubscriptions] = useState(true);
   const [searchTab, setSearchTab] = useState<SearchTab>("name");
   const [searchValue, setSearchValue] = useState("");
+  const [togglingSubId, setTogglingSubId] = useState<string | null>(null);
   const isMountedRef = useRef(false);
 
   const monthlyRevenue = useMemo(() => {
@@ -384,6 +387,20 @@ export function PlansPage() {
       toast.error(getApiMessage(err));
     } finally {
       setTogglingId(null);
+    }
+  }
+
+  async function toggleSubscriptionStatus(sub: Subscription) {
+    setTogglingSubId(sub.id);
+    try {
+      const newStatus = sub.status === "active" ? "cancelled" : "active";
+      await updateSubscription(sub.id, { status: newStatus });
+      toast.success(sub.status === "active" ? "Assinatura cancelada." : "Assinatura ativada.");
+      await loadSubscriptions(searchValue || undefined, searchTab);
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setTogglingSubId(null);
     }
   }
 
@@ -705,19 +722,20 @@ export function PlansPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Status
                 </th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
               {loadingSubscriptions ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">
                     <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                     Carregando assinaturas...
                   </td>
                 </tr>
               ) : subscriptions.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">
                     Nenhuma assinatura encontrada.
                   </td>
                 </tr>
@@ -775,6 +793,36 @@ export function PlansPage() {
                           ? "Cancelado"
                           : "Expirado"}
                       </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
+                            <MoreHorizontal size={16} />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            disabled={
+                              togglingSubId === sub.id ||
+                              sub.status === "expired"
+                            }
+                            onClick={() => toggleSubscriptionStatus(sub)}
+                          >
+                            {sub.status === "active" ? (
+                              <>
+                                <PowerOff size={14} />
+                                Cancelar
+                              </>
+                            ) : (
+                              <>
+                                <Play size={14} />
+                                Ativar
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 ))
