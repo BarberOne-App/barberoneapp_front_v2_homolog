@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
+  ArrowLeftRight,
   Calendar,
   CheckCircle2,
   Clock,
@@ -198,6 +199,10 @@ export function BookingsPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [slots, setSlots] = useState<string[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [appointmentToTransfer, setAppointmentToTransfer] = useState<Appointment | null>(null);
+  const [transferBarberId, setTransferBarberId] = useState("");
+  const [transferSaving, setTransferSaving] = useState(false);
 
   const limit = 20;
 
@@ -250,6 +255,13 @@ export function BookingsPage() {
 
     void loadFormOptions();
   }, [dialogOpen]);
+
+  useEffect(() => {
+    if (!transferDialogOpen) return;
+    listBarbers({ page: 1, limit: 100 })
+      .then((result) => setBarbers(result.items))
+      .catch((err) => toast.error(getApiMessage(err)));
+  }, [transferDialogOpen]);
 
   const selectedServices = useMemo(
     () => services.filter((service) => form.serviceIds.includes(service.id)),
@@ -430,6 +442,32 @@ export function BookingsPage() {
       await loadAppointments();
     } catch (err) {
       toast.error(getApiMessage(err));
+    }
+  }
+
+  function openTransferDialog(appointment: Appointment) {
+    setAppointmentToTransfer(appointment);
+    setTransferBarberId(appointment.barber?.id ?? "");
+    setTransferDialogOpen(true);
+  }
+
+  async function handleTransfer() {
+    if (!appointmentToTransfer || !transferBarberId) return;
+    if (transferBarberId === appointmentToTransfer.barber?.id) {
+      toast.error("Selecione um barbeiro diferente do atual.");
+      return;
+    }
+    setTransferSaving(true);
+    try {
+      await updateAppointment(appointmentToTransfer.id, { barberId: transferBarberId });
+      const newBarberName = barbers.find((b) => b.id === transferBarberId)?.displayName ?? "novo barbeiro";
+      toast.success(`Agendamento transferido para ${newBarberName}!`);
+      setTransferDialogOpen(false);
+      await loadAppointments();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setTransferSaving(false);
     }
   }
 
@@ -695,6 +733,15 @@ export function BookingsPage() {
                                 <XCircle size={14} />
                                 Nao compareceu
                               </DropdownMenuItem>
+                              {(appointment.status === "scheduled" || appointment.status === "confirmed") && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => openTransferDialog(appointment)}>
+                                    <ArrowLeftRight size={14} />
+                                    Transferir barbeiro
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 variant="destructive"
@@ -740,6 +787,80 @@ export function BookingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Dialog de transferência de barbeiro */}
+      <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Transferir Agendamento</DialogTitle>
+            <DialogDescription>
+              Altere o barbeiro responsavel por este agendamento.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-1.5">
+              <p className="text-sm text-muted-foreground">
+                Cliente:{" "}
+                <span className="font-medium text-foreground">
+                  {appointmentToTransfer?.dependent?.name || appointmentToTransfer?.client?.name || "—"}
+                </span>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Barbeiro atual:{" "}
+                <span className="font-medium text-foreground">
+                  {appointmentToTransfer?.barber?.displayName || "—"}
+                </span>
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Novo barbeiro</Label>
+              <Select value={transferBarberId} onValueChange={setTransferBarberId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecionar barbeiro" />
+                </SelectTrigger>
+                <SelectContent>
+                  {barbers.map((barber) => (
+                    <SelectItem key={barber.id} value={barber.id}>
+                      {barber.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setTransferDialogOpen(false)}
+              disabled={transferSaving}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleTransfer}
+              disabled={
+                transferSaving ||
+                !transferBarberId ||
+                transferBarberId === appointmentToTransfer?.barber?.id
+              }
+            >
+              {transferSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Transferindo...
+                </>
+              ) : (
+                "Confirmar transferencia"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-3xl">

@@ -7,32 +7,22 @@ import {
   type FormEvent,
 } from "react";
 import {
-  Archive,
   CheckCircle2,
   Edit,
   Filter,
   Loader2,
   MoreHorizontal,
   Plus,
+  PowerOff,
   Search,
   Star,
-  Trash2,
   TrendingUp,
   Users,
   X,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -65,7 +55,6 @@ import {
 import { useTableSelection } from "@/hooks/useTableSelection";
 import {
   createPlan,
-  deletePlan,
   listPlans,
   updatePlan,
   type Plan,
@@ -191,7 +180,7 @@ export function PlansPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [form, setForm] = useState<PlanFormState>(emptyForm);
-  const [planToDelete, setPlanToDelete] = useState<Plan | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [availableServices, setAvailableServices] = useState<Service[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
   const [serviceSelectKey, setServiceSelectKey] = useState(0);
@@ -385,16 +374,16 @@ export function PlansPage() {
     }
   }
 
-  async function handleDelete() {
-    if (!planToDelete) return;
-
+  async function toggleActive(plan: Plan) {
+    setTogglingId(plan.id);
     try {
-      await deletePlan(planToDelete.id);
-      toast.success("Plano removido.");
-      setPlanToDelete(null);
+      await updatePlan(plan.id, { active: !plan.active });
+      toast.success(plan.active ? "Plano inativado." : "Plano ativado.");
       await loadPlans();
     } catch (err) {
       toast.error(getApiMessage(err));
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -614,11 +603,20 @@ export function PlansPage() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              variant="destructive"
-                              onClick={() => setPlanToDelete(plan)}
+                              disabled={togglingId === plan.id}
+                              onClick={() => toggleActive(plan)}
                             >
-                              <Trash2 size={14} />
-                              Excluir
+                              {plan.active ? (
+                                <>
+                                  <PowerOff size={14} />
+                                  Inativar
+                                </>
+                              ) : (
+                                <>
+                                  <Zap size={14} />
+                                  Ativar
+                                </>
+                              )}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -1009,33 +1007,6 @@ export function PlansPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
-      <AlertDialog
-        open={Boolean(planToDelete)}
-        onOpenChange={(open) => {
-          if (!open) setPlanToDelete(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir plano?</AlertDialogTitle>
-            <AlertDialogDescription>
-              O plano <strong>{planToDelete?.name}</strong> sera removido permanentemente.
-              Assinantes ativos nao serao afetados imediatamente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={handleDelete}
-            >
-              <Archive className="mr-2 h-4 w-4" />
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
