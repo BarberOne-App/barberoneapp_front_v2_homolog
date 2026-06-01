@@ -16,6 +16,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   createExtraEmployeePayment,
   listExtraEmployeePayments,
   type ExtraEmployeePayment,
@@ -60,6 +67,23 @@ function currentMonthRange(): DateRange {
 
 function todayDate() {
   return toDateString(new Date());
+}
+
+function onlyDigits(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function maskCurrency(value: string): string {
+  const digits = onlyDigits(value).slice(0, 13);
+  if (!digits) return "";
+  const cents = parseInt(digits, 10);
+  const reais = Math.floor(cents / 100);
+  const centavos = cents % 100;
+  return `${reais.toLocaleString("pt-BR")},${String(centavos).padStart(2, "0")}`;
+}
+
+function parseCurrency(masked: string): number {
+  return parseFloat(onlyDigits(masked)) / 100;
 }
 
 function getApiMessage(error: unknown) {
@@ -151,7 +175,7 @@ export function ExtraPaymentsPage() {
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    const amount = parseFloat(form.amount.replace(",", "."));
+    const amount = parseCurrency(form.amount);
     if (!form.employeeId) { toast.error("Selecione um funcionario."); return; }
     if (isNaN(amount) || amount <= 0) { toast.error("Informe um valor valido maior que zero."); return; }
     if (!form.date) { toast.error("Informe a data do pagamento."); return; }
@@ -296,20 +320,21 @@ export function ExtraPaymentsPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="ep-employee">Funcionario</Label>
-                <select
-                  id="ep-employee"
+                <Select
                   value={form.employeeId}
-                  onChange={(e) => setField("employeeId", e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  required
+                  onValueChange={(value) => setField("employeeId", value)}
                 >
-                  <option value="">Selecione...</option>
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.role})
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.role})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -317,12 +342,9 @@ export function ExtraPaymentsPage() {
                 <Input
                   id="ep-amount"
                   value={form.amount}
-                  onChange={(e) => setField("amount", e.target.value)}
+                  onChange={(e) => setField("amount", maskCurrency(e.target.value))}
                   placeholder="0,00"
-                  inputMode="decimal"
-                  min="0.01"
-                  step="0.01"
-                  required
+                  inputMode="numeric"
                 />
               </div>
 
