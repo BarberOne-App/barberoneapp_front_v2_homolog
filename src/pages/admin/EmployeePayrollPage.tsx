@@ -44,6 +44,11 @@ import {
   type EmployeePayrollRow,
   type EmployeePaymentStatus,
 } from "@/service/employeePayrollService";
+import {
+  getPaymentFrequencySettings,
+  type PaymentFrequency,
+  type PaymentFrequencySettings,
+} from "@/service/settingsService";
 
 type StatusFilter = "all" | EmployeePaymentStatus;
 type RoleFilter = "all" | "admin" | "barber" | "receptionist";
@@ -145,6 +150,18 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
+const frequencyLabels: Record<PaymentFrequency, string> = {
+  weekly: "Semanal",
+  biweekly: "Quinzenal",
+  monthly: "Mensal",
+};
+
+function frequencyToPeriod(freq: PaymentFrequency): "semanal" | "quinzenal" | "mensal" {
+  if (freq === "weekly") return "semanal";
+  if (freq === "biweekly") return "quinzenal";
+  return "mensal";
+}
+
 function getApiMessage(error: unknown) {
   const responseData = (error as { response?: { data?: unknown } })?.response?.data;
 
@@ -193,6 +210,16 @@ export function EmployeePayrollPage() {
     descricao: "",
     observacao: "",
   });
+  const [paymentFrequency, setPaymentFrequency] = useState<PaymentFrequencySettings>({
+    barberPaymentFrequency: "monthly",
+    employeePaymentFrequency: "monthly",
+  });
+
+  useEffect(() => {
+    getPaymentFrequencySettings()
+      .then(setPaymentFrequency)
+      .catch(() => {});
+  }, []);
   const periodStartDate = dateStringToDate(periodStart);
   const periodEndDate = dateStringToDate(periodEnd);
 
@@ -311,12 +338,18 @@ export function EmployeePayrollPage() {
 
     setSaving(true);
 
+    const freq = selectedRow.role === "barber"
+      ? paymentFrequency.barberPaymentFrequency
+      : paymentFrequency.employeePaymentFrequency;
+
+    const today = toDateInput(new Date());
+
     try {
       await createEmployeePayment({
         employeeId: selectedRow.employeeId,
-        period: "mensal",
-        periodStart,
-        periodEnd,
+        period: frequencyToPeriod(freq),
+        periodStart: today,
+        periodEnd: today,
       });
       toast.success("Pagamento registrado.");
       setPaymentOpen(false);
@@ -365,7 +398,14 @@ export function EmployeePayrollPage() {
 
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex flex-col gap-3 border-b border-border p-4 xl:flex-row xl:items-center xl:justify-between">
-          <h3 className="text-base font-medium text-foreground">Pagamento Funcionário</h3>
+          <div>
+            <h3 className="text-base font-medium text-foreground">Pagamento Funcionário</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Barbeiros: {frequencyLabels[paymentFrequency.barberPaymentFrequency]}
+              {" · "}
+              Outros: {frequencyLabels[paymentFrequency.employeePaymentFrequency]}
+            </p>
+          </div>
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
             <div className="relative">
               <Search
@@ -484,7 +524,11 @@ export function EmployeePayrollPage() {
                   filteredRows.map((row) => (
                     <tr
                       key={row.employeeId}
-                      className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
+                      className={`border-b border-border transition-colors last:border-b-0 ${
+                        row.status === "paid"
+                          ? "bg-emerald-500/5 hover:bg-emerald-500/10"
+                          : "hover:bg-secondary/30"
+                      }`}
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
@@ -507,20 +551,20 @@ export function EmployeePayrollPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Calendar size={14} />
-                          {formatDate(row.periodStart)} - {formatDate(row.periodEnd)}
+                          {row.paidAt ? formatDate(row.paidAt) : "—"}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-foreground">
-                        {formatCurrency(row.commission)}
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {row.status === "paid" ? "—" : formatCurrency(row.commission)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-foreground">
-                        {formatCurrency(row.totalVales)}
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {row.status === "paid" ? "—" : formatCurrency(row.totalVales)}
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-foreground">
-                        {formatCurrency(row.netAmount)}
+                      <td className="px-4 py-3 text-sm font-medium text-muted-foreground">
+                        {row.status === "paid" ? "—" : formatCurrency(row.netAmount)}
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-foreground">
-                        {formatCurrency(row.paidAmount)}
+                      <td className="px-4 py-3 text-sm font-medium text-emerald-600">
+                        {row.paidAmount > 0 ? formatCurrency(row.paidAmount) : "—"}
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-foreground">
                         {formatCurrency(row.amountDue)}

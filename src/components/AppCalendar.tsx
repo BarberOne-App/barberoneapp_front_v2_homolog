@@ -60,13 +60,13 @@ export function AppCalendar({
 }: AppCalendarProps) {
   const today = new Date();
 
-  const [month, setMonth] = useState<Date>(value ?? today);
+  const [month, setMonth] = useState<Date>(today);
   const [open, setOpen] = useState(false);
   const [openMonth, setOpenMonth] = useState(false);
   const [openYear, setOpenYear] = useState(false);
+  const [draftRange, setDraftRange] = useState<DateRange | undefined>(undefined);
   const isRangeMode = mode === "range";
   const selectedRange = rangeValue ?? { from: rangeStart, to: rangeEnd };
-  const selectedRangeFromTime = selectedRange.from?.getTime();
   const displayValue =
     isRangeMode && selectedRange.from
       ? selectedRange.to
@@ -86,16 +86,8 @@ export function AppCalendar({
   );
 
   useEffect(() => {
-    if (value) {
-      setMonth(value);
-    }
+    if (value) setMonth(value);
   }, [value]);
-
-  useEffect(() => {
-    if (isRangeMode && selectedRange.from && month.getTime() !== selectedRangeFromTime) {
-      setMonth(selectedRange.from);
-    }
-  }, [isRangeMode, month, selectedRange.from, selectedRangeFromTime]);
 
   function handleMonthChange(monthIndex: number) {
     const newDate = new Date(month);
@@ -115,9 +107,10 @@ export function AppCalendar({
     setOpen(nextOpen);
     setOpenMonth(false);
     setOpenYear(false);
-
     if (nextOpen) {
-      setMonth((isRangeMode ? selectedRange.from : value) ?? today);
+      const from = selectedRange.from;
+      setDraftRange(from ? { from, to: undefined } : undefined);
+      setMonth(from ?? today);
     }
   }
 
@@ -130,11 +123,10 @@ export function AppCalendar({
   }
 
   function handleRangeSelect(range?: DateRange) {
-    onRangeChange?.(range);
-    if (range?.from) {
-      setMonth(range.from);
-    }
+    setDraftRange(range);
+    if (range?.from) setMonth(range.from);
     if (range?.from && range?.to) {
+      onRangeChange?.(range);
       setOpen(false);
     }
   }
@@ -270,7 +262,7 @@ export function AppCalendar({
         {isRangeMode ? (
           <Calendar
             mode="range"
-            selected={selectedRange}
+            selected={draftRange}
             onSelect={handleRangeSelect}
             locale={ptBR}
             month={month}
