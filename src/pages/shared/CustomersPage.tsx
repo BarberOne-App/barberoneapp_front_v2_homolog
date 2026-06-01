@@ -2,13 +2,16 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Calendar,
   Cake,
+  CreditCard,
   Edit,
   Filter,
   Loader2,
   Mail,
   MoreHorizontal,
   Phone,
+  Play,
   Plus,
+  PowerOff,
   Search,
   Trash2,
 } from "lucide-react";
@@ -48,6 +51,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useTableSelection } from "@/hooks/useTableSelection";
 import {
   createUser,
@@ -56,6 +66,13 @@ import {
   updateUser,
   type UserProfile,
 } from "@/service/userService";
+import {
+  createSubscription,
+  listSubscriptions,
+  updateSubscription,
+  type Subscription,
+} from "@/service/subscriptionService";
+import { listPlans, type Plan } from "@/service/planService";
 
 type CustomerStatus = "active" | "inactive" | "new";
 type CustomerFilter = "all" | CustomerStatus | "missing-phone";
@@ -272,6 +289,12 @@ export function CustomersPage() {
   const [editingCustomer, setEditingCustomer] = useState<UserProfile | null>(null);
   const [form, setForm] = useState<CustomerFormState>(emptyForm);
   const [customerToDelete, setCustomerToDelete] = useState<UserProfile | null>(null);
+  const [subscriptionMap, setSubscriptionMap] = useState<Map<string, Subscription>>(new Map());
+  const [togglingSubId, setTogglingSubId] = useState<string | null>(null);
+  const [subDialogCustomer, setSubDialogCustomer] = useState<UserProfile | null>(null);
+  const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
+  const [subForm, setSubForm] = useState({ planId: "", paymentMethod: "pix", amount: "" });
+  const [savingSub, setSavingSub] = useState(false);
 
   const limit = 20;
 
@@ -309,6 +332,80 @@ export function CustomersPage() {
       window.clearTimeout(timeout);
     };
   }, [page, search]);
+
+  useEffect(() => {
+    async function loadAllSubscriptions() {
+      const map = new Map<string, Subscription>();
+      let page = 1;
+      const pageLimit = 100;
+      while (true) {
+        const res = await listSubscriptions({ limit: pageLimit, page });
+        for (const sub of res.items) map.set(sub.userId, sub);
+        if (res.items.length < pageLimit) break;
+        page++;
+      }
+      setSubscriptionMap(new Map(map));
+    }
+    loadAllSubscriptions().catch(() => {});
+  }, []);
+
+  async function toggleCustomerSubscription(customer: UserProfile) {
+    const sub = subscriptionMap.get(customer.id);
+    if (!sub) return;
+    setTogglingSubId(sub.id);
+    try {
+      const newStatus = sub.status === "active" ? "cancelled" : "active";
+      await updateSubscription(sub.id, { status: newStatus });
+      toast.success(sub.status === "active" ? "Plano cancelado." : "Plano ativado.");
+      setSubscriptionMap((prev) => {
+        const next = new Map(prev);
+        next.set(customer.id, { ...sub, status: newStatus });
+        return next;
+      });
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setTogglingSubId(null);
+    }
+  }
+
+  function openSubscriptionDialog(customer: UserProfile) {
+    setSubDialogCustomer(customer);
+    setSubForm({ planId: "", paymentMethod: "pix", amount: "" });
+    listPlans({ active: true })
+      .then(setAvailablePlans)
+      .catch(() => setAvailablePlans([]));
+  }
+
+  async function handleCreateSubscription(e: FormEvent) {
+    e.preventDefault();
+    if (!subDialogCustomer || !subForm.planId) return;
+    const amount = parseFloat(subForm.amount.replace(",", "."));
+    if (!amount || amount <= 0) {
+      toast.error("Informe um valor válido.");
+      return;
+    }
+    setSavingSub(true);
+    try {
+      const newSub = await createSubscription({
+        userId: subDialogCustomer.id,
+        planId: subForm.planId,
+        amount,
+        paymentMethod: subForm.paymentMethod,
+      });
+      setSubscriptionMap((prev) => {
+        const next = new Map(prev);
+        next.set(subDialogCustomer.id, newSub);
+        return next;
+      });
+      toast.success("Plano criado com sucesso.");
+      setSubDialogCustomer(null);
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSavingSub(false);
+    }
+  }
 
   const filteredCustomers = useMemo(() => {
     return customers.filter((customer) => {
@@ -570,6 +667,9 @@ export function CustomersPage() {
                     Status
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Status Plano
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Aniversário
                   </th>
                   <th className="w-10 px-4 py-3" />
@@ -578,14 +678,14 @@ export function CustomersPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={9} className="p-8 text-center text-sm text-muted-foreground">
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                       Carregando clientes...
                     </td>
                   </tr>
                 ) : filteredCustomers.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={9} className="p-8 text-center text-sm text-muted-foreground">
                       Nenhum cliente encontrado.
                     </td>
                   </tr>
@@ -658,6 +758,35 @@ export function CustomersPage() {
                         </td>
                         <td className="px-4 py-3">
                           {(() => {
+                            const sub = subscriptionMap.get(customer.id);
+                            if (!sub) {
+                              return (
+                                <Badge variant="outline" className="border-muted-foreground/20 bg-muted text-muted-foreground">
+                                  Sem plano
+                                </Badge>
+                              );
+                            }
+                            const classMap: Record<string, string> = {
+                              active: "border-emerald-500/20 bg-emerald-500/10 text-emerald-600",
+                              paused: "border-amber-500/20 bg-amber-500/10 text-amber-600",
+                              cancelled: "border-muted-foreground/20 bg-muted text-muted-foreground",
+                              expired: "border-muted-foreground/20 bg-muted text-muted-foreground",
+                            };
+                            const labelMap: Record<string, string> = {
+                              active: "Ativo",
+                              paused: "Pausado",
+                              cancelled: "Cancelado",
+                              expired: "Expirado",
+                            };
+                            return (
+                              <Badge variant="outline" className={classMap[sub.status] ?? ""}>
+                                {labelMap[sub.status] ?? sub.status}
+                              </Badge>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-4 py-3">
+                          {(() => {
                             const bd = customer.birthDate ?? customer.birth_date;
                             const formatted = formatBirthday(bd);
                             const isToday = isBirthdayToday(bd);
@@ -721,6 +850,41 @@ export function CustomersPage() {
                                 <Edit size={14} />
                                 Editar
                               </DropdownMenuItem>
+                              {(() => {
+                                const sub = subscriptionMap.get(customer.id);
+                                if (!sub || sub.status === "expired") {
+                                  return (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem onClick={() => openSubscriptionDialog(customer)}>
+                                        <CreditCard size={14} />
+                                        Criar plano
+                                      </DropdownMenuItem>
+                                    </>
+                                  );
+                                }
+                                return (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      disabled={togglingSubId === sub.id}
+                                      onClick={() => toggleCustomerSubscription(customer)}
+                                    >
+                                      {sub.status === "active" ? (
+                                        <>
+                                          <PowerOff size={14} />
+                                          Cancelar plano
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Play size={14} />
+                                          Ativar plano
+                                        </>
+                                      )}
+                                    </DropdownMenuItem>
+                                  </>
+                                );
+                              })()}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 variant="destructive"
@@ -871,6 +1035,79 @@ export function CustomersPage() {
                 ) : (
                   "Salvar"
                 )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(subDialogCustomer)} onOpenChange={(open) => { if (!open) setSubDialogCustomer(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={handleCreateSubscription} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>Criar Plano</DialogTitle>
+              <DialogDescription>
+                Associar uma assinatura a {subDialogCustomer?.name}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Plano</Label>
+                <Select
+                  value={subForm.planId}
+                  onValueChange={(val) => {
+                    const plan = availablePlans.find((p) => p.id === val);
+                    setSubForm((f) => ({ ...f, planId: val, amount: plan ? String(plan.price) : f.amount }));
+                  }}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um plano" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availablePlans.map((plan) => (
+                      <SelectItem key={plan.id} value={plan.id}>
+                        {plan.name} — {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(plan.price)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Valor (R$)</Label>
+                <Input
+                  value={subForm.amount}
+                  onChange={(e) => setSubForm((f) => ({ ...f, amount: e.target.value }))}
+                  placeholder="Ex: 89,90"
+                  inputMode="decimal"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Forma de pagamento</Label>
+                <Select
+                  value={subForm.paymentMethod}
+                  onValueChange={(val) => setSubForm((f) => ({ ...f, paymentMethod: val }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pix">Pix</SelectItem>
+                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                    <SelectItem value="debito">Débito</SelectItem>
+                    <SelectItem value="credito">Crédito</SelectItem>
+                    <SelectItem value="local">Local</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setSubDialogCustomer(null)} disabled={savingSub}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={savingSub || !subForm.planId}>
+                {savingSub ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando</> : "Criar plano"}
               </Button>
             </DialogFooter>
           </form>

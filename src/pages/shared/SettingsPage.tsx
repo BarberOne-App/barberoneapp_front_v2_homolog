@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Store,
   Bell,
+  Building2,
+  ChevronDown,
   Shield,
   CreditCard,
   QrCode,
@@ -31,6 +33,11 @@ import {
   getBarbershopProfile,
   updateBarbershopProfile,
 } from '../../service/barbershopProfileService';
+import {
+  createPagarmeRecipient,
+  getPagarmeRecipient,
+  updatePagarmeRecipient,
+} from '../../service/pagarmeService';
 import {
   getHomeInfo,
   type HomeInfo,
@@ -132,6 +139,23 @@ function getHeroImages(data: HomeInfo) {
     .slice(0, MAX_HERO_IMAGES);
 }
 
+function formatCNPJ(value: string) {
+  const d = value.replace(/\D/g, '').slice(0, 14);
+  return d
+    .replace(/^(\d{2})(\d)/, '$1.$2')
+    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1/$2')
+    .replace(/(\d{4})(\d)/, '$1-$2');
+}
+
+function formatPhone(value: string) {
+  const d = value.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 10) {
+    return d.replace(/^(\d{2})(\d)/, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2');
+  }
+  return d.replace(/^(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2');
+}
+
 export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps) {
   const { user, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState('general');
@@ -177,6 +201,24 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
   const [isLoadingBusinessProfile, setIsLoadingBusinessProfile] = useState(false);
   const [isLoadingHomeInfo, setIsLoadingHomeInfo] = useState(false);
   const [isSavingGeneralSettings, setIsSavingGeneralSettings] = useState(false);
+  const [isSavingBarbershopData, setIsSavingBarbershopData] = useState(false);
+
+  // Recebedor Pagar.me
+  const [pagarmeRecipientId, setPagarmeRecipientId] = useState<string | null>(null);
+  const [pagarmeRecipientStatus, setPagarmeRecipientStatus] = useState<string | null>(null);
+  const [isSavingRecipient, setIsSavingRecipient] = useState(false);
+  const [isLoadingRecipient, setIsLoadingRecipient] = useState(false);
+  const [recipientExpanded, setRecipientExpanded] = useState(false);
+  const [recipientForm, setRecipientForm] = useState({
+    name: '', email: '', type: 'individual' as 'individual' | 'company',
+    document: '', phone: '', birthdate: '', monthlyIncome: '',
+    professionalOccupation: '',
+    street: '', streetNumber: '', complementary: '', neighborhood: '',
+    city: '', state: 'MG', zipCode: '', referencePoint: '',
+    bankHolderName: '', bankHolderType: 'individual' as 'individual' | 'company',
+    bankHolderDocument: '', bank: '341', branchNumber: '', branchCheckDigit: '',
+    accountNumber: '', accountCheckDigit: '',
+  });
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -228,11 +270,64 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
         setBusinessForm({
           name: profile.name ?? '',
           email: profile.email ?? '',
-          phone: profile.phone ?? '',
-          cnpj: profile.cnpj ?? '',
+          phone: profile.phone ? formatPhone(profile.phone) : '',
+          cnpj: profile.cnpj ? formatCNPJ(profile.cnpj) : '',
         });
         setBusinessSlug(profile.slug ?? '');
         setBusinessLogoUrl(profile.logoUrl ?? '');
+        setPagarmeRecipientId(profile.pagarmeRecipientId ?? null);
+        setPagarmeRecipientStatus(profile.pagarmeRecipientStatus ?? null);
+
+        // Pré-popula o formulário de recebedor com os dados disponíveis
+        if (profile.pagarmeRecipientId) {
+          setIsLoadingRecipient(true);
+          getPagarmeRecipient(profile.pagarmeRecipientId)
+            .then((recipient) => {
+              if (!isMounted) return;
+              const ri = recipient?.register_information ?? {};
+              const addr = ri?.address ?? {};
+              const ba = recipient?.default_bank_account ?? {};
+              const phone = Array.isArray(ri?.phone_numbers) ? ri.phone_numbers[0] : null;
+              setRecipientForm({
+                name: ri.name ?? profile.name ?? '',
+                email: ri.email ?? profile.email ?? '',
+                type: ri.type ?? 'individual',
+                document: ri.document ?? '',
+                phone: `${phone?.ddd ?? ''}${phone?.number ?? ''}`,
+                birthdate: ri.birthdate ? ri.birthdate.split('/').reverse().join('-') : '',
+                monthlyIncome: ri.monthly_income ? String(ri.monthly_income) : '',
+                professionalOccupation: ri.professional_occupation ?? '',
+                street: addr.street ?? '',
+                streetNumber: addr.street_number ?? '',
+                complementary: addr.complementary ?? '',
+                neighborhood: addr.neighborhood ?? '',
+                city: addr.city ?? '',
+                state: addr.state ?? 'MG',
+                zipCode: addr.zip_code ?? '',
+                referencePoint: addr.reference_point ?? '',
+                bankHolderName: ba.holder_name ?? '',
+                bankHolderType: ba.holder_type ?? 'individual',
+                bankHolderDocument: ba.holder_document ?? '',
+                bank: ba.bank ?? '341',
+                branchNumber: ba.branch_number ?? '',
+                branchCheckDigit: ba.branch_check_digit ?? '',
+                accountNumber: ba.account_number ?? '',
+                accountCheckDigit: ba.account_check_digit ?? '',
+              });
+              setPagarmeRecipientStatus(recipient?.status ?? null);
+            })
+            .catch(() => {})
+            .finally(() => { if (isMounted) setIsLoadingRecipient(false); });
+        } else {
+          // Pré-popula com dados da barbearia para facilitar o cadastro
+          setRecipientForm((prev) => ({
+            ...prev,
+            name: profile.name ?? '',
+            email: profile.email ?? '',
+            document: profile.cnpj ?? '',
+            bankHolderDocument: profile.cnpj ?? '',
+          }));
+        }
       } catch {
         if (isMounted) {
           toast.error('Erro ao carregar dados da barbearia.');
@@ -403,6 +498,41 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
       ...current,
       [field]: value,
     }));
+  }
+
+  async function saveBarbershopData() {
+    if (!businessForm.name.trim()) {
+      toast.error('O nome comercial é obrigatório.');
+      return;
+    }
+
+    setIsSavingBarbershopData(true);
+    try {
+      const profile = await updateBarbershopProfile({
+        name: businessForm.name.trim(),
+        email: businessForm.email.trim(),
+        phone: businessForm.phone.trim(),
+        cnpj: businessForm.cnpj.replace(/\D/g, ''),
+        logoUrl: businessLogoUrl,
+      });
+
+      setBusinessForm({
+        name: profile.name ?? '',
+        email: profile.email ?? '',
+        phone: profile.phone ?? '',
+        cnpj: profile.cnpj ? formatCNPJ(profile.cnpj) : '',
+      });
+      setBusinessSlug(profile.slug ?? '');
+      persistStoredBarbershop(profile);
+
+      const isNew = !businessForm.cnpj.replace(/\D/g, '');
+      toast.success(isNew ? 'Dados cadastrados com sucesso.' : 'Dados atualizados com sucesso.');
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      toast.error(message || 'Erro ao salvar dados da barbearia.');
+    } finally {
+      setIsSavingBarbershopData(false);
+    }
   }
 
   function persistStoredBarbershop(profile: {
@@ -691,6 +821,82 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
     return (Object.entries(paymentMethods) as Array<[BookingPaymentMethod, boolean]>)
       .filter(([, enabled]) => !enabled)
       .map(([method]) => method);
+  }
+
+  function updateRecipientField<K extends keyof typeof recipientForm>(field: K, value: typeof recipientForm[K]) {
+    setRecipientForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function saveRecipient() {
+    const f = recipientForm;
+    if (!f.name.trim()) { toast.error('Informe o nome do responsável.'); return; }
+    if (!f.document.replace(/\D/g, '')) { toast.error('Informe CPF ou CNPJ.'); return; }
+    if (!f.street.trim() || !f.city.trim() || !f.zipCode.replace(/\D/g, '')) {
+      toast.error('Preencha os campos de endereço obrigatórios.'); return;
+    }
+    if (!f.bankHolderName.trim() || !f.accountNumber.trim() || !f.branchNumber.trim()) {
+      toast.error('Preencha os dados bancários obrigatórios.'); return;
+    }
+
+    const barbershop = getStoredBarbershop();
+    if (!barbershop?.id) { toast.error('Barbearia não encontrada.'); return; }
+
+    const phoneDigits = f.phone.replace(/\D/g, '');
+    const payload = {
+      barbershopId: barbershop.id,
+      linkBarbershop: true as const,
+      ...(pagarmeRecipientId ? { recipientId: pagarmeRecipientId } : {}),
+      register_information: {
+        name: f.name.trim(),
+        email: f.email.trim().toLowerCase(),
+        type: f.type,
+        document: f.document.replace(/\D/g, ''),
+        birthdate: f.birthdate ? f.birthdate.split('-').reverse().join('/') : undefined,
+        monthly_income: f.monthlyIncome ? Number(f.monthlyIncome.replace(/\D/g, '')) : undefined,
+        professional_occupation: f.professionalOccupation.trim() || undefined,
+        phone_numbers: phoneDigits ? [{ ddd: phoneDigits.slice(0, 2), number: phoneDigits.slice(2), type: 'mobile' }] : [],
+        address: {
+          street: f.street.trim(),
+          street_number: f.streetNumber.trim(),
+          complementary: f.complementary.trim() || undefined,
+          neighborhood: f.neighborhood.trim(),
+          city: f.city.trim(),
+          state: f.state.trim(),
+          zip_code: f.zipCode.replace(/\D/g, ''),
+          reference_point: f.referencePoint.trim() || undefined,
+        },
+      },
+      default_bank_account: {
+        holder_name: f.bankHolderName.trim(),
+        holder_type: f.bankHolderType,
+        holder_document: f.bankHolderDocument.replace(/\D/g, ''),
+        bank: f.bank.replace(/\D/g, ''),
+        branch_number: f.branchNumber.replace(/\D/g, ''),
+        branch_check_digit: f.branchCheckDigit.replace(/\D/g, '') || undefined,
+        account_number: f.accountNumber.replace(/\D/g, ''),
+        account_check_digit: f.accountCheckDigit.replace(/\D/g, ''),
+        type: 'checking' as const,
+      },
+    };
+
+    setIsSavingRecipient(true);
+    try {
+      let recipient;
+      if (pagarmeRecipientId) {
+        recipient = await updatePagarmeRecipient(pagarmeRecipientId, payload as any);
+        toast.success('Recebedor atualizado com sucesso.');
+      } else {
+        recipient = await createPagarmeRecipient(payload);
+        toast.success('Recebedor cadastrado com sucesso.');
+      }
+      setPagarmeRecipientId(recipient?.id ?? null);
+      setPagarmeRecipientStatus(recipient?.status ?? null);
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      toast.error(message || 'Erro ao salvar recebedor Pagar.me.');
+    } finally {
+      setIsSavingRecipient(false);
+    }
   }
 
   async function saveGeneralSettings() {
@@ -1377,6 +1583,225 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
 
         {/* Security */}
         <TabsContent value="security" className="space-y-6">
+
+          {/* Recebedor Pagar.me */}
+          <div className="bg-card rounded-xl border border-border p-6 space-y-6">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Building2 size={18} />
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-foreground">Recebedor Pagar.me</h3>
+                <p className="text-sm text-muted-foreground">
+                  Cadastre o recebedor da barbearia depois do onboarding inicial. Assim o cadastro
+                  da barbearia continua simples e os dados financeiros ficam para a etapa de
+                  administração.
+                </p>
+              </div>
+            </div>
+
+            {/* Status */}
+            <div className="rounded-lg border border-border bg-secondary/40 p-4 space-y-1">
+              <p className="text-sm text-muted-foreground">
+                Recebedor cadastrado:{' '}
+                <strong className="text-foreground">{pagarmeRecipientId || 'não criado'}</strong>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Status:{' '}
+                <strong className={
+                  pagarmeRecipientStatus === 'active'
+                    ? 'text-emerald-600'
+                    : pagarmeRecipientStatus
+                    ? 'text-amber-600'
+                    : 'text-muted-foreground'
+                }>
+                  {pagarmeRecipientStatus || 'pendente'}
+                </strong>
+              </p>
+            </div>
+
+            {isLoadingRecipient ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner />
+                Carregando dados do recebedor...
+              </div>
+            ) : (
+              <div className="space-y-6">
+
+                {/* Campo sempre visível + toggle */}
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-foreground">
+                      Nome / Razão Social <span className="text-destructive">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={recipientForm.name}
+                      onChange={(e) => updateRecipientField('name', e.target.value)}
+                      disabled={isSavingRecipient}
+                      placeholder="Nome completo ou razão social"
+                      className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setRecipientExpanded((v) => !v)}
+                    className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <ChevronDown
+                      size={15}
+                      className={`transition-transform duration-200 ${recipientExpanded ? 'rotate-180' : ''}`}
+                    />
+                    {recipientExpanded ? 'Ocultar campos adicionais' : 'Preencher dados completos'}
+                  </button>
+                </div>
+
+                {/* Campos expandíveis */}
+                {recipientExpanded && (
+                  <div className="space-y-6">
+
+                {/* Seção 1: restante dos dados do responsável */}
+                <div>
+                  <h4 className="mb-3 text-sm font-semibold text-foreground uppercase tracking-wide">Dados do Responsável</h4>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">E-mail</label>
+                      <input type="email" value={recipientForm.email} onChange={(e) => updateRecipientField('email', e.target.value)} disabled={isSavingRecipient} placeholder="email@barbearia.com" className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Tipo</label>
+                      <select value={recipientForm.type} onChange={(e) => updateRecipientField('type', e.target.value as 'individual' | 'company')} disabled={isSavingRecipient} className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60">
+                        <option value="individual">Pessoa Física</option>
+                        <option value="company">Pessoa Jurídica</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">CPF / CNPJ <span className="text-destructive">*</span></label>
+                      <input type="text" value={recipientForm.document} onChange={(e) => updateRecipientField('document', e.target.value.replace(/\D/g, '').slice(0, 14))} disabled={isSavingRecipient} placeholder="Apenas números" maxLength={14} className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Telefone</label>
+                      <input type="tel" value={recipientForm.phone} onChange={(e) => updateRecipientField('phone', formatPhone(e.target.value))} disabled={isSavingRecipient} placeholder="(00) 00000-0000" maxLength={15} className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Data de Nascimento</label>
+                      <input type="date" value={recipientForm.birthdate} onChange={(e) => updateRecipientField('birthdate', e.target.value)} disabled={isSavingRecipient} className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Renda Mensal (R$)</label>
+                      <input type="number" min="0" value={recipientForm.monthlyIncome} onChange={(e) => updateRecipientField('monthlyIncome', e.target.value)} disabled={isSavingRecipient} placeholder="0" className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Ocupação Profissional</label>
+                      <input type="text" value={recipientForm.professionalOccupation} onChange={(e) => updateRecipientField('professionalOccupation', e.target.value)} disabled={isSavingRecipient} placeholder="Ex: Empresário" className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Seção 2: Endereço */}
+                <div>
+                  <h4 className="mb-3 text-sm font-semibold text-foreground uppercase tracking-wide">Endereço</h4>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">CEP <span className="text-destructive">*</span></label>
+                      <input type="text" value={recipientForm.zipCode} onChange={(e) => updateRecipientField('zipCode', e.target.value.replace(/\D/g, '').slice(0, 8))} disabled={isSavingRecipient} placeholder="00000000" maxLength={8} className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Rua <span className="text-destructive">*</span></label>
+                      <input type="text" value={recipientForm.street} onChange={(e) => updateRecipientField('street', e.target.value)} disabled={isSavingRecipient} placeholder="Nome da rua" className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Número</label>
+                      <input type="text" value={recipientForm.streetNumber} onChange={(e) => updateRecipientField('streetNumber', e.target.value)} disabled={isSavingRecipient} placeholder="123" className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Complemento</label>
+                      <input type="text" value={recipientForm.complementary} onChange={(e) => updateRecipientField('complementary', e.target.value)} disabled={isSavingRecipient} placeholder="Sala, andar..." className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Bairro</label>
+                      <input type="text" value={recipientForm.neighborhood} onChange={(e) => updateRecipientField('neighborhood', e.target.value)} disabled={isSavingRecipient} placeholder="Bairro" className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Cidade <span className="text-destructive">*</span></label>
+                      <input type="text" value={recipientForm.city} onChange={(e) => updateRecipientField('city', e.target.value)} disabled={isSavingRecipient} placeholder="Cidade" className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Estado (UF)</label>
+                      <input type="text" value={recipientForm.state} onChange={(e) => updateRecipientField('state', e.target.value.toUpperCase().slice(0, 2))} disabled={isSavingRecipient} placeholder="MG" maxLength={2} className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Ponto de Referência</label>
+                      <input type="text" value={recipientForm.referencePoint} onChange={(e) => updateRecipientField('referencePoint', e.target.value)} disabled={isSavingRecipient} placeholder="Próximo a..." className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Seção 3: Dados bancários */}
+                <div>
+                  <h4 className="mb-3 text-sm font-semibold text-foreground uppercase tracking-wide">Dados Bancários</h4>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Nome do Titular <span className="text-destructive">*</span></label>
+                      <input type="text" value={recipientForm.bankHolderName} onChange={(e) => updateRecipientField('bankHolderName', e.target.value)} disabled={isSavingRecipient} placeholder="Nome como no banco" className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Tipo do Titular</label>
+                      <select value={recipientForm.bankHolderType} onChange={(e) => updateRecipientField('bankHolderType', e.target.value as 'individual' | 'company')} disabled={isSavingRecipient} className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60">
+                        <option value="individual">Pessoa Física</option>
+                        <option value="company">Pessoa Jurídica</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">CPF/CNPJ do Titular</label>
+                      <input type="text" value={recipientForm.bankHolderDocument} onChange={(e) => updateRecipientField('bankHolderDocument', e.target.value.replace(/\D/g, '').slice(0, 14))} disabled={isSavingRecipient} placeholder="Apenas números" maxLength={14} className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Banco (código)</label>
+                      <input type="text" value={recipientForm.bank} onChange={(e) => updateRecipientField('bank', e.target.value.replace(/\D/g, '').slice(0, 3))} disabled={isSavingRecipient} placeholder="341" maxLength={3} className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Agência <span className="text-destructive">*</span></label>
+                      <input type="text" value={recipientForm.branchNumber} onChange={(e) => updateRecipientField('branchNumber', e.target.value.replace(/\D/g, ''))} disabled={isSavingRecipient} placeholder="0001" className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Dígito da Agência</label>
+                      <input type="text" value={recipientForm.branchCheckDigit} onChange={(e) => updateRecipientField('branchCheckDigit', e.target.value.replace(/\D/g, '').slice(0, 1))} disabled={isSavingRecipient} placeholder="0" maxLength={1} className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Conta <span className="text-destructive">*</span></label>
+                      <input type="text" value={recipientForm.accountNumber} onChange={(e) => updateRecipientField('accountNumber', e.target.value.replace(/\D/g, ''))} disabled={isSavingRecipient} placeholder="00000" className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-foreground">Dígito da Conta <span className="text-destructive">*</span></label>
+                      <input type="text" value={recipientForm.accountCheckDigit} onChange={(e) => updateRecipientField('accountCheckDigit', e.target.value.replace(/\D/g, '').slice(0, 2))} disabled={isSavingRecipient} placeholder="0" maxLength={2} className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end border-t border-border pt-4">
+                  <Button
+                    type="button"
+                    onClick={saveRecipient}
+                    disabled={isSavingRecipient}
+                    className="gap-2"
+                  >
+                    {isSavingRecipient ? (
+                      <><Spinner /> Salvando...</>
+                    ) : pagarmeRecipientId ? (
+                      <><Save size={14} /> Atualizar recebedor</>
+                    ) : (
+                      <><Save size={14} /> Cadastrar recebedor</>
+                    )}
+                  </Button>
+                </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="bg-card rounded-xl border border-border p-6">
             <h3 className="text-lg font-medium text-foreground mb-4">Alterar Senha</h3>
             <div className="space-y-4 max-w-md">

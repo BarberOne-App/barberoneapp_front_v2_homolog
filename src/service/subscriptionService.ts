@@ -48,3 +48,23 @@ export async function listSubscriptions(params: ListSubscriptionsParams = {}) {
   const response = await api.get<ListSubscriptionsResponse>("/subscriptions", { params });
   return response.data;
 }
+
+export async function updateSubscription(
+  id: string,
+  data: { status?: Subscription["status"] },
+) {
+  const response = await api.patch<Subscription>(`/subscriptions/${id}`, data);
+  return response.data;
+}
+
+export interface CreateSubscriptionPayload {
+  userId: string;
+  planId: string;
+  amount: number;
+  paymentMethod?: string;
+}
+
+export async function createSubscription(data: CreateSubscriptionPayload) {
+  const response = await api.post<Subscription>("/subscriptions", data);
+  return response.data;
+}

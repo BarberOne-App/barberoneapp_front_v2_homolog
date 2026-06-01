@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { 
-  Search, 
-  Book, 
-  MessageCircle, 
-  FileText, 
-  Phone, 
-  Mail, 
+import {
+  Search,
+  Book,
+  MessageCircle,
+  FileText,
+  Phone,
+  Mail,
   ChevronRight,
   Play,
   ExternalLink
@@ -15,71 +15,71 @@ import { Badge } from '@/components/ui/badge';
 
 const faqs = [
   {
-    question: 'How do I create a new booking?',
-    answer: 'To create a new booking, go to the Bookings page and click the "New Booking" button. Fill in the customer details, select the service, staff member, and preferred date/time.',
-    category: 'Bookings'
+    question: 'Como criar um novo agendamento?',
+    answer: 'Para criar um novo agendamento, acesse a página de Agendamentos e clique no botão "Novo Agendamento". Preencha os dados do cliente, selecione o serviço, o funcionário e a data/horário desejados.',
+    category: 'Agendamentos'
   },
   {
-    question: 'How do I add a new staff member?',
-    answer: 'Navigate to the Staff page and click "Add Staff". Fill in the required information including name, contact details, and role. The new staff member will receive login credentials via email.',
-    category: 'Staff'
+    question: 'Como adicionar um novo funcionário?',
+    answer: 'Acesse a página de Funcionários e clique em "Adicionar Funcionário". Preencha as informações necessárias, incluindo nome, contato e cargo. O novo funcionário receberá as credenciais de acesso por e-mail.',
+    category: 'Funcionários'
   },
   {
-    question: 'How do I process a refund?',
-    answer: 'Go to the Payments page, find the transaction you want to refund, click on the three dots menu, and select "Process Refund". Enter the refund amount and reason.',
-    category: 'Payments'
+    question: 'Como processar um reembolso?',
+    answer: 'Acesse a página de Pagamentos, localize a transação que deseja reembolsar, clique no menu de três pontos e selecione "Processar Reembolso". Informe o valor e o motivo do reembolso.',
+    category: 'Pagamentos'
   },
   {
-    question: 'How do I create a promotion?',
-    answer: 'Visit the Promotions page and click "Add Promotion". Set the promotion name, discount percentage, valid dates, and generate a unique code for customers to use.',
-    category: 'Promotions'
+    question: 'Como criar uma promoção?',
+    answer: 'Acesse a página de Promoções e clique em "Adicionar Promoção". Defina o nome, o percentual de desconto, as datas de validade e gere um código exclusivo para os clientes utilizarem.',
+    category: 'Promoções'
   },
   {
-    question: 'How do I view reports?',
-    answer: 'Click on "Generate Reports" in the header or navigate to the Overview page. You can filter reports by date range, staff member, or service type.',
-    category: 'Reports'
+    question: 'Como visualizar relatórios?',
+    answer: 'Clique em "Gerar Relatórios" no cabeçalho ou acesse a página de Visão Geral. Você pode filtrar os relatórios por período, funcionário ou tipo de serviço.',
+    category: 'Relatórios'
   },
   {
-    question: 'How do I manage user permissions?',
-    answer: 'Go to Settings > Users & Roles. Select a role and toggle the permissions you want to enable or disable for that role.',
-    category: 'Settings'
+    question: 'Como gerenciar permissões de usuários?',
+    answer: 'Acesse Configurações > Usuários e Perfis. Selecione um perfil e ative ou desative as permissões desejadas para aquele perfil.',
+    category: 'Configurações'
   },
 ];
 
 const guides = [
-  { title: 'Getting Started Guide', description: 'Learn the basics of using BarberOne', icon: Book, color: 'bg-blue-500/10 text-blue-500' },
-  { title: 'Staff Management', description: 'How to manage your team effectively', icon: MessageCircle, color: 'bg-emerald-500/10 text-emerald-500' },
-  { title: 'Booking System', description: 'Master the booking workflow', icon: FileText, color: 'bg-purple-500/10 text-purple-500' },
-  { title: 'Payment Processing', description: 'Handle payments and refunds', icon: FileText, color: 'bg-amber-500/10 text-amber-500' },
+  { title: 'Guia de Introdução', description: 'Aprenda o básico do BarberOne', icon: Book, color: 'bg-blue-500/10 text-blue-500' },
+  { title: 'Gestão de Funcionários', description: 'Como gerenciar sua equipe de forma eficiente', icon: MessageCircle, color: 'bg-emerald-500/10 text-emerald-500' },
+  { title: 'Sistema de Agendamentos', description: 'Domine o fluxo de agendamentos', icon: FileText, color: 'bg-purple-500/10 text-purple-500' },
+  { title: 'Processamento de Pagamentos', description: 'Gerencie pagamentos e reembolsos', icon: FileText, color: 'bg-amber-500/10 text-amber-500' },
 ];
 
 const videos = [
-  { title: 'Dashboard', duration: '5:30', thumbnail: 'D' },
-  { title: 'Creating Your First Booking', duration: '3:45', thumbnail: 'B' },
-  { title: 'Managing Staff Schedules', duration: '7:15', thumbnail: 'S' },
-  { title: 'Setting Up Promotions', duration: '4:20', thumbnail: 'P' },
+  { title: 'Painel de Controle', duration: '5:30', thumbnail: 'P' },
+  { title: 'Criando seu Primeiro Agendamento', duration: '3:45', thumbnail: 'A' },
+  { title: 'Gerenciando Escalas de Funcionários', duration: '7:15', thumbnail: 'E' },
+  { title: 'Configurando Promoções', duration: '4:20', thumbnail: 'C' },
 ];
 
 export function HelpCenterPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
 
-  const filteredFaqs = faqs.filter(faq => 
+  const filteredFaqs = faqs.filter(faq =>
     faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
     faq.answer.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
     <div className="space-y-8">
-      {/* Hero Section */}
+      {/* Seção de Destaque */}
       <div className="bg-gradient-to-r from-primary/20 to-primary/5 rounded-xl p-8 border border-primary/20 text-center">
-        <h2 className="text-2xl font-semibold text-foreground mb-2">How can we help you?</h2>
-        <p className="text-muted-foreground mb-6">Search our knowledge base or browse categories below</p>
+        <h2 className="text-2xl font-semibold text-foreground mb-2">Como podemos te ajudar?</h2>
+        <p className="text-muted-foreground mb-6">Pesquise em nossa base de conhecimento ou navegue pelas categorias abaixo</p>
         <div className="max-w-lg mx-auto relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-          <input 
-            type="text" 
-            placeholder="Search for help..."
+          <input
+            type="text"
+            placeholder="Buscar ajuda..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-card text-foreground placeholder:text-muted-foreground rounded-xl pl-12 pr-4 py-3 border border-border focus:outline-none focus:ring-2 focus:ring-primary"
@@ -87,13 +87,13 @@ export function HelpCenterPage() {
         </div>
       </div>
 
-      {/* Quick Guides */}
+      {/* Guias Rápidos */}
       <div>
-        <h3 className="text-lg font-medium text-foreground mb-4">Quick Guides</h3>
+        <h3 className="text-lg font-medium text-foreground mb-4">Guias Rápidos</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {guides.map((guide, idx) => (
-            <div 
-              key={idx} 
+            <div
+              key={idx}
               className="bg-card rounded-xl p-5 border border-border hover:border-primary/50 transition-colors cursor-pointer group"
             >
               <div className={`w-12 h-12 rounded-lg ${guide.color} flex items-center justify-center mb-4`}>
@@ -108,18 +108,18 @@ export function HelpCenterPage() {
         </div>
       </div>
 
-      {/* Video Tutorials */}
+      {/* Tutoriais em Vídeo */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium text-foreground">Video Tutorials</h3>
+          <h3 className="text-lg font-medium text-foreground">Tutoriais em Vídeo</h3>
           <Button variant="ghost" size="sm" className="gap-1 text-primary">
-            View All <ChevronRight size={14} />
+            Ver Todos <ChevronRight size={14} />
           </Button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {videos.map((video, idx) => (
-            <div 
-              key={idx} 
+            <div
+              key={idx}
               className="bg-card rounded-xl border border-border overflow-hidden group cursor-pointer"
             >
               <div className="aspect-video bg-secondary flex items-center justify-center relative">
@@ -141,13 +141,13 @@ export function HelpCenterPage() {
         </div>
       </div>
 
-      {/* FAQs */}
+      {/* Perguntas Frequentes */}
       <div>
-        <h3 className="text-lg font-medium text-foreground mb-4">Frequently Asked Questions</h3>
+        <h3 className="text-lg font-medium text-foreground mb-4">Perguntas Frequentes</h3>
         <div className="bg-card rounded-xl border border-border overflow-hidden">
           {filteredFaqs.map((faq, idx) => (
-            <div 
-              key={idx} 
+            <div
+              key={idx}
               className="border-b border-border last:border-b-0"
             >
               <button
@@ -158,8 +158,8 @@ export function HelpCenterPage() {
                   <Badge variant="secondary" className="text-xs">{faq.category}</Badge>
                   <span className="text-sm font-medium text-foreground">{faq.question}</span>
                 </div>
-                <ChevronRight 
-                  size={16} 
+                <ChevronRight
+                  size={16}
                   className={`text-muted-foreground transition-transform ${expandedFaq === idx ? 'rotate-90' : ''}`}
                 />
               </button>
@@ -173,16 +173,16 @@ export function HelpCenterPage() {
         </div>
       </div>
 
-      {/* Contact Support */}
+      {/* Suporte */}
       <div>
-        <h3 className="text-lg font-medium text-foreground mb-4">Still need help?</h3>
+        <h3 className="text-lg font-medium text-foreground mb-4">Ainda precisa de ajuda?</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-card rounded-xl p-5 border border-border flex items-center gap-4">
             <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
               <Mail size={24} className="text-primary" />
             </div>
             <div>
-              <h4 className="text-sm font-medium text-foreground">Email Support</h4>
+              <h4 className="text-sm font-medium text-foreground">Suporte por E-mail</h4>
               <p className="text-xs text-muted-foreground">support@barberone.com</p>
             </div>
           </div>
@@ -191,7 +191,7 @@ export function HelpCenterPage() {
               <Phone size={24} className="text-emerald-500" />
             </div>
             <div>
-              <h4 className="text-sm font-medium text-foreground">Phone Support</h4>
+              <h4 className="text-sm font-medium text-foreground">Suporte por Telefone</h4>
               <p className="text-xs text-muted-foreground">(11) 98765-9999</p>
             </div>
           </div>
@@ -200,26 +200,26 @@ export function HelpCenterPage() {
               <MessageCircle size={24} className="text-purple-500" />
             </div>
             <div>
-              <h4 className="text-sm font-medium text-foreground">Live Chat</h4>
-              <p className="text-xs text-muted-foreground">Available 9AM - 6PM</p>
+              <h4 className="text-sm font-medium text-foreground">Chat ao Vivo</h4>
+              <p className="text-xs text-muted-foreground">Disponível das 9h às 18h</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Documentation Link */}
+      {/* Link para Documentação */}
       <div className="bg-card rounded-xl p-6 border border-border flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center">
             <FileText size={24} className="text-blue-500" />
           </div>
           <div>
-            <h4 className="text-sm font-medium text-foreground">Full Documentation</h4>
-            <p className="text-xs text-muted-foreground">Complete guide to all features and APIs</p>
+            <h4 className="text-sm font-medium text-foreground">Documentação Completa</h4>
+            <p className="text-xs text-muted-foreground">Guia completo de todos os recursos e APIs</p>
           </div>
         </div>
         <Button variant="outline" className="gap-2">
-          View Docs <ExternalLink size={14} />
+          Ver Documentação <ExternalLink size={14} />
         </Button>
       </div>
     </div>

@@ -8,6 +8,8 @@ export interface BarbershopProfile {
   cnpj: string;
   logoUrl: string;
   slug: string;
+  pagarmeRecipientId?: string | null;
+  pagarmeRecipientStatus?: string | null;
 }
 
 export interface UpdateBarbershopProfilePayload {

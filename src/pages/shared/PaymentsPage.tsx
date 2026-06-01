@@ -17,6 +17,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -165,6 +173,8 @@ export function PaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [localPaymentDialog, setLocalPaymentDialog] = useState<PaymentWithType | null>(null);
+  const [selectedLocalMethod, setSelectedLocalMethod] = useState<PaymentMethod>("dinheiro");
 
   const limit = 20;
 
@@ -247,11 +257,32 @@ export function PaymentsPage() {
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   async function changePaymentStatus(payment: PaymentWithType, status: PaymentStatus) {
-    setUpdatingId(payment.id);
+    if (status === "paid" && payment.method === "local") {
+      setSelectedLocalMethod("dinheiro");
+      setLocalPaymentDialog(payment);
+      return;
+    }
 
+    setUpdatingId(payment.id);
     try {
       await updatePayment(payment, { status });
       toast.success("Pagamento atualizado.");
+      await loadPayments();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function confirmLocalPayment() {
+    if (!localPaymentDialog) return;
+    const payment = localPaymentDialog;
+    setLocalPaymentDialog(null);
+    setUpdatingId(payment.id);
+    try {
+      await updatePayment(payment, { status: "paid", method: selectedLocalMethod });
+      toast.success("Pagamento confirmado.");
       await loadPayments();
     } catch (err) {
       toast.error(getApiMessage(err));
@@ -545,6 +576,51 @@ export function PaymentsPage() {
           </div>
         </div>
       </div>
+      <Dialog open={Boolean(localPaymentDialog)} onOpenChange={(open) => { if (!open) setLocalPaymentDialog(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Como foi realizado o pagamento?</DialogTitle>
+            <DialogDescription>
+              Selecione a forma de pagamento usada no local para{" "}
+              <span className="font-medium text-foreground">
+                {localPaymentDialog?.user?.name ?? "este cliente"}
+              </span>
+              .
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 py-2">
+            {(
+              [
+                { value: "dinheiro", label: "Dinheiro" },
+                { value: "pix", label: "PIX" },
+                { value: "credito", label: "Cartão Crédito" },
+                { value: "debito", label: "Cartão Débito" },
+              ] as { value: PaymentMethod; label: string }[]
+            ).map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setSelectedLocalMethod(value)}
+                className={`rounded-lg border px-4 py-3 text-sm font-medium transition-colors ${
+                  selectedLocalMethod === value
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-card text-foreground hover:bg-secondary/50"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLocalPaymentDialog(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmLocalPayment}>
+              Confirmar pagamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
