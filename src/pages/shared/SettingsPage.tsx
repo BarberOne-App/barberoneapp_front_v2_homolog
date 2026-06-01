@@ -1343,14 +1343,24 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">CNPJ</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={businessForm.cnpj}
                   onChange={(event) => updateBusinessField('cnpj', event.target.value)}
                   disabled={isLoadingBusinessProfile}
                   className="w-full bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={saveBarbershopData}
+                disabled={isSavingBarbershopData || isLoadingBusinessProfile}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSavingBarbershopData ? 'Salvando...' : 'Salvar informações'}
+              </button>
             </div>
           </div>
 
