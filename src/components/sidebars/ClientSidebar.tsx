@@ -1,4 +1,4 @@
-import { Calendar, CreditCard, HelpCircle, History, Home, Scissors, Settings, Star } from "lucide-react";
+import { Calendar, Home, Scissors, Settings } from "lucide-react";
 
 import { ProfileSidebar } from "../shared/ProfileSidebar";
 import type { SidebarSection } from "../shared/ProfileSidebar";
@@ -9,16 +9,12 @@ const sections: SidebarSection[] = [
     title: "Cliente",
     items: [
       { icon: Calendar, label: "Agendamentos", href: "/bookings" },
-      { icon: History, label: "Historico", href: "/bookings" },
       { icon: Scissors, label: "Servicos", href: "/services" },
-      { icon: CreditCard, label: "Pagamentos", href: "/payments" },
-      { icon: Star, label: "Avaliacoes", href: "/reviews" },
     ],
   },
   {
     items: [
       { icon: Settings, label: "Configuracoes", href: "/settings" },
-      { icon: HelpCircle, label: "Ajuda", href: "/help" },
     ],
   },
 ];
