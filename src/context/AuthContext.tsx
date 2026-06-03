@@ -10,6 +10,7 @@ export interface User {
   role?: string;
   isAdmin?: boolean;
   photoUrl?: string | null;
+  permissions?: Record<string, boolean> | null;
 }
 
 export interface AuthContextData {

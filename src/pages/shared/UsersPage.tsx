@@ -75,6 +75,7 @@ type RoleFilter = "all" | ManagedUserRole;
 type PermissionKey =
   | "viewAdmin"
   | "manageEmployees"
+  | "manageCustomers"
   | "manageProducts"
   | "addProducts"
   | "editProducts"
@@ -99,6 +100,7 @@ const permissionOptions: Array<{
 }> = [
   { key: "viewAdmin", label: "Acessar painel admin", description: "Permite entrar nas areas administrativas." },
   { key: "manageEmployees", label: "Gerenciar funcionarios", description: "Permite cadastrar, editar e remover funcionarios." },
+  { key: "manageCustomers", label: "Gerenciar clientes", description: "Permite cadastrar, editar e remover clientes." },
   { key: "manageAgendamentos", label: "Gerenciar agendamentos", description: "Permite criar, alterar e cancelar agendamentos." },
   { key: "manageOffScheduleAppointments", label: "Agendamentos fora do horario", description: "Permite encaixes fora da grade configurada." },
   { key: "manageBlockedDates", label: "Bloquear agenda", description: "Permite criar e remover bloqueios de agenda." },

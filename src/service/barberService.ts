@@ -8,6 +8,7 @@ export interface Barber {
   userId?: string | null;
   serviceIds?: string[];
   salarioFixo?: number | null;
+  commissionPercent?: number | null;
 }
 
 export interface ListBarbersResponse {
@@ -19,6 +20,12 @@ export interface ListBarbersResponse {
 
 export async function listBarbers(params: { q?: string; page?: number; limit?: number } = {}) {
   const response = await api.get<ListBarbersResponse>("/barbers", { params });
+
+  return response.data;
+}
+
+export async function getMyBarber() {
+  const response = await api.get<Barber>("/barbers/me");
 
   return response.data;
 }
