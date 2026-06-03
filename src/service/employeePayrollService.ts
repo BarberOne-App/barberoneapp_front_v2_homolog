@@ -114,6 +114,17 @@ export async function getEmployeePayrollSummary(params: PayrollSummaryParams) {
   return response.data;
 }
 
+export async function getMyPayrollSummary(params: {
+  periodStart: string;
+  periodEnd: string;
+}) {
+  const response = await api.get<PayrollSummaryResponse>("/employeePayments/my-summary", {
+    params,
+  });
+
+  return response.data;
+}
+
 export async function createEmployeeVale(data: CreateEmployeeValePayload) {
   const response = await api.post<EmployeeVale>("/employeeVales", data);
 

@@ -58,6 +58,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useTableSelection } from "@/hooks/useTableSelection";
 import {
   createUser,
@@ -277,6 +279,11 @@ function buildPasswordForm(): CustomerFormState {
 }
 
 export function CustomersPage() {
+  const { user } = useAuth();
+  const { can, isAdmin } = usePermissions();
+  // Barbeiro vê somente leitura por padrão; apenas admins e barbeiros com manageCustomers podem editar
+  const canEdit = isAdmin || user?.role !== "barber" || can("manageCustomers");
+
   const [customers, setCustomers] = useState<UserProfile[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
@@ -628,10 +635,12 @@ export function CustomersPage() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button size="sm" className="gap-2" onClick={openCreateDialog}>
-              <Plus size={14} />
-              Adicionar Cliente
-            </Button>
+            {canEdit && (
+              <Button size="sm" className="gap-2" onClick={openCreateDialog}>
+                <Plus size={14} />
+                Adicionar Cliente
+              </Button>
+            )}
           </div>
         </div>
 
@@ -642,15 +651,17 @@ export function CustomersPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="w-10 p-4">
-                    <Checkbox
-                      checked={
-                        selectedRows.length === filteredCustomers.length &&
-                        filteredCustomers.length > 0
-                      }
-                      onCheckedChange={toggleAll}
-                    />
-                  </th>
+                  {canEdit && (
+                    <th className="w-10 p-4">
+                      <Checkbox
+                        checked={
+                          selectedRows.length === filteredCustomers.length &&
+                          filteredCustomers.length > 0
+                        }
+                        onCheckedChange={toggleAll}
+                      />
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Cliente
                   </th>
@@ -672,20 +683,20 @@ export function CustomersPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Aniversário
                   </th>
-                  <th className="w-10 px-4 py-3" />
+                  {canEdit && <th className="w-10 px-4 py-3" />}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={canEdit ? 9 : 7} className="p-8 text-center text-sm text-muted-foreground">
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                       Carregando clientes...
                     </td>
                   </tr>
                 ) : filteredCustomers.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={canEdit ? 9 : 7} className="p-8 text-center text-sm text-muted-foreground">
                       Nenhum cliente encontrado.
                     </td>
                   </tr>
@@ -698,12 +709,14 @@ export function CustomersPage() {
                         key={customer.id}
                         className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
                       >
-                        <td className="p-4">
-                          <Checkbox
-                            checked={selectedRows.includes(customer.id)}
-                            onCheckedChange={() => toggleRow(customer.id)}
-                          />
-                        </td>
+                        {canEdit && (
+                          <td className="p-4">
+                            <Checkbox
+                              checked={selectedRows.includes(customer.id)}
+                              onCheckedChange={() => toggleRow(customer.id)}
+                            />
+                          </td>
+                        )}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <Avatar className="h-10 w-10">
@@ -829,7 +842,8 @@ export function CustomersPage() {
                             );
                           })()}
                         </td>
-                        <td className="px-4 py-3">
+                        {canEdit && (
+                          <td className="px-4 py-3">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
@@ -895,7 +909,8 @@ export function CustomersPage() {
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
-                        </td>
+                          </td>
+                        )}
                       </tr>
                     );
                   })

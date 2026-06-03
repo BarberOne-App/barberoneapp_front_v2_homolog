@@ -30,6 +30,7 @@ export interface AuthResponse {
     role?: string;
     isAdmin?: boolean;
     photoUrl?: string | null;
+    permissions?: Record<string, boolean> | null;
   };
   barbershop?: {
     id: string;
