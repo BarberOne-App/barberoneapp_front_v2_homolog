@@ -59,6 +59,7 @@ import {
   type AppointmentStatus,
 } from "@/service/appointmentService";
 import { listBarbers, type Barber } from "@/service/barberService";
+import { listBlockedDates, type BlockedDate } from "@/service/blockedDateService";
 import { listServices, type Service } from "@/service/serviceService";
 import { listUsers, type UserProfile } from "@/service/userService";
 import { isFitAppointment } from "@/utils/fitAppointment";
@@ -203,6 +204,7 @@ export function BookingsPage() {
   const [appointmentToTransfer, setAppointmentToTransfer] = useState<Appointment | null>(null);
   const [transferBarberId, setTransferBarberId] = useState("");
   const [transferSaving, setTransferSaving] = useState(false);
+  const [blockedDateWarning, setBlockedDateWarning] = useState<BlockedDate | null>(null);
 
   const limit = 20;
 
@@ -307,6 +309,25 @@ export function BookingsPage() {
       active = false;
     };
   }, [dialogOpen, form.allowOutsideBusinessHours, form.barberId, form.date, totalDuration]);
+
+  // Verifica se a data/barbeiro selecionado tem bloqueio
+  useEffect(() => {
+    if (!dialogOpen || !form.date || !form.barberId) {
+      setBlockedDateWarning(null);
+      return;
+    }
+
+    listBlockedDates({ dateFrom: form.date, dateTo: form.date, barberId: form.barberId })
+      .then((items) => {
+        const block = items.find((b) => {
+          if (!b.barberId && !form.barberId) return true;
+          if (!b.barberId) return true; // barbearia inteira
+          return b.barberId === form.barberId;
+        });
+        setBlockedDateWarning(block ?? null);
+      })
+      .catch(() => setBlockedDateWarning(null));
+  }, [dialogOpen, form.date, form.barberId]);
 
   const filteredAppointments = useMemo(() => {
     const term = normalizeText(search.trim());
@@ -1008,6 +1029,18 @@ export function BookingsPage() {
                 </div>
               ) : null}
 
+              {blockedDateWarning && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive md:col-span-2">
+                  <strong>Data bloqueada:</strong>{" "}
+                  {blockedDateWarning.startTime && blockedDateWarning.endTime
+                    ? `${blockedDateWarning.barberId ? "Barbeiro bloqueado" : "Barbearia bloqueada"} das ${blockedDateWarning.startTime} às ${blockedDateWarning.endTime}`
+                    : blockedDateWarning.barberId
+                      ? "O barbeiro está indisponível neste dia"
+                      : "A barbearia está fechada neste dia"}
+                  {blockedDateWarning.reason ? ` — ${blockedDateWarning.reason}` : ""}
+                </div>
+              )}
+
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="booking-notes">Observacoes</Label>
                 <Textarea
@@ -1028,7 +1061,10 @@ export function BookingsPage() {
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={saving}>
+              <Button
+                type="submit"
+                disabled={saving || (!!blockedDateWarning && !blockedDateWarning.startTime)}
+              >
                 {saving ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
