@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Calendar,
-  CheckCircle2,
   Clock,
   Filter,
   Loader2,
@@ -186,7 +185,7 @@ export function ClientBookingsPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [slots, setSlots] = useState<string[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
-  const [formValidated, setFormValidated] = useState(false);
+
 
   // Passo 2 — escolha do método de pagamento
   const [choiceOpen, setChoiceOpen] = useState(false);
@@ -302,7 +301,6 @@ export function ClientBookingsPage() {
     e.preventDefault();
     const err = validateForm();
     if (err) { toast.error(err); return; }
-    setFormValidated(true);
     setChoiceOpen(true);
   }
 
@@ -453,7 +451,7 @@ export function ClientBookingsPage() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button size="sm" className="gap-2" onClick={() => { setForm({ ...emptyForm, date: dateToDateString(new Date()) }); setFormValidated(false); setBookingOpen(true); }}>
+            <Button size="sm" className="gap-2" onClick={() => { setForm({ ...emptyForm, date: dateToDateString(new Date()) }); setBookingOpen(true); }}>
               <Plus size={14} /> Marcar Horario
             </Button>
           </div>
