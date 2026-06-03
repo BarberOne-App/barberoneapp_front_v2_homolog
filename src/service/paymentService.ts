@@ -81,6 +81,20 @@ export async function listAppointmentPayments(params: ListPaymentsParams = {}) {
   return response.data;
 }
 
+export interface CreateAppointmentPaymentPayload {
+  appointmentId: string;
+  userId: string;
+  amount: number;
+  method: PaymentMethod;
+  status?: PaymentStatus;
+}
+
+export async function createAppointmentPayment(data: CreateAppointmentPaymentPayload) {
+  const response = await api.post<PaymentRecord>("/appointmentPayments", data);
+
+  return response.data;
+}
+
 export async function listAllPayments(params: ListPaymentsParams = {}): Promise<PaymentListResult> {
   const response = await api.get<PaymentListResult>("/payments/all", { params });
 

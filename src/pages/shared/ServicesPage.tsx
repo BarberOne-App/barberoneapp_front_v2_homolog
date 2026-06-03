@@ -455,9 +455,11 @@ export function ServicesPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Preco
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Comissao
-                  </th>
+                  {isAdmin ? (
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Comissao
+                    </th>
+                  ) : null}
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Plano
                   </th>
@@ -471,7 +473,7 @@ export function ServicesPage() {
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={isAdmin ? 8 : 6}
+                      colSpan={isAdmin ? 8 : 5}
                       className="p-8 text-center text-sm text-muted-foreground"
                     >
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
@@ -481,7 +483,7 @@ export function ServicesPage() {
                 ) : filteredServices.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={isAdmin ? 8 : 6}
+                      colSpan={isAdmin ? 8 : 5}
                       className="p-8 text-center text-sm text-muted-foreground"
                     >
                       Nenhum servico encontrado.
@@ -538,9 +540,11 @@ export function ServicesPage() {
                         <td className="px-4 py-3 text-sm font-medium text-foreground">
                           {formatCurrency(service.basePrice)}
                         </td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">
-                          {commission == null ? "-" : `${commission}%`}
-                        </td>
+                        {isAdmin ? (
+                          <td className="px-4 py-3 text-sm text-muted-foreground">
+                            {commission == null ? "-" : `${commission}%`}
+                          </td>
+                        ) : null}
                         <td className="px-4 py-3">
                           {service.covered_by_plan ? (
                             <Badge
