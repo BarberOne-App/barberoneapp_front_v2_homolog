@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Calendar, CreditCard, History, Scissors } from "lucide-react";
 
+import { BannerCarousel } from "@/components/BannerCarousel";
 import { RecentBookings } from "@/components/RecentBookings";
 import { StatCard } from "@/components/StatCard";
 import { useAuth } from "../../hooks/useAuth";
@@ -110,6 +111,8 @@ export function ClientDashboard() {
           Acompanhe seus agendamentos, historico e proximas opcoes para marcar horario.
         </p>
       </section>
+
+      <BannerCarousel />
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
