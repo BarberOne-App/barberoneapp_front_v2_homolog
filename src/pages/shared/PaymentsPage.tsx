@@ -41,6 +41,7 @@ import {
   type PaymentMethod,
   type PaymentRecord,
   type PaymentStatus,
+  type PaymentSummary,
   type PaymentType,
 } from "@/service/paymentService";
 
@@ -166,6 +167,7 @@ function downloadCsv(payments: PaymentWithType[]) {
 export function PaymentsPage() {
   const [payments, setPayments] = useState<PaymentWithType[]>([]);
   const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<PaymentSummary | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
@@ -191,6 +193,7 @@ export function PaymentsPage() {
 
       setPayments(result.items);
       setTotal(result.total);
+      if (result.summary) setSummary(result.summary);
     } catch (err) {
       setError(getApiMessage(err));
     } finally {
@@ -231,28 +234,38 @@ export function PaymentsPage() {
     filteredPayments.map((payment) => payment.id),
   );
 
+  // Usa o summary da API (todos os pagamentos) quando disponível;
+  // cai no cálculo local (página atual) como fallback.
   const stats = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    if (summary) {
+      return {
+        paid: summary.paid,
+        today: summary.today,
+        pending: summary.pending,
+        refunded: summary.refunded,
+      };
+    }
 
+    const today = new Date().toISOString().slice(0, 10);
     return {
       paid: payments
-        .filter((payment) => payment.status === "paid" || payment.status === "approved")
-        .reduce((sum, payment) => sum + payment.amount, 0),
+        .filter((p) => p.status === "paid" || p.status === "approved")
+        .reduce((sum, p) => sum + p.amount, 0),
       today: payments
         .filter(
-          (payment) =>
-            (payment.paidAt || payment.createdAt)?.slice(0, 10) === today &&
-            (payment.status === "paid" || payment.status === "approved"),
+          (p) =>
+            (p.paidAt || p.createdAt)?.slice(0, 10) === today &&
+            (p.status === "paid" || p.status === "approved"),
         )
-        .reduce((sum, payment) => sum + payment.amount, 0),
+        .reduce((sum, p) => sum + p.amount, 0),
       pending: payments
-        .filter((payment) => payment.status === "pending")
-        .reduce((sum, payment) => sum + payment.amount, 0),
+        .filter((p) => p.status === "pending")
+        .reduce((sum, p) => sum + p.amount, 0),
       refunded: payments
-        .filter((payment) => payment.status === "refunded")
-        .reduce((sum, payment) => sum + payment.amount, 0),
+        .filter((p) => p.status === "refunded")
+        .reduce((sum, p) => sum + p.amount, 0),
     };
-  }, [payments]);
+  }, [summary, payments]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 

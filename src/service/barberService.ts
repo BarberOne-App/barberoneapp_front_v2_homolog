@@ -20,18 +20,35 @@ export interface ListBarbersResponse {
 
 export async function listBarbers(params: { q?: string; page?: number; limit?: number } = {}) {
   const response = await api.get<ListBarbersResponse>("/barbers", { params });
-
   return response.data;
 }
 
 export async function getMyBarber() {
   const response = await api.get<Barber>("/barbers/me");
-
   return response.data;
 }
 
-export async function updateBarber(barberId: string, data: { salarioFixo?: number | null }) {
-  const response = await api.patch<Barber>(`/barbers/${barberId}`, data);
+export interface CreateBarberPayload {
+  displayName: string;
+  commissionPercent?: number | null;
+  serviceIds?: string[];
+  userId?: string | null;
+  salarioFixo?: number | null;
+}
 
+export async function createBarber(data: CreateBarberPayload) {
+  const response = await api.post<Barber>("/barbers", data);
+  return response.data;
+}
+
+export interface UpdateBarberPayload {
+  displayName?: string;
+  commissionPercent?: number | null;
+  serviceIds?: string[];
+  salarioFixo?: number | null;
+}
+
+export async function updateBarber(barberId: string, data: UpdateBarberPayload) {
+  const response = await api.patch<Barber>(`/barbers/${barberId}`, data);
   return response.data;
 }

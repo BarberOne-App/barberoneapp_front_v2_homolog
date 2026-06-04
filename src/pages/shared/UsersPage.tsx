@@ -68,6 +68,13 @@ import {
   type ListUsersParams,
   type UserProfile,
 } from "@/service/userService";
+import {
+  createBarber,
+  listBarbers,
+  updateBarber,
+  type Barber,
+} from "@/service/barberService";
+import { listServices, type Service } from "@/service/serviceService";
 
 type UserRole = NonNullable<ListUsersParams["role"]>;
 type ManagedUserRole = Exclude<UserRole, "client">;
@@ -132,6 +139,8 @@ interface UserFormState {
   resetPassword: boolean;
   photoUrl: string | null;
   salary: string;
+  commissionPercent: string;
+  serviceIds: string[];
 }
 
 const emptyForm: UserFormState = {
@@ -144,6 +153,8 @@ const emptyForm: UserFormState = {
   resetPassword: false,
   photoUrl: null,
   salary: "",
+  commissionPercent: "",
+  serviceIds: [],
 };
 
 const roleLabels: Record<UserRole, string> = {
@@ -279,7 +290,7 @@ function roleFromUser(user: UserProfile): UserRole {
   return user.isAdmin ? "admin" : "client";
 }
 
-function userToForm(user: UserProfile): UserFormState {
+function userToForm(user: UserProfile, barber?: Barber | null): UserFormState {
   const role = roleFromUser(user);
 
   return {
@@ -292,6 +303,8 @@ function userToForm(user: UserProfile): UserFormState {
     resetPassword: false,
     photoUrl: user.photoUrl ?? null,
     salary: user.salary != null ? maskCurrency(String(Math.round(user.salary * 100))) : "",
+    commissionPercent: barber?.commissionPercent != null ? String(barber.commissionPercent) : "",
+    serviceIds: barber?.serviceIds ?? [],
   };
 }
 
@@ -316,6 +329,8 @@ export function UsersPage() {
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const [services, setServices] = useState<Service[]>([]);
+  const [editingBarber, setEditingBarber] = useState<Barber | null>(null);
 
   const limit = 20;
 
@@ -372,14 +387,31 @@ export function UsersPage() {
 
   function openCreateDialog() {
     setEditingUser(null);
+    setEditingBarber(null);
     setForm({ ...emptyForm, password: "123456" });
     setDialogOpen(true);
+    listServices({ limit: 100 }).then((res) => setServices(res.items)).catch(() => {});
   }
 
-  function openEditDialog(user: UserProfile) {
+  async function openEditDialog(user: UserProfile) {
     setEditingUser(user);
-    setForm(userToForm(user));
     setDialogOpen(true);
+    listServices({ limit: 100 }).then((res) => setServices(res.items)).catch(() => {});
+
+    if (roleFromUser(user) === "barber") {
+      try {
+        const res = await listBarbers({ limit: 200 });
+        const barber = res.items.find((b) => b.userId === user.id) ?? null;
+        setEditingBarber(barber);
+        setForm(userToForm(user, barber));
+      } catch {
+        setEditingBarber(null);
+        setForm(userToForm(user));
+      }
+    } else {
+      setEditingBarber(null);
+      setForm(userToForm(user));
+    }
   }
 
   function openPermissionsDialog(user: UserProfile) {
@@ -465,6 +497,10 @@ export function UsersPage() {
       salary: form.salary !== "" ? parseCurrency(form.salary) : null,
     };
 
+    const commissionValue = form.commissionPercent !== ""
+      ? Math.min(100, Math.max(0, parseInt(form.commissionPercent, 10)))
+      : null;
+
     setSaving(true);
 
     try {
@@ -475,12 +511,35 @@ export function UsersPage() {
           newPassword: form.resetPassword ? form.password.trim() : undefined,
         });
 
+        if (form.role === "barber") {
+          const barberData = {
+            displayName: form.name.trim(),
+            commissionPercent: commissionValue,
+            serviceIds: form.serviceIds,
+          };
+          if (editingBarber) {
+            await updateBarber(editingBarber.id, barberData);
+          } else {
+            await createBarber({ ...barberData, userId: editingUser.id }).catch(() => {});
+          }
+        }
+
         toast.success("Funcionario atualizado.");
       } else {
-        await createUser({
+        const created = await createUser({
           ...payload,
           password: form.password.trim(),
         });
+
+        if (form.role === "barber" && created?.id) {
+          await createBarber({
+            displayName: form.name.trim(),
+            commissionPercent: commissionValue,
+            serviceIds: form.serviceIds,
+            userId: created.id,
+          }).catch(() => {});
+        }
+
         toast.success("Funcionario cadastrado.");
       }
 
@@ -802,170 +861,250 @@ export function UsersPage() {
           if (!open) setUploadingPhoto(false);
         }}
       >
-        <DialogContent className="sm:max-w-2xl">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <DialogHeader>
-              <DialogTitle>
-                {editingUser ? "Editar Funcionario" : "Adicionar Funcionario"}
-              </DialogTitle>
-              <DialogDescription>
-                {editingUser
-                  ? "Atualize os dados de acesso e perfil deste funcionario."
-                  : "Cadastre um funcionario vinculado a esta barbearia."}
-              </DialogDescription>
-            </DialogHeader>
+        {/* p-0 gap-0 overflow-hidden para controlar padding e scroll manualmente */}
+        <DialogContent className="sm:max-w-2xl flex flex-col max-h-[90vh] p-0 gap-0 overflow-hidden">
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
 
-            <div className="flex flex-col items-center gap-3">
-              <Avatar className="h-20 w-20 ring-2 ring-border">
-                <AvatarImage src={form.photoUrl ?? undefined} alt={form.name} />
-                <AvatarFallback className="bg-primary/10 text-lg text-primary">
-                  {getInitials(form.name || "?")}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex gap-2">
-                <input
-                  ref={photoInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handlePhotoChange}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => photoInputRef.current?.click()}
-                  disabled={uploadingPhoto}
-                >
-                  {uploadingPhoto ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Enviando...
-                    </>
-                  ) : (
-                    <>
-                      <Camera size={14} />
-                      Alterar foto
-                    </>
-                  )}
-                </Button>
-                {form.photoUrl ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground"
-                    onClick={() => setField("photoUrl", null)}
-                    disabled={uploadingPhoto}
-                  >
-                    Remover
-                  </Button>
-                ) : null}
-              </div>
+            {/* Cabeçalho fixo */}
+            <div className="shrink-0 px-6 pt-6 pb-4 border-b border-border">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingUser ? "Editar Funcionario" : "Adicionar Funcionario"}
+                </DialogTitle>
+                <DialogDescription>
+                  {editingUser
+                    ? "Atualize os dados de acesso e perfil deste funcionario."
+                    : "Cadastre um funcionario vinculado a esta barbearia."}
+                </DialogDescription>
+              </DialogHeader>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="user-name">Nome</Label>
-                <Input
-                  id="user-name"
-                  value={form.name}
-                  onChange={(event) => setField("name", event.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="user-email">E-mail</Label>
-                <Input
-                  id="user-email"
-                  type="email"
-                  value={form.email}
-                  onChange={(event) => setField("email", event.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="user-role">Perfil</Label>
-                <Select
-                  value={form.role}
-                  onValueChange={(value) => setField("role", value as ManagedUserRole)}
-                >
-                  <SelectTrigger id="user-role" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">
-                      <UserCog size={14} />
-                      Administrador
-                    </SelectItem>
-                    <SelectItem value="barber">Barbeiro</SelectItem>
-                    <SelectItem value="receptionist">Recepcionista</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="user-phone">Telefone</Label>
-                <Input
-                  id="user-phone"
-                  value={form.phone}
-                  onChange={(event) => setField("phone", maskPhone(event.target.value))}
-                  placeholder="(11) 99999-9999"
-                  inputMode="numeric"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="user-cpf">CPF</Label>
-                <Input
-                  id="user-cpf"
-                  value={form.cpf}
-                  onChange={(event) => setField("cpf", maskCpf(event.target.value))}
-                  placeholder="000.000.000-00"
-                  inputMode="numeric"
-                />
+            {/* Corpo com scroll */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+              <div className="flex flex-col items-center gap-3">
+                <Avatar className="h-20 w-20 ring-2 ring-border">
+                  <AvatarImage src={form.photoUrl ?? undefined} alt={form.name} />
+                  <AvatarFallback className="bg-primary/10 text-lg text-primary">
+                    {getInitials(form.name || "?")}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex gap-2">
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoChange}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={uploadingPhoto}
+                  >
+                    {uploadingPhoto ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      <>
+                        <Camera size={14} />
+                        Alterar foto
+                      </>
+                    )}
+                  </Button>
+                  {form.photoUrl ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground"
+                      onClick={() => setField("photoUrl", null)}
+                      disabled={uploadingPhoto}
+                    >
+                      Remover
+                    </Button>
+                  ) : null}
+                </div>
               </div>
 
-              {editingUser ? (
-                <div className="space-y-2">
-                  <Label htmlFor="user-salary">Salario fixo (R$)</Label>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="user-name">Nome</Label>
                   <Input
-                    id="user-salary"
-                    value={form.salary}
-                    onChange={(event) => setField("salary", maskCurrency(event.target.value))}
-                    placeholder="0,00"
+                    id="user-name"
+                    value={form.name}
+                    onChange={(event) => setField("name", event.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="user-email">E-mail</Label>
+                  <Input
+                    id="user-email"
+                    type="email"
+                    value={form.email}
+                    onChange={(event) => setField("email", event.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="user-role">Perfil</Label>
+                  <Select
+                    value={form.role}
+                    onValueChange={(value) => setField("role", value as ManagedUserRole)}
+                  >
+                    <SelectTrigger id="user-role" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">
+                        <UserCog size={14} />
+                        Administrador
+                      </SelectItem>
+                      <SelectItem value="barber">Barbeiro</SelectItem>
+                      <SelectItem value="receptionist">Recepcionista</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="user-phone">Telefone</Label>
+                  <Input
+                    id="user-phone"
+                    value={form.phone}
+                    onChange={(event) => setField("phone", maskPhone(event.target.value))}
+                    placeholder="(11) 99999-9999"
                     inputMode="numeric"
                   />
                 </div>
-              ) : null}
-
-              {editingUser ? (
-                <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm md:col-span-2">
-                  <Checkbox
-                    checked={form.resetPassword}
-                    onCheckedChange={(checked) => setField("resetPassword", checked === true)}
-                  />
-                  Redefinir senha deste funcionario
-                </label>
-              ) : null}
-
-              {editingUser && !form.resetPassword ? null : (
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="user-password">
-                    {editingUser ? "Nova senha" : "Senha inicial"}
-                  </Label>
+                <div className="space-y-2">
+                  <Label htmlFor="user-cpf">CPF</Label>
                   <Input
-                    id="user-password"
-                    type="password"
-                    value={form.password}
-                    onChange={(event) => setField("password", event.target.value)}
-                    placeholder="Minimo 4 caracteres"
-                    required={!editingUser || form.resetPassword}
+                    id="user-cpf"
+                    value={form.cpf}
+                    onChange={(event) => setField("cpf", maskCpf(event.target.value))}
+                    placeholder="000.000.000-00"
+                    inputMode="numeric"
                   />
+                </div>
+
+                {editingUser ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="user-salary">Salario fixo (R$)</Label>
+                    <Input
+                      id="user-salary"
+                      value={form.salary}
+                      onChange={(event) => setField("salary", maskCurrency(event.target.value))}
+                      placeholder="0,00"
+                      inputMode="numeric"
+                    />
+                  </div>
+                ) : null}
+
+                {editingUser ? (
+                  <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm md:col-span-2">
+                    <Checkbox
+                      checked={form.resetPassword}
+                      onCheckedChange={(checked) => setField("resetPassword", checked === true)}
+                    />
+                    Redefinir senha deste funcionario
+                  </label>
+                ) : null}
+
+                {editingUser && !form.resetPassword ? null : (
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="user-password">
+                      {editingUser ? "Nova senha" : "Senha inicial"}
+                    </Label>
+                    <Input
+                      id="user-password"
+                      type="password"
+                      value={form.password}
+                      onChange={(event) => setField("password", event.target.value)}
+                      placeholder="Minimo 4 caracteres"
+                      required={!editingUser || form.resetPassword}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Seção exclusiva para barbeiros */}
+              {form.role === "barber" && (
+                <div className="space-y-4 rounded-xl border border-border bg-secondary/30 p-4">
+                  <h4 className="text-sm font-semibold text-foreground">Configurações do barbeiro</h4>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="user-commission">Comissão padrão (%)</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="user-commission"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={form.commissionPercent}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "" || (/^\d+$/.test(v) && parseInt(v, 10) <= 100)) {
+                            setField("commissionPercent", v);
+                          }
+                        }}
+                        placeholder="Ex: 50"
+                        className="w-32"
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        % sobre cada serviço realizado
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Serviços sem comissão própria usarão este percentual como padrão.
+                    </p>
+                  </div>
+
+                  {services.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Serviços que o barbeiro realiza</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Selecione os serviços disponíveis para este barbeiro.
+                      </p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {services.map((service) => (
+                          <label
+                            key={service.id}
+                            className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm cursor-pointer hover:border-primary/50 transition-colors"
+                          >
+                            <Checkbox
+                              checked={form.serviceIds.includes(service.id)}
+                              onCheckedChange={(checked) => {
+                                setField(
+                                  "serviceIds",
+                                  checked
+                                    ? [...form.serviceIds, service.id]
+                                    : form.serviceIds.filter((id) => id !== service.id),
+                                );
+                              }}
+                            />
+                            <div className="min-w-0">
+                              <p className="font-medium text-foreground truncate">{service.name}</p>
+                              {service.commissionPercent != null && (
+                                <p className="text-xs text-muted-foreground">
+                                  Comissão própria: {service.commissionPercent}%
+                                </p>
+                              )}
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
-            <DialogFooter>
+            {/* Footer sticky */}
+            <div className="shrink-0 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end px-6 py-4 border-t border-border bg-background">
               <Button
                 type="button"
                 variant="outline"
@@ -984,7 +1123,8 @@ export function UsersPage() {
                   "Salvar"
                 )}
               </Button>
-            </DialogFooter>
+            </div>
+
           </form>
         </DialogContent>
       </Dialog>
