@@ -10,6 +10,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { AdminLayout } from "../layouts/AdminLayout";
 import { BarberLayout } from "../layouts/BarberLayout";
 import { ClientLayout } from "../layouts/ClientLayout";
+import { ReceptionistLayout } from "../layouts/ReceptionistLayout";
 import { SuperAdminLayout } from "../layouts/SuperAdminLayout";
 import { adminRoutes } from "./admin.routes";
 import { barberRoutes } from "./barber.routes";
@@ -17,6 +18,7 @@ import { clientRoutes } from "./client.routes";
 import { LogoutRoute } from "./LogoutRoute";
 import { PrivateRoute } from "./PrivateRoute";
 import { ProtectedRoute } from "./ProtectedRoute";
+import { receptionistRoutes } from "./receptionist.routes";
 import { superAdminRoutes } from "./superadmin.routes";
 import type { AppRoute } from "./types";
 
@@ -51,6 +53,12 @@ const routeGroups: Record<UserRole, RouteGroup> = {
     routes: superAdminRoutes,
     headerActionLabel: "Metricas",
     headerActionHref: "/overview",
+  },
+  receptionist: {
+    Layout: ReceptionistLayout,
+    routes: receptionistRoutes,
+    headerActionLabel: "Novo agendamento",
+    headerActionHref: "/bookings",
   },
 };
 
