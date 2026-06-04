@@ -20,7 +20,9 @@ import {
   CircleUserRound,
   FileText,
   ExternalLink,
+  ClipboardList,
 } from 'lucide-react';
+import { PlatformSubscriptionTab } from '@/components/PlatformSubscriptionTab';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -244,6 +246,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
   const [isSavingPaymentSettings, setIsSavingPaymentSettings] = useState(false);
   const barbershop = useMemo(() => getStoredBarbershop(), []);
   const canManageSecurityDocuments = user?.role === 'admin' || user?.isAdmin === true;
+  const isAdmin = user?.role === 'admin' || user?.isAdmin === true;
   const registrationLink = useMemo(() => {
     const slug = businessSlug || barbershop?.slug;
 
@@ -1242,15 +1245,17 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-6 lg:w-auto">
+        <TabsList className={`grid w-full lg:w-auto ${isAdmin ? 'grid-cols-5' : 'grid-cols-6'}`}>
           <TabsTrigger value="general" className="gap-2">
             <Store size={14} />
             <span className="hidden sm:inline">Configurações Gerais</span>
           </TabsTrigger>
-          <TabsTrigger value="notifications" className="gap-2">
-            <Bell size={14} />
-            <span className="hidden sm:inline">Notificações</span>
-          </TabsTrigger>
+          {!isAdmin && (
+            <TabsTrigger value="notifications" className="gap-2">
+              <Bell size={14} />
+              <span className="hidden sm:inline">Notificações</span>
+            </TabsTrigger>
+          )}
           <TabsTrigger value="security" className="gap-2">
             <Shield size={14} />
             <span className="hidden sm:inline">Segurança</span>
@@ -1259,14 +1264,22 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
             <CreditCard size={14} />
             <span className="hidden sm:inline">Pagamentos</span>
           </TabsTrigger>
-          <TabsTrigger value="email" className="gap-2">
-            <Mail size={14} />
-            <span className="hidden sm:inline">Email</span>
-          </TabsTrigger>
+          {!isAdmin && (
+            <TabsTrigger value="email" className="gap-2">
+              <Mail size={14} />
+              <span className="hidden sm:inline">Email</span>
+            </TabsTrigger>
+          )}
           <TabsTrigger value="appearance" className="gap-2">
             <Palette size={14} />
             <span className="hidden sm:inline">Aparência</span>
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="meuPlano" className="gap-2">
+              <ClipboardList size={14} />
+              <span className="hidden sm:inline">Meu Plano</span>
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* General Settings */}
@@ -1946,32 +1959,6 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
             </div>
           )}
 
-          <div className="bg-card rounded-xl border border-border p-6">
-            <h3 className="text-lg font-medium text-foreground mb-4">Two-Factor Authentication</h3>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-foreground">Enable 2FA</p>
-                <p className="text-xs text-muted-foreground">Add an extra layer of security to your account</p>
-              </div>
-              <Switch />
-            </div>
-          </div>
-
-          <div className="bg-card rounded-xl border border-border p-6">
-            <h3 className="text-lg font-medium text-foreground mb-4">Session Management</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Current Session</p>
-                  <p className="text-xs text-muted-foreground">Chrome on Windows • IP: 192.168.1.1</p>
-                </div>
-                <Badge variant="outline" className="text-emerald-500 border-emerald-500/20">
-                  <Check size={12} className="mr-1" />
-                  Active
-                </Badge>
-              </div>
-            </div>
-          </div>
         </TabsContent>
 
         {/* Payments */}
@@ -2402,77 +2389,6 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
             </div>
           </div>
 
-          <div className="bg-card rounded-xl border border-border p-6">
-            <h3 className="text-lg font-medium text-foreground mb-4">Theme Settings</h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between py-3 border-b border-border">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Dark Mode</p>
-                  <p className="text-xs text-muted-foreground">Enable dark mode for the dashboard</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between py-3 border-b border-border">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Compact Mode</p>
-                  <p className="text-xs text-muted-foreground">Reduce spacing between elements</p>
-                </div>
-                <Switch />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-card rounded-xl border border-border p-6">
-            <h3 className="text-lg font-medium text-foreground mb-4">Brand Colors</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Primary Color</label>
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="color" 
-                    defaultValue="#f97316"
-                    className="w-10 h-10 rounded-md border border-border cursor-pointer"
-                  />
-                  <input 
-                    type="text" 
-                    defaultValue="#f97316"
-                    className="flex-1 bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Secondary Color</label>
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="color" 
-                    defaultValue="#1a1a1a"
-                    className="w-10 h-10 rounded-md border border-border cursor-pointer"
-                  />
-                  <input 
-                    type="text" 
-                    defaultValue="#1a1a1a"
-                    className="flex-1 bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Accent Color</label>
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="color" 
-                    defaultValue="#10b981"
-                    className="w-10 h-10 rounded-md border border-border cursor-pointer"
-                  />
-                  <input 
-                    type="text" 
-                    defaultValue="#10b981"
-                    className="flex-1 bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div className="flex justify-end">
             <Button
               className="gap-2"
@@ -2491,6 +2407,13 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
             </Button>
           </div>
         </TabsContent>
+
+        {/* Meu Plano — admin only */}
+        {isAdmin && (
+          <TabsContent value="meuPlano" className="space-y-6">
+            <PlatformSubscriptionTab />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

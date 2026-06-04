@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Bell, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -105,14 +105,6 @@ export function AppHeader({
         >
           <Link to={actionHref}>{actionLabel}</Link>
         </Button>
-
-        <button
-          type="button"
-          className="relative p-2 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <Bell size={20} />
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
-        </button>
 
         <Link
           to="/settings"
