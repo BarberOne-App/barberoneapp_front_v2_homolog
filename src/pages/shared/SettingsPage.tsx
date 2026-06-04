@@ -20,7 +20,9 @@ import {
   CircleUserRound,
   FileText,
   ExternalLink,
+  ClipboardList,
 } from 'lucide-react';
+import { PlatformSubscriptionTab } from '@/components/PlatformSubscriptionTab';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -244,6 +246,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
   const [isSavingPaymentSettings, setIsSavingPaymentSettings] = useState(false);
   const barbershop = useMemo(() => getStoredBarbershop(), []);
   const canManageSecurityDocuments = user?.role === 'admin' || user?.isAdmin === true;
+  const isAdmin = user?.role === 'admin' || user?.isAdmin === true;
   const registrationLink = useMemo(() => {
     const slug = businessSlug || barbershop?.slug;
 
@@ -1242,15 +1245,17 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-6 lg:w-auto">
+        <TabsList className={`grid w-full lg:w-auto ${isAdmin ? 'grid-cols-5' : 'grid-cols-6'}`}>
           <TabsTrigger value="general" className="gap-2">
             <Store size={14} />
             <span className="hidden sm:inline">Configurações Gerais</span>
           </TabsTrigger>
-          <TabsTrigger value="notifications" className="gap-2">
-            <Bell size={14} />
-            <span className="hidden sm:inline">Notificações</span>
-          </TabsTrigger>
+          {!isAdmin && (
+            <TabsTrigger value="notifications" className="gap-2">
+              <Bell size={14} />
+              <span className="hidden sm:inline">Notificações</span>
+            </TabsTrigger>
+          )}
           <TabsTrigger value="security" className="gap-2">
             <Shield size={14} />
             <span className="hidden sm:inline">Segurança</span>
@@ -1259,14 +1264,22 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
             <CreditCard size={14} />
             <span className="hidden sm:inline">Pagamentos</span>
           </TabsTrigger>
-          <TabsTrigger value="email" className="gap-2">
-            <Mail size={14} />
-            <span className="hidden sm:inline">Email</span>
-          </TabsTrigger>
+          {!isAdmin && (
+            <TabsTrigger value="email" className="gap-2">
+              <Mail size={14} />
+              <span className="hidden sm:inline">Email</span>
+            </TabsTrigger>
+          )}
           <TabsTrigger value="appearance" className="gap-2">
             <Palette size={14} />
             <span className="hidden sm:inline">Aparência</span>
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="meuPlano" className="gap-2">
+              <ClipboardList size={14} />
+              <span className="hidden sm:inline">Meu Plano</span>
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* General Settings */}
@@ -2491,6 +2504,13 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
             </Button>
           </div>
         </TabsContent>
+
+        {/* Meu Plano — admin only */}
+        {isAdmin && (
+          <TabsContent value="meuPlano" className="space-y-6">
+            <PlatformSubscriptionTab />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
