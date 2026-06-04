@@ -12,7 +12,6 @@ import {
   Palette,
   Save,
   Upload,
-  Check,
   Copy,
   Link2,
   Plus,

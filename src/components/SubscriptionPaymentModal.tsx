@@ -57,6 +57,7 @@ export function SubscriptionPaymentModal({ isOpen, plan, onClose, onSuccess }: S
     const err = validate();
     if (err) { toast.error(err); return; }
 
+    if (!plan) return;
     setProcessing(true);
     try {
       await subscribeBarbershopPlatformPlan({
