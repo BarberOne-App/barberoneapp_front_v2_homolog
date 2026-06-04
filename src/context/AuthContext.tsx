@@ -11,6 +11,10 @@ export interface User {
   isAdmin?: boolean;
   photoUrl?: string | null;
   permissions?: Record<string, boolean> | null;
+  phone?: string | null;
+  cpf?: string | null;
+  birthDate?: string | null;
+  birth_date?: string | null;
 }
 
 export interface AuthContextData {

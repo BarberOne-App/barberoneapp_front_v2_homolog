@@ -52,7 +52,6 @@ export const barberRoutes: AppRoute[] = [
     title: "Configuracoes",
     breadcrumbs: ["Barbeiro", "Configuracoes"],
     Component: BarberSettingsPage,
-    requiredPermission: "manageSettings",
   },
   {
     path: "/help",
