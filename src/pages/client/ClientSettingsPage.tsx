@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { CircleUserRound, Copy, Check, Link2, Save, Upload, X } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { CircleUserRound, Save, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/hooks/useAuth';
-import { getBarbershopProfile } from '@/service/barbershopProfileService';
 import { uploadProfilePhoto } from '@/service/uploadService';
 import {
   changePassword,
@@ -47,26 +46,13 @@ function getApiErrorMessage(error: unknown) {
   return null;
 }
 
-function getStoredSlug(): string {
-  try {
-    const stored = localStorage.getItem('barbershop');
-    if (!stored) return '';
-    const parsed = JSON.parse(stored) as { slug?: string };
-    return parsed.slug ?? '';
-  } catch {
-    return '';
-  }
-}
-
-export function BarberSettingsPage() {
+export function ClientSettingsPage() {
   const { user, updateUser: updateAuthUser } = useAuth();
 
-  // Foto de perfil
   const [profilePhotoUrl, setProfilePhotoUrl] = useState(user?.photoUrl ?? '');
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const photoFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Informações pessoais
   const [profileForm, setProfileForm] = useState({
     name: user?.name ?? '',
     email: user?.email ?? '',
@@ -76,28 +62,12 @@ export function BarberSettingsPage() {
   });
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  // Link de cadastro
-  const [barbershopSlug, setBarbershopSlug] = useState(getStoredSlug);
-  const [copied, setCopied] = useState(false);
-  const registrationLink = useMemo(() => {
-    if (!barbershopSlug) return '';
-    return `${window.location.origin}/register/${barbershopSlug}`;
-  }, [barbershopSlug]);
-
-  // Alterar senha
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
-
-  useEffect(() => {
-    if (barbershopSlug) return;
-    getBarbershopProfile()
-      .then((profile) => { if (profile.slug) setBarbershopSlug(profile.slug); })
-      .catch(() => {});
-  }, [barbershopSlug]);
 
   async function handlePhotoUpload(file: File) {
     if (!user?.id) return;
@@ -154,14 +124,6 @@ export function BarberSettingsPage() {
     } finally {
       setIsSavingProfile(false);
     }
-  }
-
-  function handleCopyLink() {
-    if (!registrationLink) return;
-    navigator.clipboard.writeText(registrationLink).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
   }
 
   async function handleChangePassword() {
@@ -252,7 +214,7 @@ export function BarberSettingsPage() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Sua foto aparece no perfil, no cabeçalho e na agenda dos clientes.
+              Sua foto aparece no perfil e no cabeçalho do sistema.
             </p>
           </div>
         </div>
@@ -324,38 +286,6 @@ export function BarberSettingsPage() {
             {isSavingProfile && <Spinner />}
             <Save size={14} />
             {isSavingProfile ? 'Salvando...' : 'Salvar informações'}
-          </Button>
-        </div>
-      </div>
-
-      {/* Link de Cadastro da Barbearia */}
-      <div className="bg-card rounded-xl border border-border p-6">
-        <div className="mb-4 flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
-            <Link2 size={18} />
-          </div>
-          <div>
-            <h3 className="text-lg font-medium text-foreground">Link de cadastro</h3>
-            <p className="text-sm text-muted-foreground">
-              Compartilhe este link para que novos clientes se cadastrem diretamente nesta barbearia.
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-col gap-3 md:flex-row">
-          <input
-            type="text"
-            value={registrationLink || 'Link indisponível'}
-            readOnly
-            className="h-10 flex-1 rounded-md border border-border bg-secondary px-3 text-sm text-foreground outline-none"
-          />
-          <Button
-            type="button"
-            onClick={handleCopyLink}
-            disabled={!registrationLink}
-            className="gap-2"
-          >
-            {copied ? <Check size={14} /> : <Copy size={14} />}
-            {copied ? 'Copiado!' : 'Copiar link'}
           </Button>
         </div>
       </div>

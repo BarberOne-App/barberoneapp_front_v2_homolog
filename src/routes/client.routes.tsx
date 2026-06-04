@@ -1,7 +1,7 @@
 import { ClientBookingsPage } from "../pages/client/ClientBookingsPage";
 import { ClientDashboard } from "../pages/client/ClientDashboard";
+import { ClientSettingsPage } from "../pages/client/ClientSettingsPage";
 import { ServicesPage } from "../pages/shared/ServicesPage";
-import { SettingsPage } from "../pages/shared/SettingsPage";
 import type { AppRoute } from "./types";
 
 export const clientRoutes: AppRoute[] = [
@@ -27,6 +27,6 @@ export const clientRoutes: AppRoute[] = [
     path: "/settings",
     title: "Configuracoes",
     breadcrumbs: ["Cliente", "Configuracoes"],
-    Component: SettingsPage,
+    Component: ClientSettingsPage,
   },
 ];
