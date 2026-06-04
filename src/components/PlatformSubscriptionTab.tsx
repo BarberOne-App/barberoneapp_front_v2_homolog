@@ -35,20 +35,24 @@ function intervalLabel(interval: string, count: number) {
 
 function getApiErrorMessage(error: unknown): string {
   if (typeof error === 'object' && error !== null) {
-    const e = error as { response?: { data?: { message?: string; [k: string]: unknown } }; message?: string };
+    const e = error as { response?: { data?: { message?: string } }; message?: string };
     if (e.response?.data?.message) return e.response.data.message;
     if (e.message) return e.message;
   }
   return 'Erro desconhecido.';
 }
 
+function normalizeStatus(raw: string): string {
+  return raw?.trim().toLowerCase().replace('canceled', 'cancelled');
+}
+
 const STATUS_LABEL: Record<string, string> = {
   active: 'Ativo',
+  trialing: 'Período de teste',
   future: 'Agendado',
   paused: 'Pausado',
   pending: 'Pendente',
   cancelled: 'Cancelado',
-  trialing: 'Período de teste',
 };
 
 const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -104,7 +108,8 @@ export function PlatformSubscriptionTab() {
     loadPlans();
   }, [loadSubscription, loadPlans]);
 
-  const hasActiveSub = ['active', 'trialing', 'future'].includes(currentSub?.status ?? '');
+  const normalizedStatus = currentSub ? normalizeStatus(currentSub.status) : '';
+  const hasActiveSub = ['active', 'trialing', 'future'].includes(normalizedStatus);
   const isCurrentPlan = (plan: PlatformPlan) => currentSub?.plan?.id === plan.id;
 
   function handleSelectPlan(plan: PlatformPlan, upgrade: boolean) {
@@ -150,8 +155,8 @@ export function PlatformSubscriptionTab() {
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="text-lg font-medium text-foreground">Assinatura da plataforma</h3>
           {!loadingSubscription && !subscriptionError && currentSub && (
-            <Badge variant={STATUS_VARIANT[currentSub.status] ?? 'outline'}>
-              {STATUS_LABEL[currentSub.status] ?? currentSub.status}
+            <Badge variant={STATUS_VARIANT[normalizedStatus] ?? 'outline'}>
+              {STATUS_LABEL[normalizedStatus] ?? currentSub.status}
             </Badge>
           )}
           {!loadingSubscription && !subscriptionError && !currentSub && (
@@ -185,16 +190,24 @@ export function PlatformSubscriptionTab() {
               <div>
                 <p className="text-xs text-muted-foreground">Valor</p>
                 <p className="font-semibold text-foreground">
-                  {currentSub.amount ? `${formatCurrency(currentSub.amount)}/mês` : '-'}
+                  {currentSub.plan?.price != null
+                    ? `${formatCurrency(currentSub.plan.price)}/mês`
+                    : currentSub.amount != null
+                    ? `${formatCurrency(currentSub.amount)}/mês`
+                    : '-'}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Próxima cobrança</p>
-                <p className="font-semibold text-foreground">{formatDate(currentSub.nextBillingDate)}</p>
+                <p className="font-semibold text-foreground">
+                  {formatDate(currentSub.nextBillingDate)}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Ativo desde</p>
-                <p className="font-semibold text-foreground">{formatDate(currentSub.startDate)}</p>
+                <p className="font-semibold text-foreground">
+                  {formatDate(currentSub.startDate ?? currentSub.createdAt)}
+                </p>
               </div>
             </div>
 
@@ -229,9 +242,12 @@ export function PlatformSubscriptionTab() {
             )}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            Sua barbearia ainda não possui uma assinatura ativa. Escolha um plano abaixo para começar.
-          </p>
+          <div className="rounded-lg border border-border bg-secondary/40 p-4">
+            <p className="text-sm font-medium text-foreground">Nenhuma assinatura ativa encontrada.</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Escolha um plano abaixo para ativar sua assinatura da plataforma.
+            </p>
+          </div>
         )}
       </div>
 

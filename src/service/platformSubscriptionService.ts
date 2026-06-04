@@ -18,12 +18,13 @@ export interface PlatformPlan {
 
 export interface PlatformSubscription {
   id: string;
-  status: 'active' | 'trialing' | 'future' | 'paused' | 'pending' | 'cancelled';
+  status: string;
   selectedPlan: string;
   plan: PlatformPlan | null;
   amount: number | null;
   nextBillingDate: string | null;
   startDate: string | null;
+  createdAt: string | null;
 }
 
 export async function getBarbershopPlatformSubscription(): Promise<{ subscription: PlatformSubscription | null }> {

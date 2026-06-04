@@ -1959,32 +1959,6 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
             </div>
           )}
 
-          <div className="bg-card rounded-xl border border-border p-6">
-            <h3 className="text-lg font-medium text-foreground mb-4">Two-Factor Authentication</h3>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-foreground">Enable 2FA</p>
-                <p className="text-xs text-muted-foreground">Add an extra layer of security to your account</p>
-              </div>
-              <Switch />
-            </div>
-          </div>
-
-          <div className="bg-card rounded-xl border border-border p-6">
-            <h3 className="text-lg font-medium text-foreground mb-4">Session Management</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Current Session</p>
-                  <p className="text-xs text-muted-foreground">Chrome on Windows • IP: 192.168.1.1</p>
-                </div>
-                <Badge variant="outline" className="text-emerald-500 border-emerald-500/20">
-                  <Check size={12} className="mr-1" />
-                  Active
-                </Badge>
-              </div>
-            </div>
-          </div>
         </TabsContent>
 
         {/* Payments */}
@@ -2412,77 +2386,6 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
                   Nenhuma imagem adicionada ao banner.
                 </div>
               )}
-            </div>
-          </div>
-
-          <div className="bg-card rounded-xl border border-border p-6">
-            <h3 className="text-lg font-medium text-foreground mb-4">Theme Settings</h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between py-3 border-b border-border">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Dark Mode</p>
-                  <p className="text-xs text-muted-foreground">Enable dark mode for the dashboard</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-              <div className="flex items-center justify-between py-3 border-b border-border">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Compact Mode</p>
-                  <p className="text-xs text-muted-foreground">Reduce spacing between elements</p>
-                </div>
-                <Switch />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-card rounded-xl border border-border p-6">
-            <h3 className="text-lg font-medium text-foreground mb-4">Brand Colors</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Primary Color</label>
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="color" 
-                    defaultValue="#f97316"
-                    className="w-10 h-10 rounded-md border border-border cursor-pointer"
-                  />
-                  <input 
-                    type="text" 
-                    defaultValue="#f97316"
-                    className="flex-1 bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Secondary Color</label>
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="color" 
-                    defaultValue="#1a1a1a"
-                    className="w-10 h-10 rounded-md border border-border cursor-pointer"
-                  />
-                  <input 
-                    type="text" 
-                    defaultValue="#1a1a1a"
-                    className="flex-1 bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Accent Color</label>
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="color" 
-                    defaultValue="#10b981"
-                    className="w-10 h-10 rounded-md border border-border cursor-pointer"
-                  />
-                  <input 
-                    type="text" 
-                    defaultValue="#10b981"
-                    className="flex-1 bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border"
-                  />
-                </div>
-              </div>
             </div>
           </div>
 
