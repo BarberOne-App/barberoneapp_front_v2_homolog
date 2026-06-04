@@ -9,7 +9,7 @@ export function AresChatButton() {
       aria-label="Suporte via AresChat"
       style={{
         position: 'fixed',
-        bottom: '24px',
+        bottom: '120px',
         right: '24px',
         zIndex: 9999,
         display: 'flex',
