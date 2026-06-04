@@ -65,8 +65,16 @@ export interface ListPaymentsResponse {
   items: PaymentRecord[];
 }
 
+export interface PaymentSummary {
+  paid: number;
+  pending: number;
+  refunded: number;
+  today: number;
+}
+
 export interface PaymentListResult extends ListPaymentsResponse {
   items: Array<PaymentRecord & { paymentType: PaymentType }>;
+  summary?: PaymentSummary;
 }
 
 export async function listSubscriptionPayments(params: ListPaymentsParams = {}) {
