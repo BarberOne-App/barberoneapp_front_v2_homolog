@@ -424,7 +424,6 @@ export function ClientPlansPage() {
   const isActive = mySubscription?.status === "active" || mySubscription?.status === "paused";
   const isCancelledOrExpired =
     mySubscription?.status === "cancelled" || mySubscription?.status === "expired";
-  const hasAnySubscription = mySubscription !== null;
 
   return (
     <div className="space-y-6">
