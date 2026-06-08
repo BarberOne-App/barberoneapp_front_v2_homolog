@@ -190,7 +190,7 @@ export function AppCalendar({
       <PopoverContent
         align="start"
         sideOffset={8}
-        className="z-50 w-[390px] rounded-2xl border border-border bg-card p-4 shadow-xl"
+        className="z-50 w-[min(390px,calc(100vw-1rem))] rounded-2xl border border-border bg-card p-4 shadow-xl"
       >
         <div className="mb-4 flex items-center gap-3 rounded-xl bg-background p-3">
           <div className="relative flex-1">

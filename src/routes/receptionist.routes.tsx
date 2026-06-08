@@ -4,6 +4,8 @@ import { BookingsPage } from "../pages/shared/BookingsPage";
 import { CustomersPage } from "../pages/shared/CustomersPage";
 import { FitAppointmentPage } from "../pages/shared/FitAppointmentPage";
 import { PaymentsPage } from "../pages/shared/PaymentsPage";
+import { PlansPage } from "../pages/admin/PlansPage";
+import { ProductsPage } from "../pages/admin/ProductsPage";
 import { SchedulesPage } from "../pages/shared/SchedulesPage";
 import { ServicesPage } from "../pages/shared/ServicesPage";
 import type { AppRoute } from "./types";
@@ -32,24 +34,40 @@ export const receptionistRoutes: AppRoute[] = [
     title: "Agenda",
     breadcrumbs: ["Operacao", "Agenda"],
     Component: SchedulesPage,
+    requiredPermission: "manageBlockedDates",
   },
   {
     path: "/payments",
     title: "Pagamentos",
     breadcrumbs: ["Operacao", "Pagamentos"],
     Component: PaymentsPage,
+    requiredPermission: "managePayments",
   },
   {
     path: "/customers",
     title: "Clientes",
     breadcrumbs: ["Atendimento", "Clientes"],
     Component: CustomersPage,
+    requiredPermission: "manageCustomers",
   },
+  /* Visualização sem permissão — ações de edição são bloqueadas dentro das páginas */
   {
     path: "/services",
     title: "Servicos",
-    breadcrumbs: ["Atendimento", "Servicos"],
+    breadcrumbs: ["Catalogo", "Servicos"],
     Component: ServicesPage,
+  },
+  {
+    path: "/products",
+    title: "Produtos",
+    breadcrumbs: ["Catalogo", "Produtos"],
+    Component: ProductsPage,
+  },
+  {
+    path: "/plans",
+    title: "Planos",
+    breadcrumbs: ["Catalogo", "Planos"],
+    Component: PlansPage,
   },
   {
     path: "/settings",

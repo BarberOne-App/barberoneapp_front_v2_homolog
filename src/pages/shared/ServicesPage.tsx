@@ -61,6 +61,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useTableSelection } from "@/hooks/useTableSelection";
 import {
   createService,
@@ -150,8 +151,10 @@ function serviceToForm(service: Service): ServiceFormState {
 
 export function ServicesPage() {
   const { user } = useAuth();
+  const { can } = usePermissions();
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const isAdmin = user?.role === "admin" || user?.isAdmin === true;
+  const canManage = isAdmin || can("manageServices");
   const [services, setServices] = useState<Service[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<ServiceFilter>("all");
@@ -412,14 +415,14 @@ export function ServicesPage() {
                 >
                   <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="active">Ativos</DropdownMenuRadioItem>
-                  {isAdmin ? (
+                  {canManage ? (
                     <DropdownMenuRadioItem value="inactive">Inativos</DropdownMenuRadioItem>
                   ) : null}
                   <DropdownMenuRadioItem value="covered">Cobertos pelo plano</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-            {isAdmin ? (
+            {canManage ? (
               <Button size="sm" className="gap-2" onClick={openCreateDialog}>
                 <Plus size={14} />
                 Adicionar Servico
@@ -435,7 +438,7 @@ export function ServicesPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  {isAdmin ? (
+                  {canManage ? (
                     <th className="w-10 p-4">
                       <Checkbox
                         checked={
@@ -466,14 +469,14 @@ export function ServicesPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Status
                   </th>
-                  {isAdmin ? <th className="w-10 px-4 py-3" /> : null}
+                  {canManage ? <th className="w-10 px-4 py-3" /> : null}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={isAdmin ? 8 : 5}
+                      colSpan={isAdmin ? 8 : canManage ? 7 : 5}
                       className="p-8 text-center text-sm text-muted-foreground"
                     >
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
@@ -483,7 +486,7 @@ export function ServicesPage() {
                 ) : filteredServices.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={isAdmin ? 8 : 5}
+                      colSpan={isAdmin ? 8 : canManage ? 7 : 5}
                       className="p-8 text-center text-sm text-muted-foreground"
                     >
                       Nenhum servico encontrado.
@@ -498,7 +501,7 @@ export function ServicesPage() {
                         key={service.id}
                         className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
                       >
-                        {isAdmin ? (
+                        {canManage ? (
                           <td className="p-4">
                             <Checkbox
                               checked={selectedRows.includes(service.id)}
@@ -571,7 +574,7 @@ export function ServicesPage() {
                             {service.active ? "Ativo" : "Inativo"}
                           </Badge>
                         </td>
-                        {isAdmin ? (
+                        {canManage ? (
                           <td className="px-4 py-3">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>

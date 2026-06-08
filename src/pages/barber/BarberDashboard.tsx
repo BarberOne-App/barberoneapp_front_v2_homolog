@@ -152,7 +152,7 @@ export function BarberDashboard() {
         </p>
       </section>
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {isLoading ? (
           <div className="col-span-4 flex items-center justify-center py-8">
             <Loader2 size={24} className="animate-spin text-muted-foreground" />

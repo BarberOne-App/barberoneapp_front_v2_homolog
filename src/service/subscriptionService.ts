@@ -58,13 +58,29 @@ export async function updateSubscription(
 }
 
 export interface CreateSubscriptionPayload {
-  userId: string;
+  userId?: string;
   planId: string;
   amount: number;
   paymentMethod?: string;
+  isRecurring?: boolean;
+  autoRenewal?: boolean;
 }
 
 export async function createSubscription(data: CreateSubscriptionPayload) {
   const response = await api.post<Subscription>("/subscriptions", data);
   return response.data;
+}
+
+export async function getMyActiveSubscription(): Promise<Subscription | null> {
+  const response = await api.get<ListSubscriptionsResponse>("/subscriptions", {
+    params: { limit: 10 },
+  });
+  // Prioriza ativa/pausada; se só existir cancelada/expirada retorna ela
+  // para bloquear nova assinatura (constraint único no banco)
+  const items = response.data.items;
+  return (
+    items.find((s) => s.status === "active" || s.status === "paused") ??
+    items.find((s) => s.status === "cancelled" || s.status === "expired") ??
+    null
+  );
 }

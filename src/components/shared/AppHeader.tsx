@@ -1,11 +1,12 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Settings } from "lucide-react";
+import { Menu, Settings } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { getProfileConfig } from "../../config/profileConfig";
 import { useAuth } from "../../hooks/useAuth";
+import { useSidebarMobile } from "../../layouts/ProfileLayout";
 
 interface AppHeaderProps {
   title: string;
@@ -40,6 +41,7 @@ export function AppHeader({
   actionHref,
 }: AppHeaderProps) {
   const { user } = useAuth();
+  const { setOpen: setSidebarOpen } = useSidebarMobile();
   const [barbershop, setBarbershop] = useState<StoredBarbershop | null>(() =>
     getStoredBarbershop()
   );
@@ -71,8 +73,17 @@ export function AppHeader({
   }, []);
 
   return (
-    <header className="flex items-center justify-between px-6 py-4">
+    <header className="flex items-center justify-between px-4 py-4 md:px-6">
       <div className="flex min-w-0 items-center gap-3">
+        {/* Hamburger — apenas mobile */}
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          className="flex-shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground md:hidden"
+          aria-label="Abrir menu"
+        >
+          <Menu size={22} />
+        </button>
         <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary">
           {logoUrl ? (
             <img src={logoUrl} alt={barbershopName} className="h-full w-full object-cover" />

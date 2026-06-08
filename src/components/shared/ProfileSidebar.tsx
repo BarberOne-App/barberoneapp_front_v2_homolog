@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
-import { ChevronLeft, ChevronRight, LogOut, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut, Search, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useAuth } from "../../hooks/useAuth";
+import { usePermissions } from "../../hooks/usePermissions";
+import type { PermissionKey } from "../../hooks/usePermissions";
+import { useSidebarMobile } from "../../layouts/ProfileLayout";
 
 export interface SidebarItem {
   icon: LucideIcon;
   label: string;
   href: string;
+  requiredPermission?: PermissionKey;
 }
 
 export interface SidebarSection {
@@ -50,6 +54,9 @@ export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProp
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const { open: mobileOpen, setOpen: setMobileOpen } = useSidebarMobile();
+  const { can } = usePermissions();
+
   const sidebarTitle = barbershop?.name?.trim() || title;
   const logoUrl = barbershop?.logoUrl?.trim() || "";
   const fallbackInitial = sidebarTitle.trim()[0]?.toUpperCase() || "B";
@@ -57,7 +64,12 @@ export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProp
   const menuSections = [
     ...sections,
     { items: [{ icon: LogOut, label: "Sair", href: "/logout" }] },
-  ];
+  ].map((section) => ({
+    ...section,
+    items: section.items.filter(
+      (item) => !item.requiredPermission || can(item.requiredPermission)
+    ),
+  })).filter((section) => section.items.length > 0);
 
   const isActive = (href: string) => location.pathname === href;
 
@@ -65,6 +77,8 @@ export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProp
     logout();
     navigate("/login", { replace: true });
   };
+
+  const closeMobile = () => setMobileOpen(false);
 
   useEffect(() => {
     function refreshBarbershop() {
@@ -80,15 +94,24 @@ export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProp
     };
   }, []);
 
+  /* Fecha o drawer quando a rota muda (navegação mobile) */
+  useEffect(() => {
+    setMobileOpen(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
   return (
     <aside
       className={cn(
         "fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
+        /* Largura: mobile sempre w-64; desktop respeita collapsed */
+        collapsed ? "w-64 md:w-16" : "w-64",
+        /* Visibilidade: mobile desliza; desktop sempre visível */
+        mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       )}
     >
       <div className="flex items-center justify-between border-b border-sidebar-border p-4">
-        <Link to={homeHref} className="flex items-center gap-3">
+        <Link to={homeHref} className="flex items-center gap-3" onClick={closeMobile}>
           <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary">
             {logoUrl ? (
               <img src={logoUrl} alt={sidebarTitle} className="h-full w-full object-cover" />
@@ -104,10 +127,23 @@ export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProp
             </span>
           )}
         </Link>
+
+        {/* Botão fechar — apenas mobile */}
+        <button
+          type="button"
+          onClick={closeMobile}
+          className="rounded-md p-1 text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground md:hidden"
+          aria-label="Fechar menu"
+        >
+          <X size={16} />
+        </button>
+
+        {/* Botão colapsar — apenas desktop */}
         <button
           type="button"
           onClick={() => setCollapsed(!collapsed)}
-          className="rounded-md p-1 text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          className="hidden rounded-md p-1 text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground md:flex"
+          aria-label={collapsed ? "Expandir sidebar" : "Colapsar sidebar"}
         >
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
@@ -155,6 +191,7 @@ export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProp
                     ) : (
                       <Link
                         to={item.href}
+                        onClick={closeMobile}
                         className={cn(
                           "mx-2 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                           isActive(item.href)

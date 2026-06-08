@@ -52,6 +52,33 @@ export interface SubscribePlatformPayload {
   };
 }
 
+export interface SubscribeClientPlanPayload {
+  planId: string;
+  amount: number;
+  cardForm: CardFormData;
+  customer?: {
+    name?: string;
+    email?: string;
+  };
+}
+
+export async function subscribeClientToPlan(payload: SubscribeClientPlanPayload) {
+  const cardToken = await createPagarmeCardToken(payload.cardForm);
+
+  const { data } = await api.post('/pagarme/subscriptions/client-subscriptions', {
+    planId: payload.planId,
+    cardToken,
+    customer: {
+      name: payload.customer?.name ?? '',
+      email: payload.customer?.email ?? '',
+      document: payload.cardForm.document,
+      phone: payload.cardForm.phone,
+    },
+  });
+
+  return data;
+}
+
 export async function subscribeBarbershopPlatformPlan(payload: SubscribePlatformPayload) {
   const cardToken = await createPagarmeCardToken(payload.cardForm);
 
