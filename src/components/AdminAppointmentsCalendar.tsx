@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getStableCalendarColor } from '@/utils/adminCalendar';
+import { getStableCalendarColor, CALENDAR_END_MINUTES } from '@/utils/adminCalendar';
 import type { CalendarAppointment, CalendarColor, FreeSlot } from '@/utils/adminCalendar';
 import type { Barber } from '@/service/barberService';
 import type { Appointment } from '@/service/appointmentService';
@@ -235,8 +235,39 @@ export default function AdminAppointmentsCalendar({
                       });
                     };
 
+                    const handleColumnClick = (e: React.MouseEvent<HTMLDivElement>) => {
+                      if (!calDate) return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const relativeY = e.clientY - rect.top;
+                      const rawMinutes = startMinutes + Math.floor(relativeY / slotHeight) * minutesPerSlot;
+                      const clickedMinutes = Math.max(
+                        startMinutes,
+                        Math.min(CALENDAR_END_MINUTES - minutesPerSlot, rawMinutes),
+                      );
+
+                      const clickedDate = new Date(calDate);
+                      clickedDate.setHours(Math.floor(clickedMinutes / 60), clickedMinutes % 60, 0, 0);
+                      if (clickedDate < new Date()) return;
+
+                      const barberApts = appointmentsByBarber.get(barber.id) ?? [];
+                      const nextAptStart = barberApts
+                        .map((apt) => {
+                          const [h, m] = String(apt.startTime ?? '00:00').split(':').map(Number);
+                          return (h ?? 0) * 60 + (m ?? 0);
+                        })
+                        .filter((s) => s > clickedMinutes)
+                        .sort((a, b) => a - b)[0];
+
+                      const maxAvail = nextAptStart != null
+                        ? nextAptStart - clickedMinutes
+                        : CALENDAR_END_MINUTES - clickedMinutes;
+                      const duration = Math.max(5, Math.min(maxAvail, 60));
+
+                      onFreeFitBooking(barber.id, calDate, clickedMinutes, duration);
+                    };
+
                     return (
-                      <div key={barber.id} className="calendar-appointments-column">
+                      <div key={barber.id} className="calendar-appointments-column" style={{ cursor: 'pointer' }} onClick={handleColumnClick}>
                         {/* Free fit slots */}
                         {barberFreeSlots.map((freeSlot, freeIdx) => {
                           const freeTop = ((freeSlot.startMinutes - startMinutes) / minutesPerSlot) * slotHeight;
@@ -253,7 +284,8 @@ export default function AdminAppointmentsCalendar({
                               key={`free-${freeIdx}`}
                               className={`calendar-free-fit${isFreeFitPast ? ' past-free-fit' : ''}`}
                               style={{ top: `${freeTop}px`, height: `${freeHeight}px` }}
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 if (isFreeFitPast || !calDate) return;
                                 onFreeFitBooking(barber.id, calDate, freeSlot.startMinutes, freeSlot.durationMinutes);
                               }}
@@ -300,7 +332,10 @@ export default function AdminAppointmentsCalendar({
                                 borderLeftColor: appointment.color.accent,
                                 boxShadow: `0 4px 14px rgba(0,0,0,0.24), inset 0 1px 0 ${appointment.color.border}`,
                               }}
-                              onClick={isAptPast ? (e) => e.stopPropagation() : () => setAptModal({ appointment, barber, calDate, clientName, servicesNames })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!isAptPast) setAptModal({ appointment, barber, calDate, clientName, servicesNames });
+                              }}
                             >
                               {eventHeight <= 28 ? (
                                 <div className="apt-inline-summary">
@@ -352,7 +387,10 @@ export default function AdminAppointmentsCalendar({
                                 borderLeftColor: appointment.color.accent,
                                 boxShadow: `0 4px 14px rgba(0,0,0,0.24), inset 0 1px 0 ${appointment.color.border}`,
                               }}
-                              onClick={isAptPast ? (e) => e.stopPropagation() : () => setAptModal({ appointment, barber, calDate, clientName, servicesNames })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!isAptPast) setAptModal({ appointment, barber, calDate, clientName, servicesNames });
+                              }}
                             >
                               {eventHeight <= 28 ? (
                                 <div className="apt-inline-summary">
