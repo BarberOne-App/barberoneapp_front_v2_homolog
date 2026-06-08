@@ -54,6 +54,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useTableSelection } from "@/hooks/useTableSelection";
+import { useAuth } from "@/hooks/useAuth";
 import {
   createPlan,
   listPlans,
@@ -174,6 +175,8 @@ function planToForm(plan: Plan): PlanFormState {
 }
 
 export function PlansPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.isAdmin === true || user?.role === "admin";
   const [plans, setPlans] = useState<Plan[]>([]);
   const [filter, setFilter] = useState<PlanFilter>("all");
   const [loading, setLoading] = useState(true);
@@ -468,10 +471,12 @@ export function PlansPage() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button size="sm" className="gap-2" onClick={openCreateDialog}>
-              <Plus size={14} />
-              Adicionar Plano
-            </Button>
+            {isAdmin ? (
+              <Button size="sm" className="gap-2" onClick={openCreateDialog}>
+                <Plus size={14} />
+                Adicionar Plano
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -606,38 +611,40 @@ export function PlansPage() {
                           {plan.active ? "Ativo" : "Inativo"}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
-                              <MoreHorizontal size={16} />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEditDialog(plan)}>
-                              <Edit size={14} />
-                              Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              disabled={togglingId === plan.id}
-                              onClick={() => toggleActive(plan)}
-                            >
-                              {plan.active ? (
-                                <>
-                                  <PowerOff size={14} />
-                                  Inativar
-                                </>
-                              ) : (
-                                <>
-                                  <Zap size={14} />
-                                  Ativar
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
+                      {isAdmin ? (
+                        <td className="px-4 py-3">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
+                                <MoreHorizontal size={16} />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEditDialog(plan)}>
+                                <Edit size={14} />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                disabled={togglingId === plan.id}
+                                onClick={() => toggleActive(plan)}
+                              >
+                                {plan.active ? (
+                                  <>
+                                    <PowerOff size={14} />
+                                    Inativar
+                                  </>
+                                ) : (
+                                  <>
+                                    <Zap size={14} />
+                                    Ativar
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      ) : null}
                     </tr>
                   ))
                 )}
@@ -722,20 +729,20 @@ export function PlansPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Status
                 </th>
-                <th className="px-4 py-3" />
+                {isAdmin ? <th className="px-4 py-3" /> : null}
               </tr>
             </thead>
             <tbody>
               {loadingSubscriptions ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={isAdmin ? 6 : 5} className="p-8 text-center text-sm text-muted-foreground">
                     <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                     Carregando assinaturas...
                   </td>
                 </tr>
               ) : subscriptions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={isAdmin ? 6 : 5} className="p-8 text-center text-sm text-muted-foreground">
                     Nenhuma assinatura encontrada.
                   </td>
                 </tr>
@@ -794,36 +801,38 @@ export function PlansPage() {
                           : "Expirado"}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
-                            <MoreHorizontal size={16} />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            disabled={
-                              togglingSubId === sub.id ||
-                              sub.status === "expired"
-                            }
-                            onClick={() => toggleSubscriptionStatus(sub)}
-                          >
-                            {sub.status === "active" ? (
-                              <>
-                                <PowerOff size={14} />
-                                Cancelar
-                              </>
-                            ) : (
-                              <>
-                                <Play size={14} />
-                                Ativar
-                              </>
-                            )}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </td>
+                    {isAdmin ? (
+                      <td className="px-4 py-3">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
+                              <MoreHorizontal size={16} />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              disabled={
+                                togglingSubId === sub.id ||
+                                sub.status === "expired"
+                              }
+                              onClick={() => toggleSubscriptionStatus(sub)}
+                            >
+                              {sub.status === "active" ? (
+                                <>
+                                  <PowerOff size={14} />
+                                  Cancelar
+                                </>
+                              ) : (
+                                <>
+                                  <Play size={14} />
+                                  Ativar
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    ) : null}
                   </tr>
                 ))
               )}

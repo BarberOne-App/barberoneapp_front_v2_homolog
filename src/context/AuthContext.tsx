@@ -1,7 +1,7 @@
-import { createContext, useState } from "react";
+import { createContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
-import { login as loginRequest, logout as logoutRequest } from "../service/authService";
+import { fetchMe, login as loginRequest, logout as logoutRequest } from "../service/authService";
 
 export interface User {
   id: string;
@@ -65,6 +65,22 @@ export const AuthContext = createContext<AuthContextData | null>(null);
 
 export function AuthProvider({ children }: Props) {
   const [user, setUser] = useState<User | null>(() => getStoredUser());
+
+  /* Ao montar, sincroniza permissões com o servidor.
+     Garante que mudanças feitas pelo admin tomem efeito sem re-login. */
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    fetchMe()
+      .then((fresh) => {
+        localStorage.setItem("user", JSON.stringify(fresh));
+        setUser(fresh);
+      })
+      .catch(() => {
+        /* Ignora erros de rede — mantém sessão local */
+      });
+  }, []);
 
   async function login(email: string, password: string) {
     console.info("[AuthContext] Iniciando loginRequest.", { email });

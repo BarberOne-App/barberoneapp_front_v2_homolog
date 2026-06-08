@@ -57,6 +57,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useTableSelection } from "@/hooks/useTableSelection";
+import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   createProduct,
   deleteProduct,
@@ -155,6 +157,10 @@ function productToForm(product: Product): ProductFormState {
 }
 
 export function ProductsPage() {
+  const { user } = useAuth();
+  const { can } = usePermissions();
+  const isAdmin = user?.isAdmin === true || user?.role === "admin";
+  const canManage = isAdmin || can("manageProducts");
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState("");
@@ -409,10 +415,12 @@ export function ProductsPage() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button size="sm" className="gap-2" onClick={openCreateDialog}>
-              <Plus size={14} />
-              Adicionar Produto
-            </Button>
+            {canManage ? (
+              <Button size="sm" className="gap-2" onClick={openCreateDialog}>
+                <Plus size={14} />
+                Adicionar Produto
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -423,15 +431,17 @@ export function ProductsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="w-10 p-4">
-                    <Checkbox
-                      checked={
-                        selectedRows.length === filteredProducts.length &&
-                        filteredProducts.length > 0
-                      }
-                      onCheckedChange={toggleAll}
-                    />
-                  </th>
+                  {canManage ? (
+                    <th className="w-10 p-4">
+                      <Checkbox
+                        checked={
+                          selectedRows.length === filteredProducts.length &&
+                          filteredProducts.length > 0
+                        }
+                        onCheckedChange={toggleAll}
+                      />
+                    </th>
+                  ) : null}
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Produto
                   </th>
@@ -531,36 +541,38 @@ export function ProductsPage() {
                             {statusLabels[status]}
                           </Badge>
                         </td>
-                        <td className="px-4 py-3">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
-                                <MoreHorizontal size={16} />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openEditDialog(product)}>
-                                <Edit size={14} />
-                                Editar
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {product.active ? (
-                                <DropdownMenuItem
-                                  variant="destructive"
-                                  onClick={() => setProductToDeactivate(product)}
-                                >
-                                  <Trash2 size={14} />
-                                  Desativar
+                        {canManage ? (
+                          <td className="px-4 py-3">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
+                                  <MoreHorizontal size={16} />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openEditDialog(product)}>
+                                  <Edit size={14} />
+                                  Editar
                                 </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem onClick={() => setProductToReactivate(product)}>
-                                  <RotateCcw size={14} />
-                                  Reativar
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
+                                <DropdownMenuSeparator />
+                                {product.active ? (
+                                  <DropdownMenuItem
+                                    variant="destructive"
+                                    onClick={() => setProductToDeactivate(product)}
+                                  >
+                                    <Trash2 size={14} />
+                                    Desativar
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem onClick={() => setProductToReactivate(product)}>
+                                    <RotateCcw size={14} />
+                                    Reativar
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        ) : null}
                       </tr>
                     );
                   })

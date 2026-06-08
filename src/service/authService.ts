@@ -122,3 +122,19 @@ export function logout() {
 export function isAuthenticated() {
   return Boolean(localStorage.getItem("token"));
 }
+
+export async function fetchMe() {
+  const response = await api.get<{
+    id: string;
+    name: string;
+    email: string;
+    role?: string;
+    isAdmin?: boolean;
+    photoUrl?: string | null;
+    permissions?: Record<string, boolean> | null;
+    phone?: string | null;
+    cpf?: string | null;
+    birthDate?: string | null;
+  }>("/auth/me");
+  return response.data;
+}
