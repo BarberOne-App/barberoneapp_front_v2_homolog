@@ -114,7 +114,6 @@ export function ClientSettingsPage() {
         name: profileForm.name.trim() || undefined,
         email: profileForm.email.trim() || undefined,
         phone: profileForm.phone.replace(/\D/g, '') || null,
-        cpf: profileForm.cpf.replace(/\D/g, '') || null,
         birthDate: profileForm.birthDate || null,
       });
       updateAuthUser({ ...user, ...updated });
@@ -258,12 +257,9 @@ export function ClientSettingsPage() {
             <label className="text-sm font-medium text-foreground">CPF</label>
             <input
               type="text"
-              value={profileForm.cpf}
-              onChange={(e) =>
-                setProfileForm((f) => ({ ...f, cpf: formatCPF(e.target.value) }))
-              }
-              placeholder="000.000.000-00"
-              className="w-full bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+              value={profileForm.cpf || '—'}
+              readOnly
+              className="w-full bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border opacity-60 cursor-not-allowed select-none"
             />
           </div>
           <div className="space-y-2">
