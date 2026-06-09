@@ -10,9 +10,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { listAppointments } from "@/service/appointmentService";
 import { getMyPayrollSummary, type EmployeePayrollRow } from "@/service/employeePayrollService";
-import { useMyBarber } from "@/hooks/useMyBarber";
 
 /* ─── helpers ─── */
 
@@ -49,49 +47,22 @@ const MONTH_NAMES = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
-function isExtraPayment(p: EmployeePayrollRow["payments"][number]): boolean {
-  return (
-    p.periodStart === p.periodEnd &&
-    Number(p.commission) === 0 &&
-    Number(p.salarioFixo) > 0
-  );
-}
-
 /* ─── component ─── */
 
 export function BarberEarningsPage() {
-  const { barber, loading: barberLoading } = useMyBarber();
-
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [row, setRow] = useState<EmployeePayrollRow | null>(null);
-  const [totalRevenue, setTotalRevenue] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const { start: periodStart, end: periodEnd } = getMonthRange(year, month);
 
-  const load = useCallback(async (barberId: string) => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [summaryRes, apptRes] = await Promise.all([
-        getMyPayrollSummary({ periodStart, periodEnd }),
-        listAppointments({
-          barberId,
-          dateFrom: periodStart,
-          dateTo: periodEnd,
-          allAppointments: true,
-          limit: 100,
-        }),
-      ]);
-
-      const myRow = summaryRes.items[0] ?? null;
-      setRow(myRow);
-
-      const revenue = apptRes.items
-        .filter((a) => a.status !== "cancelled" && a.status !== "no_show")
-        .reduce((sum, a) => sum + (a.totalAmount ?? 0), 0);
-      setTotalRevenue(revenue);
+      const summaryRes = await getMyPayrollSummary({ periodStart, periodEnd });
+      setRow(summaryRes.items[0] ?? null);
     } catch (err) {
       toast.error(getApiMessage(err));
     } finally {
@@ -100,8 +71,8 @@ export function BarberEarningsPage() {
   }, [periodStart, periodEnd]);
 
   useEffect(() => {
-    if (barber?.id) void load(barber.id);
-  }, [barber, load]);
+    void load();
+  }, [load]);
 
   function prevMonth() {
     if (month === 0) { setYear((y) => y - 1); setMonth(11); }
@@ -120,39 +91,28 @@ export function BarberEarningsPage() {
   const stats = useMemo(() => {
     if (!row) return null;
 
-    const commissionPercent = barber?.commissionPercent ?? null;
-    const extraPago = row.paymentHistory
-      .filter(isExtraPayment)
-      .reduce((sum, p) => sum + Number(p.salarioFixo || 0), 0);
-    const folhaPago = row.paymentHistory
-      .filter((p) => !isExtraPayment(p))
-      .reduce((sum, p) => sum + Number(p.liquido || p.netAmount || 0), 0);
-    const barbearia = Math.max(totalRevenue - row.commission, 0);
+    const effectiveCommissionPercent =
+      row.totalRevenue > 0
+        ? Math.round((row.commission / row.totalRevenue) * 100)
+        : null;
 
     return {
       atendimentos: row.appointmentsCount,
-      totalRevenue,
-      commissionPercent,
+      totalRevenue: row.totalRevenue,
+      effectiveCommissionPercent,
       commission: row.commission,
-      extraPago,
-      folhaPago,
-      barbearia,
+      totalVales: row.totalVales,
+      extraPago: row.extraPago,
+      folhaPago: row.folhaPago,
+      barbershopShare: row.barbershopShare,
       totalRecebido: row.paidAmount,
       amountDue: row.amountDue,
     };
-  }, [row, barber, totalRevenue]);
-
-  if (barberLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 size={24} className="animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  }, [row]);
 
   return (
     <div className="space-y-6">
-      {/* Period navigation */}
+      {/* Navegação de período */}
       <div className="flex items-center justify-between rounded-xl border border-border bg-card px-5 py-4">
         <div>
           <p className="text-sm text-muted-foreground">Periodo</p>
@@ -185,7 +145,7 @@ export function BarberEarningsPage() {
         </div>
       ) : (
         <>
-          {/* Top stats */}
+          {/* Cards de topo */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex items-start gap-4 rounded-xl border border-border bg-card p-5">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -209,12 +169,14 @@ export function BarberEarningsPage() {
                 <p className="text-3xl font-bold text-foreground">
                   {formatCurrency(stats.totalRevenue)}
                 </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">Soma dos atendimentos</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Atendimentos com pagamento aprovado
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Breakdown card */}
+          {/* Card de resumo */}
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="border-b border-border px-5 py-4">
               <div className="flex items-center gap-2">
@@ -227,29 +189,46 @@ export function BarberEarningsPage() {
             </div>
 
             <div className="divide-y divide-border">
-              {/* Commission */}
+              {/* Comissão */}
               <div className="flex items-center justify-between px-5 py-4">
                 <div>
                   <p className="text-sm font-medium text-foreground">
                     Comissão
-                    {stats.commissionPercent !== null && stats.commissionPercent !== undefined && (
+                    {stats.effectiveCommissionPercent !== null && (
                       <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                        {stats.commissionPercent}%
+                        {stats.effectiveCommissionPercent}%
                       </span>
                     )}
                   </p>
-                  <p className="text-xs text-muted-foreground">Sobre os atendimentos do periodo</p>
+                  <p className="text-xs text-muted-foreground">
+                    Sobre os atendimentos pagos do periodo
+                  </p>
                 </div>
                 <p className="text-base font-semibold text-foreground">
                   {formatCurrency(stats.commission)}
                 </p>
               </div>
 
-              {/* Pag. extras */}
+              {/* Vales — só exibe se houver desconto */}
+              {stats.totalVales > 0 && (
+                <div className="flex items-center justify-between px-5 py-4">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Descontos / Vales</p>
+                    <p className="text-xs text-muted-foreground">Adiantamentos descontados</p>
+                  </div>
+                  <p className="text-base font-semibold text-destructive">
+                    − {formatCurrency(stats.totalVales)}
+                  </p>
+                </div>
+              )}
+
+              {/* Pagamentos extras */}
               <div className="flex items-center justify-between px-5 py-4">
                 <div>
                   <p className="text-sm font-medium text-foreground">Pag. extras</p>
-                  <p className="text-xs text-muted-foreground">Adiantamentos e pagamentos avulsos</p>
+                  <p className="text-xs text-muted-foreground">
+                    Adiantamentos e pagamentos avulsos
+                  </p>
                 </div>
                 <p className="text-base font-semibold text-foreground">
                   {formatCurrency(stats.extraPago)}
@@ -260,21 +239,25 @@ export function BarberEarningsPage() {
               <div className="flex items-center justify-between px-5 py-4">
                 <div>
                   <p className="text-sm font-medium text-foreground">Folha recebida</p>
-                  <p className="text-xs text-muted-foreground">Repasses de folha registrados</p>
+                  <p className="text-xs text-muted-foreground">
+                    Repasses de folha registrados
+                  </p>
                 </div>
                 <p className="text-base font-semibold text-emerald-600">
                   {formatCurrency(stats.folhaPago)}
                 </p>
               </div>
 
-              {/* Barbearia */}
+              {/* Parte da barbearia */}
               <div className="flex items-center justify-between px-5 py-4">
                 <div>
                   <p className="text-sm font-medium text-foreground">Barbearia</p>
-                  <p className="text-xs text-muted-foreground">Faturamento - comissao</p>
+                  <p className="text-xs text-muted-foreground">
+                    Faturamento − comissão
+                  </p>
                 </div>
                 <p className="text-base font-semibold text-muted-foreground">
-                  {formatCurrency(stats.barbearia)}
+                  {formatCurrency(stats.barbershopShare)}
                 </p>
               </div>
 

@@ -60,6 +60,10 @@ export interface EmployeePayrollRow {
   paymentId?: string | null;
   appointmentsCount: number;
   servicesCount: number;
+  totalRevenue: number;
+  barbershopShare: number;
+  extraPago: number;
+  folhaPago: number;
   vales: EmployeeVale[];
   payments: EmployeePayment[];
   paymentHistory: EmployeePayment[];
