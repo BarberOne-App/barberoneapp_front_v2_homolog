@@ -144,6 +144,11 @@ function getApiMessage(error: unknown) {
   return "Nao foi possivel concluir a operacao.";
 }
 
+function isConflictError(error: unknown) {
+  const msg = getApiMessage(error).toLowerCase();
+  return msg.includes("conflito") || msg.includes("ja possui agendamento") || msg.includes("já possui agendamento");
+}
+
 function normalizeText(v: string) {
   return v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
@@ -319,20 +324,30 @@ export function ClientBookingsPage() {
         products: [],
       });
 
-      await createAppointmentPayment({
-        appointmentId: appt.id,
-        userId: user.id,
-        amount: totalPrice,
-        method: "local",
-        status: "pending",
-      });
+      // Registro de pagamento é secundário — agendamento já confirmado
+      try {
+        await createAppointmentPayment({
+          appointmentId: appt.id,
+          userId: user.id,
+          amount: totalPrice,
+          method: "local",
+          status: "pending",
+        });
+      } catch {
+        // ignora falha no registro de pagamento; agendamento continua válido
+      }
 
       toast.success("Agendamento confirmado! Pague na barbearia.");
       setBookingOpen(false);
       setForm({ ...emptyForm, date: dateToDateString(new Date()) });
       await loadAppointments();
     } catch (err) {
-      toast.error(getApiMessage(err));
+      if (isConflictError(err)) {
+        toast.error("Voce ja possui um agendamento neste horario. Confira seus agendamentos abaixo.");
+        await loadAppointments();
+      } else {
+        toast.error(getApiMessage(err));
+      }
     } finally {
       setSavingLocal(false);
     }
@@ -353,19 +368,35 @@ export function ClientBookingsPage() {
         products: [],
       });
 
-      const payment = await createAppointmentPayment({
-        appointmentId: appt.id,
-        userId: user.id,
-        amount: totalPrice,
-        method: method === "cartao" ? "credito" : "pix",
-        status: "pending",
-      });
+      let paymentId = "";
+      try {
+        const payment = await createAppointmentPayment({
+          appointmentId: appt.id,
+          userId: user.id,
+          amount: totalPrice,
+          method: method === "cartao" ? "credito" : "pix",
+          status: "pending",
+        });
+        paymentId = payment.id;
+      } catch {
+        // Se falhar o registro de pagamento, confirma como agendamento sem pagamento online
+        toast.success("Agendamento confirmado! Pague na barbearia.");
+        setBookingOpen(false);
+        setForm({ ...emptyForm, date: dateToDateString(new Date()) });
+        await loadAppointments();
+        return;
+      }
 
-      setPendingPaymentData({ appointmentId: appt.id, paymentId: payment.id });
+      setPendingPaymentData({ appointmentId: appt.id, paymentId });
       setOnlineMethod(method);
       setPaymentOpen(true);
     } catch (err) {
-      toast.error(getApiMessage(err));
+      if (isConflictError(err)) {
+        toast.error("Voce ja possui um agendamento neste horario. Confira seus agendamentos abaixo.");
+        await loadAppointments();
+      } else {
+        toast.error(getApiMessage(err));
+      }
     } finally {
       setSavingLocal(false);
     }
@@ -629,6 +660,19 @@ export function ClientBookingsPage() {
         canPayPix
         canPayLocal
       />
+
+      {/* Loading — processando agendamento */}
+      {savingLocal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card px-10 py-8 shadow-2xl">
+            <Loader2 className="animate-spin text-primary" size={40} />
+            <div className="text-center">
+              <p className="text-base font-semibold text-foreground">Processando agendamento</p>
+              <p className="mt-1 text-sm text-muted-foreground">Aguarde enquanto confirmamos seu horario</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Passo 3 — Pagamento online */}
       {pendingPaymentData && (
