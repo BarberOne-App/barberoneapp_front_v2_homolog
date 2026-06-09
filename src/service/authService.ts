@@ -8,6 +8,18 @@ function maskToken(token?: string) {
   return `${token.slice(0, 8)}...${token.slice(-4)}`;
 }
 
+export class TrialExpiredError extends Error {
+  trialExpiredAt: string;
+  barbershopName: string;
+
+  constructor(message: string, trialExpiredAt: string, barbershopName: string) {
+    super(message);
+    this.name = "TrialExpiredError";
+    this.trialExpiredAt = trialExpiredAt;
+    this.barbershopName = barbershopName;
+  }
+}
+
 export interface LoginPayload {
   email: string;
   password: string;
@@ -23,6 +35,10 @@ export interface AuthResponse {
   accessToken?: string;
   token?: string;
   refreshToken: string;
+  trialExpired?: boolean;
+  trialExpiredAt?: string;
+  barbershopName?: string;
+  message?: string;
   user: {
     id: string;
     name: string;
@@ -55,6 +71,15 @@ export async function login(data: LoginPayload) {
   });
 
   const response = await api.post<AuthResponse>("/auth/login", data);
+
+  if (response.data.trialExpired) {
+    throw new TrialExpiredError(
+      response.data.message ?? "Período de teste expirado.",
+      response.data.trialExpiredAt ?? new Date().toISOString(),
+      response.data.barbershopName ?? ""
+    );
+  }
+
   const accessToken = response.data.accessToken || response.data.token || "";
 
   console.info("[authService] Login retornou com sucesso.", {
