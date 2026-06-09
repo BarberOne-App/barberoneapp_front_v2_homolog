@@ -1,10 +1,11 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Lock, Loader2 } from "lucide-react";
+import { Lock, Loader2, AlertTriangle, X } from "lucide-react";
 
 import barberOneLogo from "../assets/image/barberOne-logo.png";
 import { useAuth } from "../hooks/useAuth";
+import { TrialExpiredError } from "../service/authService";
 
 type ApiErrorResponse = {
   message?: string;
@@ -40,11 +41,17 @@ export function Login() {
   const whatsappUrl =
     "https://wa.me/5500000000000?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20para%20acessar%20o%20BarberOne";
 
+
   const [email, setEmail] = useState("diegoadmin@teste.com");
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [trialExpired, setTrialExpired] = useState<{
+    message: string;
+    barbershopName: string;
+    trialExpiredAt: string;
+  } | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -71,6 +78,15 @@ export function Login() {
 
       navigate("/", { replace: true });
     } catch (err: unknown) {
+      if (err instanceof TrialExpiredError) {
+        setTrialExpired({
+          message: err.message,
+          barbershopName: err.barbershopName,
+          trialExpiredAt: err.trialExpiredAt,
+        });
+        return;
+      }
+
       const apiError = err as ApiErrorResponse;
 
       console.error("[Login] Falha ao realizar login.", {
@@ -93,8 +109,57 @@ export function Login() {
     }
   }
 
+  const whatsappSupportUrl =
+    "https://wa.me/5500000000000?text=Ol%C3%A1%2C%20preciso%20renovar%20meu%20plano%20no%20BarberOne";
+
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-6 py-10">
+
+      {trialExpired && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-2xl">
+            <button
+              onClick={() => setTrialExpired(null)}
+              className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition hover:text-foreground"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="mb-5 flex flex-col items-center gap-3 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
+                <AlertTriangle size={28} className="text-destructive" />
+              </div>
+              <h2 className="text-xl font-bold text-foreground">
+                Acesso suspenso
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                O período de teste da barbearia{" "}
+                <span className="font-semibold text-foreground">
+                  {trialExpired.barbershopName}
+                </span>{" "}
+                expirou. Para continuar usando a plataforma, assine um plano.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <a
+                href={whatsappSupportUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-11 w-full items-center justify-center rounded-lg bg-primary font-semibold text-primary-foreground shadow transition hover:bg-primary/90"
+              >
+                Falar com suporte e assinar
+              </a>
+              <button
+                onClick={() => setTrialExpired(null)}
+                className="h-11 w-full rounded-lg border border-border text-sm text-muted-foreground transition hover:bg-muted"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="absolute right-[-120px] top-[-140px] h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
 
       <div className="absolute bottom-[-160px] left-[-120px] h-96 w-96 rounded-full bg-primary/10 blur-3xl" />

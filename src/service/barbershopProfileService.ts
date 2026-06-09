@@ -10,6 +10,8 @@ export interface BarbershopProfile {
   slug: string;
   pagarmeRecipientId?: string | null;
   pagarmeRecipientStatus?: string | null;
+  createdAt?: string | null;
+  platformSubscriptionStatus?: string | null;
 }
 
 export interface UpdateBarbershopProfilePayload {
