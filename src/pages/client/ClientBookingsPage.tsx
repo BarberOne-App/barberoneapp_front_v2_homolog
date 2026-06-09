@@ -682,6 +682,14 @@ export function ClientBookingsPage() {
             setPaymentOpen(false);
             setPendingPaymentData(null);
           }}
+          onAbort={() => {
+            setPaymentOpen(false);
+            setPendingPaymentData(null);
+            setBookingOpen(false);
+            setForm({ ...emptyForm, date: dateToDateString(new Date()) });
+            toast.info("Agendamento confirmado! O pagamento nao foi concluido. Realize o pagamento no local.");
+            void loadAppointments();
+          }}
           data={{
             appointmentId: pendingPaymentData.appointmentId,
             paymentId: pendingPaymentData.paymentId,

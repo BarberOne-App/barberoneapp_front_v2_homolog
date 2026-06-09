@@ -47,6 +47,7 @@ export interface PaymentModalData {
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onAbort?: () => void;
   data: PaymentModalData;
   onSuccess: () => void;
 }
@@ -68,7 +69,7 @@ function onlyNumbers(value: unknown): string {
 
 type ScreenState = "form" | "pix" | "processing" | "rejected";
 
-export function PaymentModal({ isOpen, onClose, data, onSuccess }: PaymentModalProps) {
+export function PaymentModal({ isOpen, onClose, onAbort, data, onSuccess }: PaymentModalProps) {
   const [screen, setScreen] = useState<ScreenState>("form");
   const [cardForm, setCardForm] = useState<CardFormData>(emptyCard);
   const [pixQrCode, setPixQrCode] = useState("");
@@ -94,6 +95,15 @@ export function PaymentModal({ isOpen, onClose, data, onSuccess }: PaymentModalP
   }, [isOpen, method]);
 
   useEffect(() => () => clearPixPolling(), []);
+
+  // Sair sem pagar: se não estava na tela "rejeitado" o agendamento ainda existe
+  function handleAbort() {
+    if (screen === "rejected") {
+      onClose();
+    } else {
+      (onAbort ?? onClose)();
+    }
+  }
 
   function clearPixPolling() {
     if (pixPollingRef.current) {
@@ -268,7 +278,7 @@ export function PaymentModal({ isOpen, onClose, data, onSuccess }: PaymentModalP
           : "Dados do Cartao";
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open && !processing) onClose(); }}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open && !processing) handleAbort(); }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -299,7 +309,7 @@ export function PaymentModal({ isOpen, onClose, data, onSuccess }: PaymentModalP
               </p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose}>Cancelar</Button>
+              <Button variant="outline" onClick={onClose}>Fechar</Button>
               <Button onClick={() => setScreen(method === "pix" ? "pix" : "form")}>
                 Tentar novamente
               </Button>
@@ -420,7 +430,7 @@ export function PaymentModal({ isOpen, onClose, data, onSuccess }: PaymentModalP
             </div>
 
             <div className="flex gap-2 pt-2">
-              <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
+              <Button type="button" variant="outline" className="flex-1" onClick={handleAbort}>
                 Cancelar
               </Button>
               <Button type="submit" className="flex-1" disabled={processing}>
@@ -442,7 +452,7 @@ export function PaymentModal({ isOpen, onClose, data, onSuccess }: PaymentModalP
           <div className="space-y-4">
             {!pixOrderId ? (
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={onClose}>
+                <Button variant="outline" className="flex-1" onClick={handleAbort}>
                   Cancelar
                 </Button>
                 <Button className="flex-1" onClick={handleGeneratePix} disabled={processing}>
@@ -483,7 +493,7 @@ export function PaymentModal({ isOpen, onClose, data, onSuccess }: PaymentModalP
                 </div>
 
                 <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={onClose}>
+                  <Button variant="outline" className="flex-1" onClick={handleAbort}>
                     Fechar
                   </Button>
                   <Button
