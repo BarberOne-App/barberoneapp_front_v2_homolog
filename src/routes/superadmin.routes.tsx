@@ -1,67 +1,46 @@
-import { BarbershopsPage } from "../pages/super_admin/BarbershopsPage";
-import { SuperAdminDashboard } from "../pages/super_admin/SuperAdminDashboard";
-import { HelpCenterPage } from "../pages/shared/HelpCenterPage";
-import { OverviewPage } from "../pages/shared/OverviewPage";
-import { PaymentsPage } from "../pages/shared/PaymentsPage";
-import { PermissionsPage } from "../pages/shared/PermissionsPage";
-import { RolesPage } from "../pages/shared/RolesPage";
-import { SettingsPage } from "../pages/shared/SettingsPage";
-import { UsersPage } from "../pages/shared/UsersPage";
+import { SuperAdminDashboardPage } from "../pages/super_admin/SuperAdminDashboardPage";
+import { SuperAdminBarbershopsPage } from "../pages/super_admin/SuperAdminBarbershopsPage";
+import { SuperAdminUsersPage } from "../pages/super_admin/SuperAdminUsersPage";
+import { SuperAdminSubscriptionsPage } from "../pages/super_admin/SuperAdminSubscriptionsPage";
+import { SuperAdminPlansPage } from "../pages/super_admin/SuperAdminPlansPage";
+import { SuperAdminReportsPage } from "../pages/super_admin/SuperAdminReportsPage";
 import type { AppRoute } from "./types";
 
 export const superAdminRoutes: AppRoute[] = [
   {
     path: "/home",
-    title: "Home",
-    breadcrumbs: ["Super Admin", "Home"],
-    Component: SuperAdminDashboard,
-  },
-  {
-    path: "/overview",
-    title: "Metricas gerais",
-    breadcrumbs: ["Sistema", "Metricas gerais"],
-    Component: OverviewPage,
+    title: "Dashboard",
+    breadcrumbs: ["Super Admin", "Dashboard"],
+    Component: SuperAdminDashboardPage,
   },
   {
     path: "/barbershops",
     title: "Barbearias",
-    breadcrumbs: ["Sistema", "Barbearias"],
-    Component: BarbershopsPage,
+    breadcrumbs: ["Super Admin", "Barbearias"],
+    Component: SuperAdminBarbershopsPage,
   },
   {
     path: "/users",
     title: "Usuarios",
-    breadcrumbs: ["Sistema", "Usuarios"],
-    Component: UsersPage,
+    breadcrumbs: ["Super Admin", "Usuarios"],
+    Component: SuperAdminUsersPage,
   },
   {
-    path: "/payments",
-    title: "Pagamentos",
-    breadcrumbs: ["Sistema", "Pagamentos"],
-    Component: PaymentsPage,
+    path: "/subscriptions",
+    title: "Assinaturas",
+    breadcrumbs: ["Super Admin", "Assinaturas"],
+    Component: SuperAdminSubscriptionsPage,
   },
   {
-    path: "/roles",
-    title: "Perfis",
-    breadcrumbs: ["Administracao", "Perfis"],
-    Component: RolesPage,
+    path: "/platform-plans",
+    title: "Planos Landing",
+    breadcrumbs: ["Super Admin", "Planos Landing"],
+    Component: SuperAdminPlansPage,
   },
   {
-    path: "/permissions",
-    title: "Permissoes",
-    breadcrumbs: ["Administracao", "Permissoes"],
-    Component: PermissionsPage,
-  },
-  {
-    path: "/settings",
-    title: "Configuracoes",
-    breadcrumbs: ["Administracao", "Configuracoes"],
-    Component: SettingsPage,
-  },
-  {
-    path: "/help",
-    title: "Central de Ajuda",
-    breadcrumbs: ["Super Admin", "Ajuda"],
-    Component: HelpCenterPage,
+    path: "/reports",
+    title: "Relatorios",
+    breadcrumbs: ["Super Admin", "Relatorios"],
+    Component: SuperAdminReportsPage,
   },
 ];
