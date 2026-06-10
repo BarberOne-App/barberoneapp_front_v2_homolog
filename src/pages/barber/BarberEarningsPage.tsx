@@ -340,7 +340,7 @@ export function BarberEarningsPage() {
             {formatPeriodLabel(periodStart, periodEnd, frequency)}
           </p>
           <p className="text-xs text-muted-foreground">
-            {periodStartStr} a {periodEndStr}
+            {periodStartStr.split("-").reverse().join("/")} a {periodEndStr.split("-").reverse().join("/")}
           </p>
         </div>
         <div className="flex items-center gap-2">
