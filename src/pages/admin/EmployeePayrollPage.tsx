@@ -342,14 +342,12 @@ export function EmployeePayrollPage() {
       ? paymentFrequency.barberPaymentFrequency
       : paymentFrequency.employeePaymentFrequency;
 
-    const today = toDateInput(new Date());
-
     try {
       await createEmployeePayment({
         employeeId: selectedRow.employeeId,
         period: frequencyToPeriod(freq),
-        periodStart: today,
-        periodEnd: today,
+        periodStart: periodStart,
+        periodEnd: periodEnd,
       });
       toast.success("Pagamento registrado.");
       setPaymentOpen(false);
@@ -489,16 +487,13 @@ export function EmployeePayrollPage() {
                     Salario Fixo
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Comissoes
+                    Comissao Total
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Comissao Paga
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Vales
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Liquido
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Pago
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Pendente
@@ -512,14 +507,14 @@ export function EmployeePayrollPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={10} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={9} className="p-8 text-center text-sm text-muted-foreground">
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                       Carregando pagamentos de funcionarios...
                     </td>
                   </tr>
                 ) : filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={9} className="p-8 text-center text-sm text-muted-foreground">
                       Nenhum funcionario encontrado.
                     </td>
                   </tr>
@@ -560,20 +555,17 @@ export function EmployeePayrollPage() {
                       <td className="px-4 py-3 text-sm text-muted-foreground">
                         {formatCurrency(row.baseSalary)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {row.status === "paid" ? "—" : formatCurrency(row.commission)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {row.status === "paid" ? "—" : formatCurrency(row.totalVales)}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-muted-foreground">
-                        {row.status === "paid" ? "—" : formatCurrency(row.netAmount)}
+                      <td className="px-4 py-3 text-sm font-medium text-foreground">
+                        {formatCurrency(row.commission)}
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-emerald-600">
-                        {row.paidAmount > 0 ? formatCurrency(row.paidAmount) : "—"}
+                        {row.folhaPago > 0 ? formatCurrency(row.folhaPago) : "—"}
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-foreground">
-                        {formatCurrency(row.amountDue)}
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {row.totalVales > 0 ? formatCurrency(row.totalVales) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold text-foreground">
+                        {row.amountDue > 0 ? formatCurrency(row.amountDue) : "—"}
                       </td>
                       <td className="px-4 py-3">
                         <Badge
