@@ -141,10 +141,6 @@ function isPaidStatus(status: string): boolean {
   return status === "confirmed" || status === "completed";
 }
 
-function isCancelledStatus(status: string): boolean {
-  return status === "cancelled" || status === "no_show";
-}
-
 function statusLabel(status: string): string {
   switch (status) {
     case "scheduled":   return "Agendado";
