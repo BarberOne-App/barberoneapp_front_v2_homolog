@@ -40,6 +40,9 @@ export interface Appointment {
     durationMinutes: number;
     quantity: number;
     totalPrice: number;
+    commissionPercent?: number;
+    commissionAmount?: number;
+    commissionType?: string;
   }>;
   products: Array<{
     id: string;
@@ -50,6 +53,8 @@ export interface Appointment {
     totalPrice: number;
   }>;
   totalAmount: number;
+  commissionAmount?: number;
+  commissionPercent?: number | null;
   createdAt?: string;
   updatedAt?: string;
 }
