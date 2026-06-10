@@ -271,9 +271,9 @@ export function BarberEarningsPage() {
     let appointmentsCount = 0;
 
     for (const apt of appointments) {
-      if (isCancelledStatus(apt.status)) continue;
+      // V1 inclui todos os atendimentos do período (inclusive cancelados/no_show) no cálculo.
+      // Cancelados vão para o bucket "pendente", como no V1 (isConfirmedStatus = false → pendingRevenue).
       appointmentsCount++;
-      // Services total only — matches V1 calculateTotal(apt.services)
       const total = calcServicesTotal(apt);
       const commission = apt.commissionAmount ?? 0;
 
@@ -303,8 +303,8 @@ export function BarberEarningsPage() {
 
     const commissionPercent = barber?.commissionPercent ?? 50;
 
+    // V1 exibe todos os atendimentos do período (inclusive cancelados)
     const filteredAppointments = [...appointments]
-      .filter((apt) => !isCancelledStatus(apt.status))
       .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
 
     return {
