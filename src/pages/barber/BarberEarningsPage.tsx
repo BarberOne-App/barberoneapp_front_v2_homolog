@@ -25,7 +25,7 @@ import { getHomeInfo } from "@/service/homeInfoService";
 
 type PaymentFrequency = "weekly" | "biweekly" | "monthly";
 
-/* ─── period helpers (same logic as V1 getCurrentEarningsPeriodRange) ─── */
+/* ─── period helpers ─── */
 
 function dateToStr(date: Date): string {
   const y = date.getFullYear();
@@ -43,7 +43,7 @@ function normalizeFrequency(raw: string | null | undefined): PaymentFrequency {
 function getInitialPeriodStart(frequency: PaymentFrequency): Date {
   const now = new Date();
   if (frequency === "weekly") {
-    const day = now.getDay(); // 0=Sun
+    const day = now.getDay();
     const mondayOffset = day === 0 ? -6 : 1 - day;
     return new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset);
   }
@@ -58,10 +58,7 @@ function getPeriodEnd(start: Date, frequency: PaymentFrequency): Date {
     return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
   }
   if (frequency === "biweekly") {
-    // day 1 → end on 15th; day 16 → end on last day of month
-    if (start.getDate() === 1) {
-      return new Date(start.getFullYear(), start.getMonth(), 15);
-    }
+    if (start.getDate() === 1) return new Date(start.getFullYear(), start.getMonth(), 15);
     return new Date(start.getFullYear(), start.getMonth() + 1, 0);
   }
   return new Date(start.getFullYear(), start.getMonth() + 1, 0);
@@ -72,11 +69,7 @@ function goPrevPeriod(start: Date, frequency: PaymentFrequency): Date {
     return new Date(start.getFullYear(), start.getMonth(), start.getDate() - 7);
   }
   if (frequency === "biweekly") {
-    if (start.getDate() === 1) {
-      // first half → go to second half of previous month (16th)
-      return new Date(start.getFullYear(), start.getMonth() - 1, 16);
-    }
-    // second half → go to first half of same month (1st)
+    if (start.getDate() === 1) return new Date(start.getFullYear(), start.getMonth() - 1, 16);
     return new Date(start.getFullYear(), start.getMonth(), 1);
   }
   return new Date(start.getFullYear(), start.getMonth() - 1, 1);
@@ -87,11 +80,7 @@ function goNextPeriod(start: Date, frequency: PaymentFrequency): Date {
     return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
   }
   if (frequency === "biweekly") {
-    if (start.getDate() === 1) {
-      // first half → go to second half of same month (16th)
-      return new Date(start.getFullYear(), start.getMonth(), 16);
-    }
-    // second half → go to first half of next month (1st)
+    if (start.getDate() === 1) return new Date(start.getFullYear(), start.getMonth(), 16);
     return new Date(start.getFullYear(), start.getMonth() + 1, 1);
   }
   return new Date(start.getFullYear(), start.getMonth() + 1, 1);
@@ -141,6 +130,10 @@ function isPaidStatus(status: string): boolean {
   return status === "confirmed" || status === "completed";
 }
 
+function isCancelledStatus(status: string): boolean {
+  return status === "cancelled" || status === "no_show";
+}
+
 function statusLabel(status: string): string {
   switch (status) {
     case "scheduled":   return "Agendado";
@@ -165,22 +158,30 @@ function roundMoney(v: number): number {
   return Math.round((v || 0) * 100) / 100;
 }
 
-// V1 uses services total only — products are NOT included in commission base
 function calcServicesTotal(apt: Appointment): number {
   return apt.services.reduce((sum, s) => sum + (s.totalPrice ?? 0), 0);
 }
 
+/* ─── EarningsStats ─── */
+
 interface EarningsStats {
-  pendingRevenue: number;
-  paidRevenue: number;
-  totalRevenue: number;
-  pendingBarberEarnings: number;
-  paidBarberEarnings: number;
-  totalBarberEarnings: number;
-  shopEarnings: number;
+  // Receita e comissão dos atendimentos realizados (confirmed/completed)
+  earnedRevenue: number;
+  earnedCommission: number;
+  // Cancelados / não compareceu
+  cancelledRevenue: number;
+  cancelledCommission: number;
+  cancelledCount: number;
+  // Contagem de atendimentos realizados
   appointmentsCount: number;
+  // Status de pagamento baseado no que o admin efetuou
+  adminPaidAmount: number;
+  pendingPayment: number;
+  // Parte da barbearia (receita dos realizados - comissão dos realizados)
+  shopEarnings: number;
+  // Percentual de comissão do barbeiro
   commissionPercent: number;
-  barberEarnings: number;
+  // Listas para exibição
   filteredAppointments: Appointment[];
   extraPayments: EmployeePayment[];
   payrollPayments: EmployeePayment[];
@@ -207,7 +208,6 @@ export function BarberEarningsPage() {
   const periodStartStr = dateToStr(periodStart);
   const periodEndStr = dateToStr(periodEnd);
 
-  // Load barber_payment_frequency once; adjust initial period to match V1 behavior
   useEffect(() => {
     getHomeInfo()
       .then((homeInfo) => {
@@ -215,9 +215,7 @@ export function BarberEarningsPage() {
         setFrequency(freq);
         setPeriodStart(getInitialPeriodStart(freq));
       })
-      .catch(() => {
-        // keep default monthly
-      });
+      .catch(() => {});
   }, []);
 
   const load = useCallback(async () => {
@@ -260,31 +258,30 @@ export function BarberEarningsPage() {
   }
 
   const stats = useMemo((): EarningsStats => {
-    let pendingRevenue = 0;
-    let paidRevenue = 0;
-    let pendingBarberEarnings = 0;
-    let paidBarberEarnings = 0;
+    let earnedRevenue = 0;
+    let earnedCommission = 0;
+    let cancelledRevenue = 0;
+    let cancelledCommission = 0;
+    let cancelledCount = 0;
     let appointmentsCount = 0;
 
     for (const apt of appointments) {
-      // V1 inclui todos os atendimentos do período (inclusive cancelados/no_show) no cálculo.
-      // Cancelados vão para o bucket "pendente", como no V1 (isConfirmedStatus = false → pendingRevenue).
-      appointmentsCount++;
       const total = calcServicesTotal(apt);
       const commission = apt.commissionAmount ?? 0;
 
       if (isPaidStatus(apt.status)) {
-        paidRevenue += total;
-        paidBarberEarnings += commission;
-      } else {
-        pendingRevenue += total;
-        pendingBarberEarnings += commission;
+        // Atendimento realizado (confirmado/finalizado) → entra nos ganhos do barbeiro
+        earnedRevenue += total;
+        earnedCommission += commission;
+        appointmentsCount++;
+      } else if (isCancelledStatus(apt.status)) {
+        // Cancelado / não compareceu → prejuízo
+        cancelledRevenue += total;
+        cancelledCommission += commission;
+        cancelledCount++;
       }
+      // "scheduled" (agendados futuros) não entram em nenhum cálculo de ganhos
     }
-
-    const totalRevenue = roundMoney(pendingRevenue + paidRevenue);
-    const totalBarberEarnings = roundMoney(pendingBarberEarnings + paidBarberEarnings);
-    const shopEarnings = roundMoney(Math.max(paidRevenue - paidBarberEarnings, 0));
 
     const allPayments: EmployeePayment[] = row?.payments ?? [];
     const extraPayments = allPayments.filter(isExtraPayment);
@@ -296,24 +293,33 @@ export function BarberEarningsPage() {
       payrollPayments.reduce((sum, p) => sum + Number(p.liquido || 0), 0)
     );
     const totalReceivedPayments = roundMoney(extraPaymentsTotal + payrollPaymentsTotal);
+    // Apenas pagamentos de folha quitam comissão — extras (adiantamentos) não reduzem o pendente.
+    const adminPaidAmount = payrollPaymentsTotal;
 
+    // Pendente = comissão ganha que o admin ainda não pagou via folha
+    const pendingPayment = roundMoney(
+      Math.max(roundMoney(earnedCommission) - adminPaidAmount, 0)
+    );
+
+    const shopEarnings = roundMoney(Math.max(earnedRevenue - earnedCommission, 0));
     const commissionPercent = barber?.commissionPercent ?? 50;
 
-    // V1 exibe todos os atendimentos do período (inclusive cancelados)
+    // Tabela: exibe atendimentos realizados e cancelados (não exibe agendados futuros)
     const filteredAppointments = [...appointments]
+      .filter((apt) => isPaidStatus(apt.status) || isCancelledStatus(apt.status))
       .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
 
     return {
-      pendingRevenue: roundMoney(pendingRevenue),
-      paidRevenue: roundMoney(paidRevenue),
-      totalRevenue,
-      pendingBarberEarnings: roundMoney(pendingBarberEarnings),
-      paidBarberEarnings: roundMoney(paidBarberEarnings),
-      totalBarberEarnings,
-      shopEarnings,
+      earnedRevenue: roundMoney(earnedRevenue),
+      earnedCommission: roundMoney(earnedCommission),
+      cancelledRevenue: roundMoney(cancelledRevenue),
+      cancelledCommission: roundMoney(cancelledCommission),
+      cancelledCount,
       appointmentsCount,
+      adminPaidAmount,
+      pendingPayment,
+      shopEarnings,
       commissionPercent,
-      barberEarnings: roundMoney(paidBarberEarnings),
       filteredAppointments,
       extraPayments,
       payrollPayments,
@@ -325,6 +331,7 @@ export function BarberEarningsPage() {
 
   const hasData =
     stats.appointmentsCount > 0 ||
+    stats.cancelledCount > 0 ||
     stats.extraPayments.length > 0 ||
     stats.payrollPayments.length > 0;
 
@@ -340,7 +347,8 @@ export function BarberEarningsPage() {
             {formatPeriodLabel(periodStart, periodEnd, frequency)}
           </p>
           <p className="text-xs text-muted-foreground">
-            {periodStartStr.split("-").reverse().join("/")} a {periodEndStr.split("-").reverse().join("/")}
+            {periodStartStr.split("-").reverse().join("/")} a{" "}
+            {periodEndStr.split("-").reverse().join("/")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -368,26 +376,36 @@ export function BarberEarningsPage() {
         </div>
       ) : (
         <>
-          {/* 4 cards de resumo */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {/* 5 cards de resumo */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <div className="rounded-xl border border-border bg-card p-4">
               <p className="text-xs text-muted-foreground">Pendente</p>
               <p className="mt-1 text-xl font-bold text-red-500">
-                {formatCurrency(stats.pendingBarberEarnings)}
+                {formatCurrency(stats.pendingPayment)}
               </p>
             </div>
+
             <div className="rounded-xl border border-border bg-card p-4">
               <p className="text-xs text-muted-foreground">Pago</p>
               <p className="mt-1 text-xl font-bold text-emerald-500">
-                {formatCurrency(stats.paidBarberEarnings)}
+                {formatCurrency(stats.adminPaidAmount)}
               </p>
             </div>
+
             <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs text-muted-foreground">Total</p>
+              <p className="text-xs text-muted-foreground">Total Ganhos</p>
               <p className="mt-1 text-xl font-bold text-primary">
-                {formatCurrency(stats.totalBarberEarnings)}
+                {formatCurrency(stats.earnedCommission)}
               </p>
             </div>
+
+            <div className="rounded-xl border border-border bg-card p-4">
+              <p className="text-xs text-muted-foreground">Cancelados</p>
+              <p className="mt-1 text-xl font-bold text-amber-500">
+                {formatCurrency(stats.cancelledRevenue)}
+              </p>
+            </div>
+
             <div className="rounded-xl border border-border bg-card p-4">
               <p className="text-xs text-muted-foreground">Barbearia</p>
               <p className="mt-1 text-xl font-bold text-foreground">
@@ -420,32 +438,60 @@ export function BarberEarningsPage() {
             <div className="grid grid-cols-2 divide-x divide-y divide-border sm:grid-cols-3 lg:grid-cols-4">
               {(
                 [
-                  { label: "Atendimentos", value: String(stats.appointmentsCount) },
-                  { label: "Faturamento Total", value: formatCurrency(stats.totalRevenue) },
+                  {
+                    label: "Atendimentos",
+                    value: String(stats.appointmentsCount),
+                  },
+                  {
+                    label: "Faturamento Total",
+                    value: formatCurrency(stats.earnedRevenue),
+                  },
                   {
                     label: `Seus Ganhos (${stats.commissionPercent}%)`,
-                    value: formatCurrency(stats.barberEarnings),
+                    value: formatCurrency(stats.earnedCommission),
                     highlight: true,
                   },
-                  { label: "Pag. extras", value: formatCurrency(stats.extraPaymentsTotal) },
-                  { label: "Folha recebida", value: formatCurrency(stats.payrollPaymentsTotal) },
-                  { label: "Barbearia", value: formatCurrency(stats.shopEarnings) },
+                  {
+                    label: "Pendente (a receber)",
+                    value: formatCurrency(stats.pendingPayment),
+                    warning: true,
+                  },
+                  {
+                    label: "Pag. extras",
+                    value: formatCurrency(stats.extraPaymentsTotal),
+                  },
+                  {
+                    label: "Folha recebida",
+                    value: formatCurrency(stats.payrollPaymentsTotal),
+                  },
+                  {
+                    label: "Barbearia",
+                    value: formatCurrency(stats.shopEarnings),
+                  },
                   {
                     label: "Total recebido",
                     value: formatCurrency(stats.totalReceivedPayments),
                     bold: true,
                   },
-                ] as Array<{ label: string; value: string; highlight?: boolean; bold?: boolean }>
-              ).map(({ label, value, highlight, bold }) => (
+                ] as Array<{
+                  label: string;
+                  value: string;
+                  highlight?: boolean;
+                  bold?: boolean;
+                  warning?: boolean;
+                }>
+              ).map(({ label, value, highlight, bold, warning }) => (
                 <div key={label} className="px-4 py-3">
                   <p className="text-xs text-muted-foreground">{label}</p>
                   <p
                     className={`mt-0.5 text-sm font-semibold ${
                       highlight
                         ? "text-emerald-500"
-                        : bold
-                          ? "text-primary"
-                          : "text-foreground"
+                        : warning
+                          ? "text-red-500"
+                          : bold
+                            ? "text-primary"
+                            : "text-foreground"
                     }`}
                   >
                     {value}
@@ -455,14 +501,14 @@ export function BarberEarningsPage() {
             </div>
           </div>
 
-          {/* Tabela de agendamentos */}
+          {/* Tabela de atendimentos realizados e cancelados */}
           {stats.filteredAppointments.length > 0 && (
             <div className="overflow-hidden rounded-xl border border-border bg-card">
               <div className="border-b border-border px-5 py-4">
                 <div className="flex items-center gap-2">
                   <Scissors size={18} className="text-primary" />
                   <h3 className="text-base font-semibold text-foreground">
-                    Agendamentos do período
+                    Atendimentos do período
                   </h3>
                 </div>
               </div>
@@ -484,17 +530,23 @@ export function BarberEarningsPage() {
                       const aptTotal = calcServicesTotal(apt);
                       const commission = apt.commissionAmount ?? 0;
                       const paid = isPaidStatus(apt.status);
+                      const cancelled = isCancelledStatus(apt.status);
                       const serviceNames = apt.services.map((s) => s.serviceName).join(", ");
 
                       return (
-                        <tr key={apt.id} className="transition-colors hover:bg-muted/40">
+                        <tr
+                          key={apt.id}
+                          className={`transition-colors hover:bg-muted/40 ${cancelled ? "opacity-60" : ""}`}
+                        >
                           <td className="px-4 py-3">
                             <Badge
                               variant={paid ? "default" : "secondary"}
                               className={
                                 paid
                                   ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-0"
-                                  : ""
+                                  : cancelled
+                                    ? "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border-0"
+                                    : ""
                               }
                             >
                               {statusLabel(apt.status)}
@@ -515,15 +567,23 @@ export function BarberEarningsPage() {
                           >
                             {serviceNames || "-"}
                           </td>
-                          <td className="px-4 py-3 text-right font-medium text-foreground">
+                          <td
+                            className={`px-4 py-3 text-right font-medium ${
+                              cancelled ? "text-amber-500 line-through" : "text-foreground"
+                            }`}
+                          >
                             {formatCurrency(aptTotal)}
                           </td>
                           <td
                             className={`px-4 py-3 text-right font-semibold ${
-                              paid ? "text-emerald-500" : "text-red-500"
+                              cancelled
+                                ? "text-muted-foreground"
+                                : paid
+                                  ? "text-emerald-500"
+                                  : "text-red-500"
                             }`}
                           >
-                            {formatCurrency(commission)}
+                            {cancelled ? "-" : formatCurrency(commission)}
                           </td>
                         </tr>
                       );
@@ -531,6 +591,7 @@ export function BarberEarningsPage() {
                   </tbody>
                 </table>
               </div>
+
             </div>
           )}
 
