@@ -39,7 +39,7 @@ export function Login() {
   const { login } = useAuth();
 
   const whatsappUrl =
-    "https://wa.me/5500000000000?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20para%20acessar%20o%20BarberOne";
+    "https://wa.me/5585992175631?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20para%20acessar%20o%20BarberOne";
 
 
   const [email, setEmail] = useState("diegoadmin@teste.com");
@@ -110,7 +110,7 @@ export function Login() {
   }
 
   const whatsappSupportUrl =
-    "https://wa.me/5500000000000?text=Ol%C3%A1%2C%20preciso%20renovar%20meu%20plano%20no%20BarberOne";
+    "https://wa.me/5585992175631?text=Ol%C3%A1%2C%20preciso%20renovar%20meu%20plano%20no%20BarberOne";
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-6 py-10">
@@ -172,7 +172,7 @@ export function Login() {
           <img
             src={barberOneLogo}
             alt="BarberOne"
-            className="block h-auto w-full max-w-[320px] object-contain"
+            className="block h-auto w-full max-w-[200px] object-contain"
             draggable={false}
           />
         </div>

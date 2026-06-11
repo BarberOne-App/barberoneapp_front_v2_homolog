@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { Login } from "./pages/Login";
 import { Register } from "./pages/Register";
+import { LandingPage } from "./pages/LandingPage";
 import { AppRoutes } from "./routes/AppRoutes";
 import { PublicRoute } from "./routes/PublicRoute";
 import { Toaster } from "./components/ui/sonner";
@@ -12,7 +13,7 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="/" element={<LandingPage />} />
           <Route
             path="/login"
             element={
