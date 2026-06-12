@@ -209,6 +209,7 @@ export function BookingsPage() {
   const [transferSaving, setTransferSaving] = useState(false);
   const [blockedDateWarning, setBlockedDateWarning] = useState<BlockedDate | null>(null);
   const [barbershopProfile, setBarbershopProfile] = useState<BarbershopProfile | null>(null);
+  const [todayCount, setTodayCount] = useState<number | null>(null);
 
   const limit = 20;
 
@@ -242,6 +243,13 @@ export function BookingsPage() {
 
   useEffect(() => {
     getBarbershopProfile().then(setBarbershopProfile).catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    const today = dateToDateString(new Date());
+    listAppointments({ allAppointments: true, dateFrom: today, dateTo: today, limit: 1 })
+      .then((r) => setTodayCount(r.total))
+      .catch(() => null);
   }, []);
 
   useEffect(() => {
@@ -523,7 +531,7 @@ export function BookingsPage() {
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="mb-1 text-sm text-muted-foreground">Hoje</p>
-          <h3 className="text-2xl font-semibold text-foreground">{stats.today}</h3>
+          <h3 className="text-2xl font-semibold text-foreground">{todayCount ?? "—"}</h3>
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="mb-1 text-sm text-muted-foreground">Agendados</p>

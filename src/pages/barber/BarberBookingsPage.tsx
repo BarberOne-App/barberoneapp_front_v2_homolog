@@ -173,6 +173,7 @@ export function BarberBookingsPage() {
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [barbershopProfile, setBarbershopProfile] = useState<BarbershopProfile | null>(null);
+  const [todayCount, setTodayCount] = useState<number | null>(null);
   const [form, setForm] = useState<BookingFormState>(emptyForm);
 
   const [customers, setCustomers] = useState<UserProfile[]>([]);
@@ -214,6 +215,14 @@ export function BarberBookingsPage() {
   useEffect(() => {
     getBarbershopProfile().then(setBarbershopProfile).catch(() => null);
   }, []);
+
+  useEffect(() => {
+    if (!barber?.id) return;
+    const today = dateToDateString(new Date());
+    listAppointments({ barberId: barber.id, allAppointments: true, dateFrom: today, dateTo: today, limit: 1 })
+      .then((r) => setTodayCount(r.total))
+      .catch(() => null);
+  }, [barber?.id]);
 
   useEffect(() => {
     if (!dialogOpen) return;
@@ -403,7 +412,7 @@ export function BarberBookingsPage() {
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="mb-1 text-sm text-muted-foreground">Hoje</p>
-          <h3 className="text-2xl font-semibold text-foreground">{stats.today}</h3>
+          <h3 className="text-2xl font-semibold text-foreground">{todayCount ?? "—"}</h3>
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="mb-1 text-sm text-muted-foreground">Agendados</p>
