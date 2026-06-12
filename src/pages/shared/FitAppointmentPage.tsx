@@ -11,6 +11,7 @@ import { toast } from "sonner";
 
 import AdminAppointmentsCalendar from "@/components/AdminAppointmentsCalendar";
 import { AppCalendar } from "@/components/AppCalendar";
+import { ClientPickerModal } from "@/components/ClientPickerModal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -23,13 +24,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   createAppointment,
@@ -38,7 +32,6 @@ import {
 } from "@/service/appointmentService";
 import { listBarbers, type Barber } from "@/service/barberService";
 import { listServices, type Service } from "@/service/serviceService";
-import { listUsers, type UserProfile } from "@/service/userService";
 import {
   buildCalendarAppointmentsByBarber,
   buildCalendarFreeSlotsByBarber,
@@ -120,9 +113,10 @@ interface FitBookingDialogProps {
 }
 
 function FitBookingDialog({ slotInfo, onClose, onSuccess }: FitBookingDialogProps) {
-  const [customers, setCustomers] = useState<UserProfile[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [clientId, setClientId] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
   const [time, setTime] = useState(minutesToTime(slotInfo.startMinutes));
@@ -132,11 +126,7 @@ function FitBookingDialog({ slotInfo, onClose, onSuccess }: FitBookingDialogProp
   useEffect(() => {
     async function load() {
       try {
-        const [cr, sr] = await Promise.all([
-          listUsers({ role: "client", page: 1, limit: 100 }),
-          listServices({ includeInactive: false, page: 1, limit: 100 }),
-        ]);
-        setCustomers(cr.items);
+        const sr = await listServices({ includeInactive: false, page: 1, limit: 100 });
         setServices(sr.items.filter((s) => s.active));
       } catch (err) {
         toast.error(getApiMessage(err));
@@ -235,16 +225,14 @@ function FitBookingDialog({ slotInfo, onClose, onSuccess }: FitBookingDialogProp
 
             <div className="space-y-2">
               <Label>Cliente</Label>
-              <Select value={clientId} onValueChange={setClientId} disabled={loading}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={loading ? "Carregando..." : "Selecionar cliente"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-start font-normal"
+                onClick={() => setClientPickerOpen(true)}
+              >
+                {clientName || "Selecionar cliente"}
+              </Button>
             </div>
           </div>
 
@@ -313,6 +301,15 @@ function FitBookingDialog({ slotInfo, onClose, onSuccess }: FitBookingDialogProp
           </DialogFooter>
         </form>
       </DialogContent>
+
+      <ClientPickerModal
+        open={clientPickerOpen}
+        onClose={() => setClientPickerOpen(false)}
+        onSelect={(client) => {
+          setClientId(client.id);
+          setClientName(client.name);
+        }}
+      />
     </Dialog>
   );
 }
