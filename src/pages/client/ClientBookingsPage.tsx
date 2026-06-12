@@ -615,14 +615,14 @@ export function ClientBookingsPage() {
 
       {/* Passo 1 — Formulário */}
       <Dialog open={bookingOpen} onOpenChange={(open) => { if (!open && !savingLocal) setBookingOpen(false); }}>
-        <DialogContent className="sm:max-w-2xl">
-          <form onSubmit={handleBookingSubmit} className="space-y-5">
-            <DialogHeader>
+        <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-2xl">
+          <form onSubmit={handleBookingSubmit} className="flex min-h-0 flex-1 flex-col gap-5">
+            <DialogHeader className="flex-shrink-0">
               <DialogTitle>Marcar Horario</DialogTitle>
               <DialogDescription>Escolha o barbeiro, servico e um horario disponivel.</DialogDescription>
             </DialogHeader>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid flex-1 gap-4 overflow-y-auto md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Barbeiro</Label>
                 <Select value={form.barberId} onValueChange={(v) => { setField("barberId", v); setField("time", ""); }}>
@@ -679,7 +679,7 @@ export function ClientBookingsPage() {
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex-shrink-0">
               <Button type="button" variant="outline" onClick={() => setBookingOpen(false)}>Cancelar</Button>
               <Button type="submit">Confirmar agendamento</Button>
             </DialogFooter>
