@@ -57,9 +57,11 @@ import {
   type AppointmentStatus,
 } from "@/service/appointmentService";
 import { listBarbers, type Barber } from "@/service/barberService";
+import { getBarbershopProfile, type BarbershopProfile } from "@/service/barbershopProfileService";
 import { createAppointmentPayment } from "@/service/paymentService";
 import { listServices, type Service } from "@/service/serviceService";
 import { isFitAppointment } from "@/utils/fitAppointment";
+import { buildWhatsAppMessage, openWhatsApp, type WhatsAppMessageData } from "@/utils/whatsapp";
 
 type StatusFilter = "all" | "active" | AppointmentStatus;
 
@@ -203,6 +205,12 @@ export function ClientBookingsPage() {
     paymentId: string;
   } | null>(null);
 
+  // Perfil da barbearia (para WhatsApp)
+  const [barbershopProfile, setBarbershopProfile] = useState<BarbershopProfile | null>(null);
+
+  // Modal de sucesso com botão WhatsApp
+  const [whatsAppData, setWhatsAppData] = useState<WhatsAppMessageData | null>(null);
+
   // Local: salvar direto
   const [savingLocal, setSavingLocal] = useState(false);
 
@@ -235,12 +243,14 @@ export function ClientBookingsPage() {
     if (!bookingOpen) return;
     async function load() {
       try {
-        const [b, s] = await Promise.all([
+        const [b, s, profile] = await Promise.all([
           listBarbers({ page: 1, limit: 100 }),
           listServices({ includeInactive: false, page: 1, limit: 100 }),
+          getBarbershopProfile(),
         ]);
         setBarbers(b.items);
         setServices(s.items.filter((sv) => sv.active));
+        setBarbershopProfile(profile);
       } catch (err) { toast.error(getApiMessage(err)); }
     }
     void load();
@@ -337,7 +347,16 @@ export function ClientBookingsPage() {
         // ignora falha no registro de pagamento; agendamento continua válido
       }
 
-      toast.success("Agendamento confirmado! Pague na barbearia.");
+      setWhatsAppData({
+        clientName: user?.name ?? "",
+        barbershopName: barbershopProfile?.name || "Barbearia",
+        barberName: barbers.find((b) => b.id === form.barberId)?.displayName ?? "",
+        date: formatDateBR(form.date),
+        time: form.time,
+        services: selectedServices.map((s) => s.name),
+        total: totalPrice,
+        notes: form.notes?.trim(),
+      });
       setBookingOpen(false);
       setForm({ ...emptyForm, date: dateToDateString(new Date()) });
       await loadAppointments();
@@ -380,7 +399,16 @@ export function ClientBookingsPage() {
         paymentId = payment.id;
       } catch {
         // Se falhar o registro de pagamento, confirma como agendamento sem pagamento online
-        toast.success("Agendamento confirmado! Pague na barbearia.");
+        setWhatsAppData({
+          clientName: user?.name ?? "",
+          barbershopName: barbershopProfile?.name || "Barbearia",
+          barberName: barbers.find((b) => b.id === form.barberId)?.displayName ?? "",
+          date: formatDateBR(form.date),
+          time: form.time,
+          services: selectedServices.map((s) => s.name),
+          total: totalPrice,
+          notes: form.notes?.trim(),
+        });
         setBookingOpen(false);
         setForm({ ...emptyForm, date: dateToDateString(new Date()) });
         await loadAppointments();
@@ -413,7 +441,16 @@ export function ClientBookingsPage() {
 
   // Callback de sucesso do PaymentModal
   async function handlePaymentSuccess() {
-    toast.success("Pagamento confirmado! Agendamento realizado.");
+    setWhatsAppData({
+      clientName: user?.name ?? "",
+      barbershopName: barbershopProfile?.name || "Barbearia",
+      barberName: barbers.find((b) => b.id === form.barberId)?.displayName ?? "",
+      date: formatDateBR(form.date),
+      time: form.time,
+      services: selectedServices.map((s) => s.name),
+      total: totalPrice,
+      notes: form.notes?.trim(),
+    });
     setPaymentOpen(false);
     setBookingOpen(false);
     setPendingPaymentData(null);
@@ -704,6 +741,46 @@ export function ClientBookingsPage() {
           onSuccess={handlePaymentSuccess}
         />
       )}
+
+      {/* Modal de sucesso com botão WhatsApp */}
+      <Dialog open={!!whatsAppData} onOpenChange={(open) => { if (!open) setWhatsAppData(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-600">
+              ✅ Agendamento Confirmado!
+            </DialogTitle>
+            <DialogDescription>
+              Seu agendamento foi realizado com sucesso.
+            </DialogDescription>
+          </DialogHeader>
+
+          {whatsAppData && (
+            <div className="space-y-1 rounded-md border border-border bg-secondary/40 p-4 text-sm">
+              <p><span className="font-medium">Barbeiro:</span> {whatsAppData.barberName}</p>
+              <p><span className="font-medium">Data:</span> {whatsAppData.date}</p>
+              <p><span className="font-medium">Horário:</span> {whatsAppData.time}</p>
+              <p><span className="font-medium">Serviços:</span> {whatsAppData.services.join(", ")}</p>
+            </div>
+          )}
+
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              className="w-full bg-[#25D366] text-white hover:bg-[#1ebe5a]"
+              onClick={() => {
+                if (whatsAppData) {
+                  openWhatsApp(barbershopProfile?.phone, buildWhatsAppMessage(whatsAppData));
+                }
+                setWhatsAppData(null);
+              }}
+            >
+              Enviar comprovante no WhatsApp
+            </Button>
+            <Button variant="outline" className="w-full" onClick={() => setWhatsAppData(null)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -60,9 +60,12 @@ import {
 } from "@/service/appointmentService";
 import { listBarbers, type Barber } from "@/service/barberService";
 import { listBlockedDates, type BlockedDate } from "@/service/blockedDateService";
+import { getBarbershopProfile, type BarbershopProfile } from "@/service/barbershopProfileService";
 import { listServices, type Service } from "@/service/serviceService";
 import { listUsers, type UserProfile } from "@/service/userService";
 import { isFitAppointment } from "@/utils/fitAppointment";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
+import { sendAppointmentWhatsApp } from "@/utils/whatsapp";
 
 type StatusFilter = "all" | "active" | AppointmentStatus;
 
@@ -205,6 +208,7 @@ export function BookingsPage() {
   const [transferBarberId, setTransferBarberId] = useState("");
   const [transferSaving, setTransferSaving] = useState(false);
   const [blockedDateWarning, setBlockedDateWarning] = useState<BlockedDate | null>(null);
+  const [barbershopProfile, setBarbershopProfile] = useState<BarbershopProfile | null>(null);
 
   const limit = 20;
 
@@ -235,6 +239,10 @@ export function BookingsPage() {
   useEffect(() => {
     void loadAppointments();
   }, [loadAppointments]);
+
+  useEffect(() => {
+    getBarbershopProfile().then(setBarbershopProfile).catch(() => null);
+  }, []);
 
   useEffect(() => {
     if (!dialogOpen) return;
@@ -449,8 +457,22 @@ export function BookingsPage() {
   async function changeStatus(appointment: Appointment, status: AppointmentStatus) {
     try {
       await updateAppointment(appointment.id, { status });
-      toast.success("Agendamento atualizado.");
       await loadAppointments();
+      if (status === "confirmed" && barbershopProfile?.phone) {
+        toast.success("Agendamento confirmado.", {
+          action: {
+            label: (
+              <span className="flex items-center gap-1.5">
+                <WhatsAppIcon size={14} />
+                Enviar WhatsApp
+              </span>
+            ),
+            onClick: () => sendAppointmentWhatsApp(appointment, barbershopProfile),
+          },
+        });
+      } else {
+        toast.success("Agendamento atualizado.");
+      }
     } catch (err) {
       toast.error(getApiMessage(err));
     }
@@ -763,6 +785,13 @@ export function BookingsPage() {
                                   </DropdownMenuItem>
                                 </>
                               )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => sendAppointmentWhatsApp(appointment, barbershopProfile)}
+                              >
+                                <WhatsAppIcon size={14} />
+                                Enviar WhatsApp
+                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 variant="destructive"
