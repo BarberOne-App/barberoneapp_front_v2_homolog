@@ -884,8 +884,8 @@ export function BookingsPage() {
       </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <form onSubmit={handleCreateSubmit} className="space-y-5">
+        <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-3xl">
+          <form onSubmit={handleCreateSubmit} className="flex min-h-0 flex-1 flex-col gap-5">
             <DialogHeader>
               <DialogTitle>
                 {form.allowOutsideBusinessHours
@@ -899,7 +899,7 @@ export function BookingsPage() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid flex-1 gap-4 overflow-y-auto md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Cliente</Label>
                 <Select
