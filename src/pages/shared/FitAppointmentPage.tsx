@@ -186,6 +186,7 @@ function FitBookingDialog({ slotInfo, onClose, onSuccess }: FitBookingDialogProp
   }
 
   return (
+  <>
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -301,16 +302,17 @@ function FitBookingDialog({ slotInfo, onClose, onSuccess }: FitBookingDialogProp
           </DialogFooter>
         </form>
       </DialogContent>
-
-      <ClientPickerModal
-        open={clientPickerOpen}
-        onClose={() => setClientPickerOpen(false)}
-        onSelect={(client) => {
-          setClientId(client.id);
-          setClientName(client.name);
-        }}
-      />
     </Dialog>
+
+    <ClientPickerModal
+      open={clientPickerOpen}
+      onClose={() => setClientPickerOpen(false)}
+      onSelect={(client) => {
+        setClientId(client.id);
+        setClientName(client.name);
+      }}
+    />
+  </>
   );
 }
 
