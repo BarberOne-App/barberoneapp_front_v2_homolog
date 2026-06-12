@@ -26,7 +26,7 @@ export interface FreeSlot {
 
 export const BARBER_CALENDAR_COLORS: CalendarColor[] = [
   { accent: '#38bdf8', tint: 'rgba(56,189,248,0.05)',  tintStrong: 'rgba(56,189,248,0.12)',  border: 'rgba(56,189,248,0.30)',  cardBg: 'rgba(8,47,73,0.90)',   cardText: '#bae6fd' },
-  { accent: '#34d399', tint: 'rgba(52,211,153,0.05)',  tintStrong: 'rgba(52,211,153,0.12)',  border: 'rgba(52,211,153,0.30)',  cardBg: 'rgba(5,46,22,0.90)',   cardText: '#a7f3d0' },
+  { accent: '#fb923c', tint: 'rgba(251,146,60,0.05)',  tintStrong: 'rgba(251,146,60,0.12)',  border: 'rgba(251,146,60,0.30)',  cardBg: 'rgba(67,20,7,0.90)',   cardText: '#fed7aa' },
   { accent: '#f472b6', tint: 'rgba(244,114,182,0.05)', tintStrong: 'rgba(244,114,182,0.12)', border: 'rgba(244,114,182,0.30)', cardBg: 'rgba(80,7,36,0.90)',   cardText: '#fbcfe8' },
   { accent: '#22d3ee', tint: 'rgba(34,211,238,0.05)',  tintStrong: 'rgba(34,211,238,0.12)',  border: 'rgba(34,211,238,0.30)',  cardBg: 'rgba(8,51,68,0.90)',   cardText: '#a5f3fc' },
   { accent: '#a78bfa', tint: 'rgba(167,139,250,0.05)', tintStrong: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.30)', cardBg: 'rgba(46,16,101,0.90)', cardText: '#ddd6fe' },

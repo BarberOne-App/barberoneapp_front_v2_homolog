@@ -57,9 +57,12 @@ import {
   type Appointment,
   type AppointmentStatus,
 } from "@/service/appointmentService";
+import { getBarbershopProfile, type BarbershopProfile } from "@/service/barbershopProfileService";
 import { listServices, type Service } from "@/service/serviceService";
-import { listUsers, type UserProfile } from "@/service/userService";
 import { isFitAppointment } from "@/utils/fitAppointment";
+import { ClientPickerModal } from "@/components/ClientPickerModal";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
+import { sendAppointmentWhatsApp } from "@/utils/whatsapp";
 
 type StatusFilter = "all" | "active" | AppointmentStatus;
 
@@ -169,9 +172,11 @@ export function BarberBookingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
+  const [selectedClientName, setSelectedClientName] = useState("");
+  const [barbershopProfile, setBarbershopProfile] = useState<BarbershopProfile | null>(null);
+  const [todayCount, setTodayCount] = useState<number | null>(null);
   const [form, setForm] = useState<BookingFormState>(emptyForm);
-
-  const [customers, setCustomers] = useState<UserProfile[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [slots, setSlots] = useState<string[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
@@ -208,14 +213,22 @@ export function BarberBookingsPage() {
   }, [barber, loadAppointments]);
 
   useEffect(() => {
+    getBarbershopProfile().then(setBarbershopProfile).catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    if (!barber?.id) return;
+    const today = dateToDateString(new Date());
+    listAppointments({ barberId: barber.id, allAppointments: true, dateFrom: today, dateTo: today, limit: 1 })
+      .then((r) => setTodayCount(r.total))
+      .catch(() => null);
+  }, [barber?.id]);
+
+  useEffect(() => {
     if (!dialogOpen) return;
     async function loadFormOptions() {
       try {
-        const [customersResult, servicesResult] = await Promise.all([
-          listUsers({ role: "client", page: 1, limit: 100 }),
-          listServices({ includeInactive: false, page: 1, limit: 100 }),
-        ]);
-        setCustomers(customersResult.items);
+        const servicesResult = await listServices({ includeInactive: false, page: 1, limit: 100 });
         setServices(servicesResult.items.filter((s) => s.active));
       } catch (err) {
         toast.error(getApiMessage(err));
@@ -289,6 +302,7 @@ export function BarberBookingsPage() {
 
   function openCreateDialog(allowOutside = false) {
     setForm({ ...emptyForm, date: dateToDateString(new Date()), allowOutsideBusinessHours: allowOutside });
+    setSelectedClientName("");
     setDialogOpen(true);
   }
 
@@ -336,8 +350,22 @@ export function BarberBookingsPage() {
   async function changeStatus(appt: Appointment, status: AppointmentStatus) {
     try {
       await updateAppointment(appt.id, { status });
-      toast.success("Agendamento atualizado.");
       if (barber?.id) void loadAppointments(barber.id);
+      if (status === "confirmed" && barbershopProfile?.phone) {
+        toast.success("Agendamento confirmado.", {
+          action: {
+            label: (
+              <span className="flex items-center gap-1.5">
+                <WhatsAppIcon size={14} />
+                Enviar WhatsApp
+              </span>
+            ),
+            onClick: () => sendAppointmentWhatsApp(appt, barbershopProfile),
+          },
+        });
+      } else {
+        toast.success("Agendamento atualizado.");
+      }
     } catch (err) {
       toast.error(getApiMessage(err));
     }
@@ -381,7 +409,7 @@ export function BarberBookingsPage() {
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="mb-1 text-sm text-muted-foreground">Hoje</p>
-          <h3 className="text-2xl font-semibold text-foreground">{stats.today}</h3>
+          <h3 className="text-2xl font-semibold text-foreground">{todayCount ?? "—"}</h3>
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="mb-1 text-sm text-muted-foreground">Agendados</p>
@@ -592,6 +620,13 @@ export function BarberBookingsPage() {
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
+                                onClick={() => sendAppointmentWhatsApp(appt, barbershopProfile)}
+                              >
+                                <WhatsAppIcon size={14} />
+                                Enviar WhatsApp
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
                                 variant="destructive"
                                 disabled={appt.status === "cancelled"}
                                 onClick={() => handleCancel(appt)}
@@ -656,18 +691,14 @@ export function BarberBookingsPage() {
             <div className="grid flex-1 gap-4 overflow-y-auto md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Cliente</Label>
-                <Select value={form.clientId} onValueChange={(v) => setField("clientId", v)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecionar cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-start font-normal"
+                  onClick={() => setClientPickerOpen(true)}
+                >
+                  {selectedClientName || "Selecionar cliente"}
+                </Button>
               </div>
 
               <div className="space-y-2">
@@ -711,9 +742,7 @@ export function BarberBookingsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {slots.map((slot) => (
-                        <SelectItem key={slot} value={slot}>
-                          {slot}
-                        </SelectItem>
+                        <SelectItem key={slot} value={slot}>{slot}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -794,6 +823,15 @@ export function BarberBookingsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ClientPickerModal
+        open={clientPickerOpen}
+        onClose={() => setClientPickerOpen(false)}
+        onSelect={(client) => {
+          setField("clientId", client.id);
+          setSelectedClientName(client.name);
+        }}
+      />
     </div>
   );
 }

@@ -1345,8 +1345,8 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">Contato</label>
-                <input 
-                  type="tel" 
+                <input
+                  type="tel"
                   value={businessForm.phone}
                   onChange={(event) => updateBusinessField('phone', event.target.value)}
                   disabled={isLoadingBusinessProfile}
