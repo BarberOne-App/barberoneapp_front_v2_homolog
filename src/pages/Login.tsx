@@ -109,9 +109,6 @@ export function Login() {
     }
   }
 
-  const whatsappSupportUrl =
-    "https://wa.me/5585992175631?text=Ol%C3%A1%2C%20preciso%20renovar%20meu%20plano%20no%20BarberOne";
-
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-6 py-10">
 
