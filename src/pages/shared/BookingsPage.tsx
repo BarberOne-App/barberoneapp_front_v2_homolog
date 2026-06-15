@@ -48,6 +48,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/hooks/useAuth";
 import { useTableSelection } from "@/hooks/useTableSelection";
 import {
   cancelAppointment,
@@ -188,6 +189,8 @@ function getServiceDuration(service: Service) {
 }
 
 export function BookingsPage() {
+  const { user } = useAuth();
+
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
@@ -199,6 +202,7 @@ export function BookingsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [selectedClientName, setSelectedClientName] = useState("");
+  const [bookForSelf, setBookForSelf] = useState(false);
   const [form, setForm] = useState<BookingFormState>(emptyForm);
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -386,6 +390,7 @@ export function BookingsPage() {
       allowOutsideBusinessHours,
     });
     setSelectedClientName("");
+    setBookForSelf(false);
     setDialogOpen(true);
   }
 
@@ -933,14 +938,39 @@ export function BookingsPage() {
             <div className="grid flex-1 gap-4 overflow-y-auto md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Cliente</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full justify-start font-normal"
-                  onClick={() => setClientPickerOpen(true)}
-                >
-                  {selectedClientName || "Selecionar cliente"}
-                </Button>
+                {bookForSelf ? (
+                  <div className="flex items-center gap-2 rounded-md border border-border bg-secondary/40 px-3 py-2 text-sm">
+                    <User size={14} className="text-muted-foreground" />
+                    <span className="text-foreground">{user?.name ?? "Administrador"}</span>
+                    <span className="ml-auto text-xs text-muted-foreground">(você)</span>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start font-normal"
+                    onClick={() => setClientPickerOpen(true)}
+                  >
+                    {selectedClientName || "Selecionar cliente"}
+                  </Button>
+                )}
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+                  <Checkbox
+                    checked={bookForSelf}
+                    onCheckedChange={(checked) => {
+                      const isSelf = checked === true;
+                      setBookForSelf(isSelf);
+                      if (isSelf) {
+                        setField("clientId", user?.id ?? "");
+                        setSelectedClientName(user?.name ?? "Eu mesmo");
+                      } else {
+                        setField("clientId", "");
+                        setSelectedClientName("");
+                      }
+                    }}
+                  />
+                  Agendar para mim mesmo
+                </label>
               </div>
 
               <div className="space-y-2">
