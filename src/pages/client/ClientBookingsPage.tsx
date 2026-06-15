@@ -57,6 +57,7 @@ import {
   type AppointmentStatus,
 } from "@/service/appointmentService";
 import { listBarbers, type Barber } from "@/service/barberService";
+import { getMyActiveSubscription, type Subscription } from "@/service/subscriptionService";
 import { getBarbershopProfile, type BarbershopProfile } from "@/service/barbershopProfileService";
 import { createAppointmentPayment } from "@/service/paymentService";
 import { listServices, type Service } from "@/service/serviceService";
@@ -176,6 +177,14 @@ function getStoredBarbershopId(): string {
 export function ClientBookingsPage() {
   const { user } = useAuth();
 
+  // Assinatura do cliente
+  const [mySubscription, setMySubscription] = useState<Subscription | null | undefined>(undefined);
+  const isSubscriptionExpired = mySubscription !== undefined && (
+    mySubscription === null
+      ? false
+      : mySubscription.status === "expired" || mySubscription.status === "cancelled"
+  );
+
   // Lista de agendamentos
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [total, setTotal] = useState(0);
@@ -238,6 +247,12 @@ export function ClientBookingsPage() {
   }, [user?.id, page, statusFilter]);
 
   useEffect(() => { void loadAppointments(); }, [loadAppointments]);
+
+  useEffect(() => {
+    getMyActiveSubscription()
+      .then((sub) => setMySubscription(sub))
+      .catch(() => setMySubscription(null));
+  }, []);
 
   useEffect(() => {
     if (!bookingOpen) return;
@@ -478,6 +493,17 @@ export function ClientBookingsPage() {
 
   return (
     <div className="space-y-6">
+      {isSubscriptionExpired && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+          <p className="text-sm font-medium text-red-600">
+            Sua assinatura expirou. Renove seu plano para continuar agendando.
+          </p>
+          <a href="/plans" className="mt-1 block text-xs text-red-500 underline underline-offset-2">
+            Ver planos disponíveis
+          </a>
+        </div>
+      )}
+
       {/* Cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         {[

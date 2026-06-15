@@ -23,6 +23,7 @@ export interface PlatformSubscription {
   plan: PlatformPlan | null;
   amount: number | null;
   nextBillingDate: string | null;
+  canceledAt: string | null;
   startDate: string | null;
   createdAt: string | null;
 }
@@ -76,6 +77,30 @@ export async function subscribeClientToPlan(payload: SubscribeClientPlanPayload)
     },
   });
 
+  return data;
+}
+
+export interface ClientPixOrderResult {
+  orderId?: string;
+  status?: string;
+  chargeStatus?: string;
+  pixQrCode?: string;
+  pixQrCodeUrl?: string;
+}
+
+export async function createClientPlanPixOrder(payload: {
+  planId: string;
+  customer?: { document?: string; phone?: string };
+}): Promise<ClientPixOrderResult> {
+  const { data } = await api.post('/pagarme/subscriptions/client-subscriptions/pix', payload);
+  return data;
+}
+
+export async function confirmClientPlanPixOrder(payload: {
+  planId: string;
+  orderId: string;
+}): Promise<{ paid: boolean; status?: string; chargeStatus?: string }> {
+  const { data } = await api.post('/pagarme/subscriptions/client-subscriptions/pix/confirm', payload);
   return data;
 }
 

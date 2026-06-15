@@ -1,5 +1,7 @@
 import api from "./api";
 
+export type PlanPaymentMethod = "pix" | "debito" | "credito";
+
 export interface Plan {
   id: string;
   barbershopId?: string;
@@ -8,6 +10,7 @@ export interface Plan {
   price: number;
   color?: string | null;
   cutsPerMonth: number;
+  paymentMethod: PlanPaymentMethod;
   maxBarbers?: number | null;
   maxReceptionists?: number | null;
   maxAdmins?: number | null;
@@ -30,6 +33,7 @@ export interface PlanPayload {
   price: number;
   color?: string | null;
   cutsPerMonth: number;
+  paymentMethod: PlanPaymentMethod;
   maxBarbers?: number | null;
   maxReceptionists?: number | null;
   maxAdmins?: number | null;

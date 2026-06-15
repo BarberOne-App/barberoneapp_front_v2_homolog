@@ -60,6 +60,7 @@ import {
   listPlans,
   updatePlan,
   type Plan,
+  type PlanPaymentMethod,
 } from "@/service/planService";
 import { listServices, type Service } from "@/service/serviceService";
 import {
@@ -77,6 +78,7 @@ interface PlanFormState {
   price: string;
   color: string;
   cutsPerMonth: string;
+  paymentMethod: PlanPaymentMethod;
   maxBarbers: string;
   maxReceptionists: string;
   maxAdmins: string;
@@ -91,6 +93,7 @@ const emptyForm: PlanFormState = {
   price: "",
   color: "#6366f1",
   cutsPerMonth: "4",
+  paymentMethod: "credito",
   maxBarbers: "",
   maxReceptionists: "",
   maxAdmins: "",
@@ -165,6 +168,7 @@ function planToForm(plan: Plan): PlanFormState {
     price: String(plan.price ?? ""),
     color: plan.color ?? "#6366f1",
     cutsPerMonth: String(plan.cutsPerMonth ?? 4),
+    paymentMethod: plan.paymentMethod ?? "credito",
     maxBarbers: plan.maxBarbers != null ? String(plan.maxBarbers) : "",
     maxReceptionists: plan.maxReceptionists != null ? String(plan.maxReceptionists) : "",
     maxAdmins: plan.maxAdmins != null ? String(plan.maxAdmins) : "",
@@ -352,6 +356,7 @@ export function PlansPage() {
       price: parseCurrencyInput(form.price),
       color: form.color || null,
       cutsPerMonth: Number(form.cutsPerMonth),
+      paymentMethod: form.paymentMethod,
       maxBarbers: form.maxBarbers !== "" ? Number(form.maxBarbers) : null,
       maxReceptionists: form.maxReceptionists !== "" ? Number(form.maxReceptionists) : null,
       maxAdmins: form.maxAdmins !== "" ? Number(form.maxAdmins) : null,
@@ -908,6 +913,26 @@ export function PlansPage() {
                   value={form.cutsPerMonth}
                   onChange={(e) => setField("cutsPerMonth", e.target.value)}
                 />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="plan-payment-method">Forma de pagamento do plano</Label>
+                <Select
+                  value={form.paymentMethod}
+                  onValueChange={(value) => setField("paymentMethod", value as PlanPaymentMethod)}
+                >
+                  <SelectTrigger id="plan-payment-method">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="credito">Cartao de credito</SelectItem>
+                    <SelectItem value="debito">Cartao de debito</SelectItem>
+                    <SelectItem value="pix">Pix</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  No cartao de credito, o cliente so consegue assinar pelo checkout seguro e a renovacao e automatica.
+                </p>
               </div>
 
               {/* Limites de funcionários */}

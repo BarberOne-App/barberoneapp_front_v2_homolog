@@ -300,7 +300,7 @@ export function CustomersPage() {
   const [togglingSubId, setTogglingSubId] = useState<string | null>(null);
   const [subDialogCustomer, setSubDialogCustomer] = useState<UserProfile | null>(null);
   const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
-  const [subForm, setSubForm] = useState({ planId: "", paymentMethod: "pix", amount: "" });
+  const [subForm, setSubForm] = useState({ planId: "", paymentMethod: "credito", amount: "" });
   const [savingSub, setSavingSub] = useState(false);
 
   const limit = 20;
@@ -378,7 +378,7 @@ export function CustomersPage() {
 
   function openSubscriptionDialog(customer: UserProfile) {
     setSubDialogCustomer(customer);
-    setSubForm({ planId: "", paymentMethod: "pix", amount: "" });
+    setSubForm({ planId: "", paymentMethod: "credito", amount: "" });
     listPlans({ active: true })
       .then(setAvailablePlans)
       .catch(() => setAvailablePlans([]));
@@ -387,6 +387,11 @@ export function CustomersPage() {
   async function handleCreateSubscription(e: FormEvent) {
     e.preventDefault();
     if (!subDialogCustomer || !subForm.planId) return;
+    const selectedPlan = availablePlans.find((plan) => plan.id === subForm.planId);
+    if (selectedPlan?.paymentMethod === "credito") {
+      toast.error("Planos no cartao devem ser assinados pelo cliente no checkout seguro.");
+      return;
+    }
     const amount = parseFloat(subForm.amount.replace(",", "."));
     if (!amount || amount <= 0) {
       toast.error("Informe um valor válido.");
@@ -1072,7 +1077,12 @@ export function CustomersPage() {
                   value={subForm.planId}
                   onValueChange={(val) => {
                     const plan = availablePlans.find((p) => p.id === val);
-                    setSubForm((f) => ({ ...f, planId: val, amount: plan ? String(plan.price) : f.amount }));
+                    setSubForm((f) => ({
+                      ...f,
+                      planId: val,
+                      amount: plan ? String(plan.price) : f.amount,
+                      paymentMethod: plan?.paymentMethod ?? "credito",
+                    }));
                   }}
                   required
                 >
@@ -1087,6 +1097,11 @@ export function CustomersPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {availablePlans.find((plan) => plan.id === subForm.planId)?.paymentMethod === "credito" ? (
+                  <p className="text-xs text-amber-600">
+                    Este plano exige cartao. O cliente deve concluir a assinatura na tela de planos.
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label>Valor (R$)</Label>
@@ -1102,7 +1117,7 @@ export function CustomersPage() {
                 <Label>Forma de pagamento</Label>
                 <Select
                   value={subForm.paymentMethod}
-                  onValueChange={(val) => setSubForm((f) => ({ ...f, paymentMethod: val }))}
+                  disabled
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -1121,7 +1136,14 @@ export function CustomersPage() {
               <Button type="button" variant="outline" onClick={() => setSubDialogCustomer(null)} disabled={savingSub}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={savingSub || !subForm.planId}>
+              <Button
+                type="submit"
+                disabled={
+                  savingSub ||
+                  !subForm.planId ||
+                  availablePlans.find((plan) => plan.id === subForm.planId)?.paymentMethod === "credito"
+                }
+              >
                 {savingSub ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando</> : "Criar plano"}
               </Button>
             </DialogFooter>

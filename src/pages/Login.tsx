@@ -142,14 +142,13 @@ export function Login() {
             </div>
 
             <div className="flex flex-col gap-3">
-              <a
-                href={whatsappSupportUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => navigate("/", { state: { scrollTo: "planos" } })}
                 className="flex h-11 w-full items-center justify-center rounded-lg bg-primary font-semibold text-primary-foreground shadow transition hover:bg-primary/90"
               >
-                Falar com suporte e assinar
-              </a>
+                Ver planos e assinar
+              </button>
               <button
                 onClick={() => setTrialExpired(null)}
                 className="h-11 w-full rounded-lg border border-border text-sm text-muted-foreground transition hover:bg-muted"
