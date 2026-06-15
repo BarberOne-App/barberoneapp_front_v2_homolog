@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   ArrowRight, BadgeCheck, CalendarCheck, CheckCircle2, ClipboardCheck,
   Clock, CreditCard, Lock, Menu, MessageCircle, Scissors,
@@ -585,6 +585,7 @@ interface PaymentCtx { plan: Plan; customerName: string; customerEmail: string; 
 
 export function LandingPage() {
   const navigate = useNavigate();
+  const { state } = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
@@ -598,6 +599,21 @@ export function LandingPage() {
       .catch(() => setPlansError("Não foi possível carregar os planos. Tente novamente."))
       .finally(() => setPlansLoading(false));
   }, []);
+
+  useEffect(() => {
+    const target = (state as { scrollTo?: string } | null)?.scrollTo;
+    if (!target) return;
+    const el = document.getElementById(target);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      // planos carregam via API — tenta de novo após renderizar
+      const timer = setTimeout(() => {
+        document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [state]);
 
   const goLogin = () => navigate("/login");
 

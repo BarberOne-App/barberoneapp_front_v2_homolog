@@ -15,12 +15,20 @@ import {
 import { getBarbershopProfile } from '@/service/barbershopProfileService';
 
 const TRIAL_PERIOD_DAYS = 14;
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'pending']);
+
+function isActivePlatformSubscription(sub: PlatformSubscription | null): boolean {
+  if (!sub) return false;
+  const status = String(sub.status || '').trim().toLowerCase().replace('canceled', 'cancelled');
+  if (status !== 'active') return false;
+  if (sub.canceledAt !== null) return false;
+  if (!sub.nextBillingDate) return true;
+  return new Date(sub.nextBillingDate) > new Date();
+}
 
 function computeTrialInfo(createdAt: string | null | undefined, platformSubscriptionStatus: string | null | undefined) {
   if (!createdAt) return null;
   const subStatus = String(platformSubscriptionStatus || '').toLowerCase().trim();
-  if (ACTIVE_SUBSCRIPTION_STATUSES.has(subStatus)) return null;
+  if (subStatus === 'active') return null;
   const created = new Date(createdAt);
   const trialEndsAt = new Date(created.getTime() + TRIAL_PERIOD_DAYS * 24 * 60 * 60 * 1000);
   const now = new Date();
@@ -70,6 +78,7 @@ const STATUS_LABEL: Record<string, string> = {
   paused: 'Pausado',
   pending: 'Pendente',
   cancelled: 'Cancelado',
+  expired: 'Expirado',
 };
 
 const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -79,6 +88,7 @@ const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | '
   paused: 'secondary',
   pending: 'outline',
   cancelled: 'destructive',
+  expired: 'destructive',
 };
 
 export function PlatformSubscriptionTab() {
@@ -133,8 +143,8 @@ export function PlatformSubscriptionTab() {
   }, [loadSubscription, loadPlans]);
 
   const normalizedStatus = currentSub ? normalizeStatus(currentSub.status) : '';
-  const hasActiveSub = ['active', 'trialing', 'future'].includes(normalizedStatus);
-  const isCurrentPlan = (plan: PlatformPlan) => currentSub?.plan?.id === plan.id;
+  const hasActiveSub = isActivePlatformSubscription(currentSub);
+  const isCurrentPlan = (plan: PlatformPlan) => hasActiveSub && currentSub?.plan?.id === plan.id;
 
   function handleSelectPlan(plan: PlatformPlan, upgrade: boolean) {
     if (upgrade) { setChangePlanTarget(plan); return; }
@@ -196,8 +206,8 @@ export function PlatformSubscriptionTab() {
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="text-lg font-medium text-foreground">Assinatura da plataforma</h3>
           {!loadingSubscription && !subscriptionError && currentSub && (
-            <Badge variant={STATUS_VARIANT[normalizedStatus] ?? 'outline'}>
-              {STATUS_LABEL[normalizedStatus] ?? currentSub.status}
+            <Badge variant={hasActiveSub ? (STATUS_VARIANT[normalizedStatus] ?? 'default') : 'destructive'}>
+              {hasActiveSub ? (STATUS_LABEL[normalizedStatus] ?? currentSub.status) : 'Expirado'}
             </Badge>
           )}
           {!loadingSubscription && !subscriptionError && !currentSub && (

@@ -13,6 +13,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SubscriptionPixModal } from "@/components/SubscriptionPixModal";
 import { useAuth } from "@/hooks/useAuth";
 import { listPlans, type Plan } from "@/service/planService";
 import {
@@ -31,6 +32,12 @@ function formatCurrency(value: number) {
     currency: "BRL",
   }).format(value ?? 0);
 }
+
+const paymentMethodLabels: Record<Plan["paymentMethod"], string> = {
+  credito: "Cartao de credito",
+  debito: "Cartao de debito",
+  pix: "Pix",
+};
 
 function formatCardNumber(value: string) {
   return value
@@ -93,6 +100,10 @@ function SubscribeModal({ plan, isChangingPlan, onClose, onSuccess }: SubscribeM
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (plan.paymentMethod !== "credito" && plan.paymentMethod !== "debito") {
+      toast.error("Este plano nao esta configurado para pagamento no cartao.");
+      return;
+    }
     const err = validate();
     if (err) { toast.error(err); return; }
 
@@ -142,7 +153,7 @@ function SubscribeModal({ plan, isChangingPlan, onClose, onSuccess }: SubscribeM
           <p className="text-sm text-muted-foreground">
             {isChangingPlan
               ? "Seu plano atual sera cancelado e o novo plano entrara em vigor imediatamente."
-              : "Assinatura recorrente mensal no cartao de credito."}
+              : `Assinatura mensal no ${paymentMethodLabels[plan.paymentMethod].toLowerCase()}.`}
           </p>
         </div>
 
@@ -299,6 +310,7 @@ interface PlanCardProps {
 
 function PlanCard({ plan, isCurrentPlan, isChangingPlan, onSubscribe }: PlanCardProps) {
   const accentColor = plan.color ?? "#d4af37";
+  const canSubscribeOnline = ["credito", "debito", "pix"].includes(plan.paymentMethod);
 
   return (
     <div
@@ -349,7 +361,11 @@ function PlanCard({ plan, isCurrentPlan, isChangingPlan, onSubscribe }: PlanCard
       )}
 
       <div className="px-6 pb-6 pt-4 border-t border-border">
-        {isCurrentPlan ? (
+        {isCurrentPlan && plan.paymentMethod === "pix" ? (
+          <Button className="w-full" onClick={() => onSubscribe(plan)}>
+            Renovar com PIX
+          </Button>
+        ) : isCurrentPlan ? (
           <div className="flex items-center justify-center gap-2 rounded-lg bg-emerald-500/10 py-2 text-sm font-medium text-emerald-600">
             <Check size={15} />
             Plano ativo
@@ -359,8 +375,17 @@ function PlanCard({ plan, isCurrentPlan, isChangingPlan, onSubscribe }: PlanCard
             className="w-full"
             variant={isChangingPlan ? "outline" : "default"}
             onClick={() => onSubscribe(plan)}
+            disabled={!canSubscribeOnline}
           >
-            {isChangingPlan ? "Trocar para este plano" : "Assinar agora"}
+            {!canSubscribeOnline
+              ? `Pagamento: ${paymentMethodLabels[plan.paymentMethod]}`
+              : plan.paymentMethod === "pix"
+                ? "Assinar com PIX"
+                : plan.paymentMethod === "debito"
+                  ? "Assinar com cartao de debito"
+                : isChangingPlan
+                ? "Trocar para este plano"
+                : "Assinar agora"}
           </Button>
         )}
       </div>
@@ -371,6 +396,7 @@ function PlanCard({ plan, isCurrentPlan, isChangingPlan, onSubscribe }: PlanCard
 /* ── Main page ── */
 
 export function ClientPlansPage() {
+  const { user } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [mySubscription, setMySubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
@@ -474,10 +500,22 @@ export function ClientPlansPage() {
         ))}
       </div>
 
-      {selectedPlan && (
+      {(selectedPlan?.paymentMethod === "credito" || selectedPlan?.paymentMethod === "debito") && (
         <SubscribeModal
           plan={selectedPlan}
           isChangingPlan={isActive && mySubscription?.planId !== selectedPlan.id}
+          onClose={() => setSelectedPlan(null)}
+          onSuccess={() => {
+            setSelectedPlan(null);
+            setLoading(true);
+            void load();
+          }}
+        />
+      )}
+      {selectedPlan?.paymentMethod === "pix" && (
+        <SubscriptionPixModal
+          plan={selectedPlan}
+          user={user}
           onClose={() => setSelectedPlan(null)}
           onSuccess={() => {
             setSelectedPlan(null);
