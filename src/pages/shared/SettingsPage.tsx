@@ -56,6 +56,7 @@ import {
   type BookingPaymentMethod,
   type PaymentFrequency,
   type Settings,
+  type SubscriptionBarberRule,
   updatePaymentFrequencySettings,
   updateSettings,
 } from '../../service/settingsService';
@@ -243,6 +244,9 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
   const [hasLoadedPaymentSettings, setHasLoadedPaymentSettings] = useState(false);
   const [isLoadingPaymentSettings, setIsLoadingPaymentSettings] = useState(false);
   const [isSavingPaymentSettings, setIsSavingPaymentSettings] = useState(false);
+  const [subscriptionBarberRule, setSubscriptionBarberRule] = useState<SubscriptionBarberRule>('fixed');
+  const [hasLoadedBarberRule, setHasLoadedBarberRule] = useState(false);
+  const [isSavingBarberRule, setIsSavingBarberRule] = useState(false);
   const barbershop = useMemo(() => getStoredBarbershop(), []);
   const canManageSecurityDocuments = user?.role === 'admin' || user?.isAdmin === true;
   const isAdmin = user?.role === 'admin' || user?.isAdmin === true;
@@ -407,6 +411,31 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
       isMounted = false;
     };
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'general' || hasLoadedBarberRule) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadBarberRule() {
+      try {
+        const settingsData = await getSettings();
+        if (!isMounted) return;
+        setSubscriptionBarberRule(settingsData.subscriptionBarberRule ?? 'fixed');
+        setHasLoadedBarberRule(true);
+      } catch {
+        // silently ignore — default 'fixed' remains
+      }
+    }
+
+    loadBarberRule();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, hasLoadedBarberRule]);
 
   useEffect(() => {
     if (activeTab !== 'payments' || hasLoadedPaymentSettings) {
@@ -1146,6 +1175,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
         termsDocumentName,
         hiddenBookingPaymentMethods:
           currentSettings.hiddenBookingPaymentMethods ?? getHiddenBookingPaymentMethods(),
+        subscriptionBarberRule: currentSettings.subscriptionBarberRule ?? subscriptionBarberRule,
       });
 
       setSettings(updatedSettings);
@@ -1216,6 +1246,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
           termsDocumentUrl: settings?.termsDocumentUrl ?? '',
           termsDocumentName: settings?.termsDocumentName ?? '',
           hiddenBookingPaymentMethods: getHiddenBookingPaymentMethods(),
+          subscriptionBarberRule: settings?.subscriptionBarberRule ?? subscriptionBarberRule,
         }),
         updatePaymentFrequencySettings({
           barberPaymentFrequency,
@@ -1238,6 +1269,31 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
       toast.error(message || 'Erro ao salvar configuracoes de pagamento.');
     } finally {
       setIsSavingPaymentSettings(false);
+    }
+  }
+
+  async function saveBarberRuleSettings() {
+    if (isSavingBarberRule) return;
+
+    setIsSavingBarberRule(true);
+
+    try {
+      const currentSettings = settings ?? await getSettings();
+      const updatedSettings = await updateSettings({
+        pixKey: currentSettings.pixKey ?? '',
+        termsDocumentUrl: currentSettings.termsDocumentUrl ?? '',
+        termsDocumentName: currentSettings.termsDocumentName ?? '',
+        hiddenBookingPaymentMethods: currentSettings.hiddenBookingPaymentMethods ?? [],
+        subscriptionBarberRule,
+      });
+
+      setSettings(updatedSettings);
+      toast.success('Regra de barbeiro salva com sucesso.');
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      toast.error(message || 'Erro ao salvar regra de barbeiro.');
+    } finally {
+      setIsSavingBarberRule(false);
     }
   }
 
@@ -1375,6 +1431,59 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
               </button>
             </div>
           </div>
+
+          {isAdmin && (
+            <div className="bg-card rounded-xl border border-border p-6">
+              <h3 className="text-lg font-medium text-foreground mb-1">Regra de Barbeiro para Assinantes</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Define como clientes com plano ativo escolhem o barbeiro ao agendar.
+              </p>
+              <div className="space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="subscriptionBarberRule"
+                    value="fixed"
+                    checked={subscriptionBarberRule === 'fixed'}
+                    onChange={() => setSubscriptionBarberRule('fixed')}
+                    className="mt-1 accent-primary"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-foreground">Barbeiro fixo</span>
+                    <p className="text-xs text-muted-foreground">
+                      O cliente fica vinculado ao barbeiro escolhido no primeiro agendamento após assinar. Pode trocar somente na renovação mensal ou após 30 dias.
+                    </p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="subscriptionBarberRule"
+                    value="free_choice"
+                    checked={subscriptionBarberRule === 'free_choice'}
+                    onChange={() => setSubscriptionBarberRule('free_choice')}
+                    className="mt-1 accent-primary"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-foreground">Livre escolha</span>
+                    <p className="text-xs text-muted-foreground">
+                      O cliente pode escolher qualquer barbeiro disponível no horário e data desejados, desde que o barbeiro realize o serviço solicitado.
+                    </p>
+                  </div>
+                </label>
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={saveBarberRuleSettings}
+                  disabled={isSavingBarberRule}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSavingBarberRule ? 'Salvando...' : 'Salvar regra'}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="bg-card rounded-xl border border-border p-6">
             <h3 className="text-lg font-medium text-foreground mb-4">Sobre Nos</h3>

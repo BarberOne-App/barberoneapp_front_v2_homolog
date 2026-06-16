@@ -27,6 +27,8 @@ export interface Subscription {
   nextBillingAt: string | null;
   startedAt: string | null;
   paymentMethod?: string | null;
+  monthlyBarberId?: string | null;
+  monthlyBarber?: { id: string; displayName: string; photoUrl?: string | null } | null;
 }
 
 export interface ListSubscriptionsParams {
