@@ -3,6 +3,8 @@ import {
   Calendar,
   Clock,
   Filter,
+  Info,
+  Lock,
   Loader2,
   MoreHorizontal,
   Plus,
@@ -59,6 +61,7 @@ import {
 import { listBarbers, type Barber } from "@/service/barberService";
 import { getMyActiveSubscription, type Subscription } from "@/service/subscriptionService";
 import { getBarbershopProfile, type BarbershopProfile } from "@/service/barbershopProfileService";
+import { getSettings, type SubscriptionBarberRule } from "@/service/settingsService";
 import { createAppointmentPayment } from "@/service/paymentService";
 import { listServices, type Service } from "@/service/serviceService";
 import { isFitAppointment } from "@/utils/fitAppointment";
@@ -214,6 +217,9 @@ export function ClientBookingsPage() {
     paymentId: string;
   } | null>(null);
 
+  // Regra de barbeiro por assinatura
+  const [subscriptionBarberRule, setSubscriptionBarberRule] = useState<SubscriptionBarberRule>("fixed");
+
   // Perfil da barbearia (para WhatsApp)
   const [barbershopProfile, setBarbershopProfile] = useState<BarbershopProfile | null>(null);
 
@@ -267,6 +273,13 @@ export function ClientBookingsPage() {
         setServices(s.items.filter((sv) => sv.active));
         setBarbershopProfile(profile);
       } catch (err) { toast.error(getApiMessage(err)); }
+
+      try {
+        const settings = await getSettings();
+        setSubscriptionBarberRule(settings.subscriptionBarberRule ?? "fixed");
+      } catch {
+        // fallback para "fixed" se o endpoint não estiver acessível para o usuário
+      }
     }
     void load();
   }, [bookingOpen]);
@@ -274,6 +287,13 @@ export function ClientBookingsPage() {
   const selectedServices = useMemo(() => services.filter((s) => form.serviceIds.includes(s.id)), [form.serviceIds, services]);
   const totalDuration = useMemo(() => selectedServices.reduce((sum, s) => sum + getServiceDuration(s), 0), [selectedServices]);
   const totalPrice = useMemo(() => selectedServices.reduce((sum, s) => sum + getServicePrice(s), 0), [selectedServices]);
+
+  const isFixedRule = subscriptionBarberRule === "fixed";
+  const hasActiveSubscription =
+    mySubscription?.status === "active" || mySubscription?.status === "paused";
+  const lockedBarberId =
+    isFixedRule && hasActiveSubscription ? (mySubscription?.monthlyBarberId ?? null) : null;
+  const hasLockedBarber = Boolean(lockedBarberId);
 
   useEffect(() => {
     if (!bookingOpen || !form.barberId || !form.date || totalDuration <= 0) { setSlots([]); return; }
@@ -545,7 +565,7 @@ export function ClientBookingsPage() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button size="sm" className="gap-2" onClick={() => { setForm({ ...emptyForm, date: dateToDateString(new Date()) }); setBookingOpen(true); }}>
+            <Button size="sm" className="gap-2" onClick={() => { setForm({ ...emptyForm, date: dateToDateString(new Date()), barberId: lockedBarberId ?? "" }); setBookingOpen(true); }}>
               <Plus size={14} /> Marcar Horario
             </Button>
           </div>
@@ -651,10 +671,29 @@ export function ClientBookingsPage() {
             <div className="grid flex-1 gap-4 overflow-y-auto md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Barbeiro</Label>
-                <Select value={form.barberId} onValueChange={(v) => { setField("barberId", v); setField("time", ""); }}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Selecionar barbeiro" /></SelectTrigger>
-                  <SelectContent>{barbers.map((b) => <SelectItem key={b.id} value={b.id}>{b.displayName}</SelectItem>)}</SelectContent>
+                <Select
+                  value={form.barberId}
+                  onValueChange={(v) => { setField("barberId", v); setField("time", ""); }}
+                  disabled={hasLockedBarber}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecionar barbeiro" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {barbers.map((b) => <SelectItem key={b.id} value={b.id}>{b.displayName}</SelectItem>)}
+                  </SelectContent>
                 </Select>
+                {hasLockedBarber ? (
+                  <p className="flex items-center gap-1.5 text-xs text-amber-600">
+                    <Lock size={11} />
+                    Barbeiro fixo do seu plano. Troca disponível após 30 dias ou na renovação mensal.
+                  </p>
+                ) : isFixedRule && hasActiveSubscription ? (
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Info size={11} />
+                    O barbeiro escolhido será vinculado ao seu plano após o agendamento.
+                  </p>
+                ) : null}
               </div>
 
               <div className="space-y-2">

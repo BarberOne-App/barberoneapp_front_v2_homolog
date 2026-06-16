@@ -31,7 +31,10 @@ interface RegForm {
   adminPhone: string;
   password: string;
   confirmPassword: string;
+  subscriptionBarberRule: SubscriptionBarberRule;
 }
+
+type SubscriptionBarberRule = "fixed" | "free_choice";
 
 interface CardForm {
   number: string;
@@ -75,6 +78,7 @@ async function apiRegister(form: RegForm, planId: string): Promise<RegisterResul
     adminPhone: form.adminPhone || null,
     password: form.password,
     selectedPlan: planId,
+    subscriptionBarberRule: form.subscriptionBarberRule,
   });
   localStorage.setItem("token", data.token);
   localStorage.setItem("refreshToken", data.refreshToken);
@@ -235,7 +239,18 @@ function RegisterModal({ plan, onClose, onRegistered }: {
   onClose: () => void;
   onRegistered: (result: RegisterResult) => void;
 }) {
-  const empty: RegForm = { barbershopName: "", slug: "", cnpj: "", phone: "", adminName: "", adminEmail: "", adminPhone: "", password: "", confirmPassword: "" };
+  const empty: RegForm = {
+    barbershopName: "",
+    slug: "",
+    cnpj: "",
+    phone: "",
+    adminName: "",
+    adminEmail: "",
+    adminPhone: "",
+    password: "",
+    confirmPassword: "",
+    subscriptionBarberRule: "fixed",
+  };
   const [form, setForm] = useState<RegForm>(empty);
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -321,6 +336,42 @@ function RegisterModal({ plan, onClose, onRegistered }: {
                   <input type="tel" className={inputClass} value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="(11) 99999-9999" disabled={submitting} />
                 </label>
               </div>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-white font-semibold text-sm mb-3 pb-2 border-b border-neutral-800">Regra de Barbeiro para Assinantes</h4>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className={`block cursor-pointer rounded-xl border p-4 transition-colors ${form.subscriptionBarberRule === "fixed" ? "border-orange-500 bg-orange-500/10" : "border-neutral-800 bg-neutral-900/50 hover:border-neutral-700"}`}>
+                <input
+                  type="radio"
+                  name="subscriptionBarberRule"
+                  value="fixed"
+                  className="sr-only"
+                  checked={form.subscriptionBarberRule === "fixed"}
+                  onChange={() => set("subscriptionBarberRule", "fixed")}
+                  disabled={submitting}
+                />
+                <span className="block text-sm font-semibold text-white">Barbeiro fixo</span>
+                <span className="mt-1 block text-xs leading-5 text-neutral-400">
+                  Cliente com plano fica vinculado ao barbeiro escolhido no primeiro agendamento e troca apenas na renovacao mensal ou apos 30 dias.
+                </span>
+              </label>
+              <label className={`block cursor-pointer rounded-xl border p-4 transition-colors ${form.subscriptionBarberRule === "free_choice" ? "border-orange-500 bg-orange-500/10" : "border-neutral-800 bg-neutral-900/50 hover:border-neutral-700"}`}>
+                <input
+                  type="radio"
+                  name="subscriptionBarberRule"
+                  value="free_choice"
+                  className="sr-only"
+                  checked={form.subscriptionBarberRule === "free_choice"}
+                  onChange={() => set("subscriptionBarberRule", "free_choice")}
+                  disabled={submitting}
+                />
+                <span className="block text-sm font-semibold text-white">Livre escolha</span>
+                <span className="mt-1 block text-xs leading-5 text-neutral-400">
+                  Cliente com plano escolhe qualquer barbeiro disponivel na data e horario, desde que realize o servico solicitado.
+                </span>
+              </label>
             </div>
           </div>
 
