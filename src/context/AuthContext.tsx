@@ -2,6 +2,7 @@ import { createContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import { fetchMe, googleLogin as googleLoginRequest, login as loginRequest, logout as logoutRequest } from "../service/authService";
+import type { AuthResponse } from "../service/authService";
 
 export interface User {
   id: string;
@@ -23,7 +24,7 @@ export interface AuthContextData {
   loading: boolean;
 
   login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: (accessToken: string) => Promise<void>;
+  loginWithGoogle: (accessToken: string, profileData?: { phone?: string; cpf?: string; birthDate?: string; password?: string }, slug?: string) => Promise<AuthResponse>;
   logout: () => void;
   updateUser: (user: User) => void;
 }
@@ -37,26 +38,16 @@ function getStoredUser(): User | null {
   const storedUser = localStorage.getItem("user");
 
   if (!storedToken || !storedUser) {
-    console.info("[AuthContext] Sessao incompleta no localStorage.", {
-      hasToken: Boolean(storedToken),
-      hasUser: Boolean(storedUser),
-    });
-    logoutRequest();
+    // Limpa apenas se houver estado parcial (token sem user ou user sem token)
+    if (storedToken || storedUser) {
+      logoutRequest();
+    }
     return null;
   }
 
   try {
-    const parsedUser = JSON.parse(storedUser) as User;
-
-    console.info("[AuthContext] Usuario carregado do localStorage.", {
-      id: parsedUser.id,
-      email: parsedUser.email,
-      role: parsedUser.role,
-    });
-
-    return parsedUser;
+    return JSON.parse(storedUser) as User;
   } catch {
-    console.warn("[AuthContext] Usuario salvo estava invalido. Removendo localStorage.");
     logoutRequest();
     return null;
   }
@@ -105,10 +96,16 @@ export function AuthProvider({ children }: Props) {
     console.info("[AuthContext] Estado de usuario atualizado.");
   }
 
-  async function loginWithGoogle(accessToken: string) {
-    const response = await googleLoginRequest(accessToken);
+  async function loginWithGoogle(
+    accessToken: string,
+    profileData?: { phone?: string; cpf?: string; birthDate?: string; password?: string },
+    slug?: string
+  ): Promise<AuthResponse> {
+    const response = await googleLoginRequest(accessToken, profileData, slug);
     localStorage.setItem("user", JSON.stringify(response.user));
-    setUser(response.user);
+    // Não chama setUser aqui — Login.tsx chama updateUser após decidir o fluxo (modal ou navegação)
+    // para evitar que PublicRoute redirecione antes do modal ser exibido
+    return response;
   }
 
   function logout() {
