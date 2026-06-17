@@ -39,6 +39,8 @@ export interface AuthResponse {
   trialExpiredAt?: string;
   barbershopName?: string;
   message?: string;
+  requiresProfileCompletion?: boolean;
+  created?: boolean;
   user: {
     id: string;
     name: string;
@@ -121,8 +123,21 @@ export async function login(data: LoginPayload) {
   return response.data;
 }
 
-export async function googleLogin(accessToken: string) {
-  const response = await api.post<AuthResponse>("/auth/google", { accessToken });
+export async function googleLogin(
+  accessToken: string,
+  profileData?: {
+    phone?: string;
+    cpf?: string;
+    birthDate?: string;
+    password?: string;
+  },
+  slug?: string
+) {
+  const response = await api.post<AuthResponse>("/auth/google", {
+    accessToken,
+    ...(slug ? { slug } : {}),
+    ...(profileData ? { profileData } : {}),
+  });
 
   const token = response.data.accessToken || response.data.token || "";
 
