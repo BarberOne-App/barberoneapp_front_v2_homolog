@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Lock, Loader2, AlertTriangle, X } from "lucide-react";
+import { useGoogleLogin } from "@react-oauth/google";
 
 import barberOneLogo from "../assets/image/barberOne-logo.png";
 import { useAuth } from "../hooks/useAuth";
@@ -36,7 +37,7 @@ function getErrorMessage(error: unknown): string {
 
 export function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
 
   const whatsappUrl =
     "https://wa.me/5585992175631?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20para%20acessar%20o%20BarberOne";
@@ -46,7 +47,27 @@ export function Login() {
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  const handleGoogleLogin = useGoogleLogin({
+    flow: "implicit",
+    onSuccess: async (tokenResponse) => {
+      try {
+        setGoogleLoading(true);
+        setErrorMessage("");
+        await loginWithGoogle(tokenResponse.access_token);
+        navigate("/", { replace: true });
+      } catch (err: unknown) {
+        setErrorMessage(getErrorMessage(err));
+      } finally {
+        setGoogleLoading(false);
+      }
+    },
+    onError: () => {
+      setErrorMessage("Não foi possível autenticar com o Google. Tente novamente.");
+    },
+  });
   const [trialExpired, setTrialExpired] = useState<{
     message: string;
     barbershopName: string;
@@ -245,8 +266,13 @@ export function Login() {
 
         <button
           type="button"
-          className="group flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-border bg-background text-sm font-semibold text-foreground shadow-sm transition hover:border-[#4285F4]/40 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-[#4285F4]/30"
+          onClick={() => handleGoogleLogin()}
+          disabled={googleLoading || loading}
+          className="group flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-border bg-background text-sm font-semibold text-foreground shadow-sm transition hover:border-[#4285F4]/40 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-[#4285F4]/30 disabled:cursor-not-allowed disabled:opacity-60"
         >
+          {googleLoading ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-border transition group-hover:scale-105">
             <svg
               aria-hidden="true"
@@ -274,8 +300,9 @@ export function Login() {
               />
             </svg>
           </span>
+          )}
 
-          Continuar com Google
+          {googleLoading ? "Autenticando..." : "Continuar com Google"}
         </button>
 
         <p className="mt-7 text-center text-sm text-muted-foreground">
