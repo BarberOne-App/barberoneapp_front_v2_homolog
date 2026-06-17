@@ -121,6 +121,22 @@ export async function login(data: LoginPayload) {
   return response.data;
 }
 
+export async function googleLogin(accessToken: string) {
+  const response = await api.post<AuthResponse>("/auth/google", { accessToken });
+
+  const token = response.data.accessToken || response.data.token || "";
+
+  localStorage.setItem("token", token);
+  localStorage.setItem("refreshToken", response.data.refreshToken);
+  localStorage.setItem("user", JSON.stringify(response.data.user));
+
+  if (response.data.currentBarbershop) {
+    localStorage.setItem("barbershop", JSON.stringify(response.data.currentBarbershop));
+  }
+
+  return response.data;
+}
+
 export async function register(data: RegisterPayload) {
   console.info("[authService] Enviando cadastro para /auth/register.", {
     name: data.name,

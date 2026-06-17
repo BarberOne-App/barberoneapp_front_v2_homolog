@@ -1,7 +1,7 @@
 import { createContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
-import { fetchMe, login as loginRequest, logout as logoutRequest } from "../service/authService";
+import { fetchMe, googleLogin as googleLoginRequest, login as loginRequest, logout as logoutRequest } from "../service/authService";
 
 export interface User {
   id: string;
@@ -23,6 +23,7 @@ export interface AuthContextData {
   loading: boolean;
 
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (accessToken: string) => Promise<void>;
   logout: () => void;
   updateUser: (user: User) => void;
 }
@@ -104,6 +105,12 @@ export function AuthProvider({ children }: Props) {
     console.info("[AuthContext] Estado de usuario atualizado.");
   }
 
+  async function loginWithGoogle(accessToken: string) {
+    const response = await googleLoginRequest(accessToken);
+    localStorage.setItem("user", JSON.stringify(response.user));
+    setUser(response.user);
+  }
+
   function logout() {
     logoutRequest();
     setUser(null);
@@ -124,6 +131,7 @@ export function AuthProvider({ children }: Props) {
         signed,
         loading: false,
         login,
+        loginWithGoogle,
         logout,
         updateUser,
       }}
