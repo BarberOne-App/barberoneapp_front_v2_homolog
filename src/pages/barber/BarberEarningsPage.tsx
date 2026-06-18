@@ -181,6 +181,7 @@ interface EarningsStats {
   shopEarnings: number;
   // Percentual de comissão do barbeiro
   commissionPercent: number;
+  commissionLabel: string;
   // Listas para exibição
   filteredAppointments: Appointment[];
   extraPayments: EmployeePayment[];
@@ -296,13 +297,25 @@ export function BarberEarningsPage() {
     // Apenas pagamentos de folha quitam comissão — extras (adiantamentos) não reduzem o pendente.
     const adminPaidAmount = payrollPaymentsTotal;
 
+    if (row) {
+      earnedRevenue = Number(row.totalRevenue || earnedRevenue);
+      earnedCommission = Number(row.commission || earnedCommission);
+      appointmentsCount = Number(row.appointmentsCount || appointmentsCount);
+    }
+
     // Pendente = comissão ganha que o admin ainda não pagou via folha
     const pendingPayment = roundMoney(
       Math.max(roundMoney(earnedCommission) - adminPaidAmount, 0)
     );
 
-    const shopEarnings = roundMoney(Math.max(earnedRevenue - earnedCommission, 0));
+    const shopEarnings = roundMoney(
+      row ? Number(row.barbershopShare || 0) : Math.max(earnedRevenue - earnedCommission, 0)
+    );
     const commissionPercent = barber?.commissionPercent ?? 50;
+    const hasSubscriptionPool = Number(row?.subscriptionPoolCommission || 0) > 0;
+    const commissionLabel = hasSubscriptionPool
+      ? `Seus Ganhos (${Number(row?.subscriptionParticipationPercent || 0).toFixed(2)}% do pote)`
+      : `Seus Ganhos (${commissionPercent}%)`;
 
     // Tabela: exibe atendimentos realizados e cancelados (não exibe agendados futuros)
     const filteredAppointments = [...appointments]
@@ -320,6 +333,7 @@ export function BarberEarningsPage() {
       pendingPayment,
       shopEarnings,
       commissionPercent,
+      commissionLabel,
       filteredAppointments,
       extraPayments,
       payrollPayments,
@@ -447,7 +461,7 @@ export function BarberEarningsPage() {
                     value: formatCurrency(stats.earnedRevenue),
                   },
                   {
-                    label: `Seus Ganhos (${stats.commissionPercent}%)`,
+                    label: stats.commissionLabel,
                     value: formatCurrency(stats.earnedCommission),
                     highlight: true,
                   },

@@ -77,9 +77,18 @@ export function AuthProvider({ children }: Props) {
   async function login(email: string, password: string) {
     console.info("[AuthContext] Iniciando loginRequest.", { email });
 
+    const storedBarbershop = localStorage.getItem("barbershop");
+    let barbershopId: string | undefined = undefined;
+    if (storedBarbershop) {
+      try {
+        barbershopId = JSON.parse(storedBarbershop).id || undefined;
+      } catch {}
+    }
+
     const response = await loginRequest({
       email,
       password,
+      barbershopId,
     });
 
     console.info("[AuthContext] Resposta de login recebida.", {

@@ -424,6 +424,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
         const settingsData = await getSettings();
         if (!isMounted) return;
         setSubscriptionBarberRule(settingsData.subscriptionBarberRule ?? 'fixed');
+        setSettings(settingsData);
         setHasLoadedBarberRule(true);
       } catch {
         // silently ignore — default 'fixed' remains
@@ -1288,7 +1289,8 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
       });
 
       setSettings(updatedSettings);
-      toast.success('Regra de barbeiro salva com sucesso.');
+      window.dispatchEvent(new Event('barbershop:updated'));
+      toast.success('Regras de barbeiro salvas com sucesso.');
     } catch (error) {
       const message = getApiErrorMessage(error);
       toast.error(message || 'Erro ao salvar regra de barbeiro.');

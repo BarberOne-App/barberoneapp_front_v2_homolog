@@ -18,7 +18,7 @@ export interface ListBarbersResponse {
   items: Barber[];
 }
 
-export async function listBarbers(params: { q?: string; page?: number; limit?: number } = {}) {
+export async function listBarbers(params: { q?: string; page?: number; limit?: number; barbershopId?: string } = {}) {
   const response = await api.get<ListBarbersResponse>("/barbers", { params });
   return response.data;
 }
@@ -32,7 +32,7 @@ export interface CreateBarberPayload {
   displayName: string;
   commissionPercent?: number | null;
   serviceIds?: string[];
-  userId?: string | null;
+  userId: string;
   salarioFixo?: number | null;
 }
 

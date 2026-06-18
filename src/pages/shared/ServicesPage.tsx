@@ -71,7 +71,16 @@ import {
   updateService,
   type Service,
 } from "@/service/serviceService";
+import { getMyActiveSubscription, type Subscription } from "@/service/subscriptionService";
 import { uploadImage } from "@/service/uploadService";
+import { getSettings, type SubscriptionBarberRule } from "@/service/settingsService";
+
+const normalizeText = (value: string) => {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+};
 
 type ServiceFilter = "all" | "active" | "inactive" | "covered";
 
@@ -79,6 +88,7 @@ interface ServiceFormState {
   name: string;
   basePrice: string;
   durationMinutes: string;
+  servicePoints: string;
   commissionPercent: string;
   promotionalPrice: string;
   imageUrl: string;
@@ -90,6 +100,7 @@ const emptyForm: ServiceFormState = {
   name: "",
   basePrice: "",
   durationMinutes: "30",
+  servicePoints: "1",
   commissionPercent: "",
   promotionalPrice: "0",
   imageUrl: "",
@@ -132,6 +143,7 @@ function formatCurrency(value?: number | null) {
   }).format(value || 0);
 }
 
+
 function getCommission(service: Service) {
   return service.commissionPercent ?? service.comissionPercent ?? service.commission_percent ?? null;
 }
@@ -141,6 +153,7 @@ function serviceToForm(service: Service): ServiceFormState {
     name: service.name ?? "",
     basePrice: String(service.basePrice ?? ""),
     durationMinutes: String(service.durationMinutes ?? 30),
+    servicePoints: String(service.servicePoints ?? service.service_points ?? 1),
     commissionPercent: getCommission(service) == null ? "" : String(getCommission(service)),
     promotionalPrice: String(service.promotionalPrice ?? 0),
     imageUrl: service.imageUrl ?? "",
@@ -167,15 +180,51 @@ export function ServicesPage() {
   const [serviceToDeactivate, setServiceToDeactivate] = useState<Service | null>(null);
   const [serviceToReactivate, setServiceToReactivate] = useState<Service | null>(null);
   const [form, setForm] = useState<ServiceFormState>(emptyForm);
+  const [subscriptionBarberRule, setSubscriptionBarberRule] = useState<SubscriptionBarberRule>("fixed");
+
+  useEffect(() => {
+    getSettings()
+      .then((s) => setSubscriptionBarberRule(s.subscriptionBarberRule ?? "fixed"))
+      .catch(() => {});
+  }, []);
+
+  const isFreeChoice = subscriptionBarberRule === "free_choice";
+
+  const [mySubscription, setMySubscription] = useState<Subscription | null>(null);
+
+  const isServiceCovered = useCallback(
+    (service: Service) => {
+      if (
+        user?.role === "client" &&
+        mySubscription &&
+        (mySubscription.status === "active" || mySubscription.status === "paused")
+      ) {
+        if (mySubscription.plan?.features) {
+          const normService = normalizeText(service.name || "");
+          const isFeatured = mySubscription.plan.features.some((f: string) => {
+            const normFeature = normalizeText(f);
+            return (
+              normFeature === normService ||
+              normFeature.includes(normService) ||
+              normService.includes(normFeature)
+            );
+          });
+          if (isFeatured) return true;
+        }
+      }
+      return service.covered_by_plan === true;
+    },
+    [user?.role, mySubscription],
+  );
 
   const filteredServices = useMemo(() => {
     return services.filter((service) => {
       if (filter === "active" && !service.active) return false;
       if (filter === "inactive" && service.active) return false;
-      if (filter === "covered" && !service.covered_by_plan) return false;
+      if (filter === "covered" && !isServiceCovered(service)) return false;
       return true;
     });
-  }, [filter, services]);
+  }, [filter, services, isServiceCovered]);
 
   const { selectedRows, toggleRow, toggleAll } = useTableSelection(
     filteredServices.map((service) => service.id),
@@ -184,7 +233,7 @@ export function ServicesPage() {
   const stats = useMemo(() => {
     const active = services.filter((service) => service.active).length;
     const inactive = services.filter((service) => !service.active).length;
-    const covered = services.filter((service) => service.covered_by_plan).length;
+    const covered = services.filter((service) => isServiceCovered(service)).length;
 
     return {
       total: services.length,
@@ -192,25 +241,29 @@ export function ServicesPage() {
       inactive,
       covered,
     };
-  }, [services]);
+  }, [services, isServiceCovered]);
 
   const loadServices = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const result = await listServices({
-        q: search.trim() || undefined,
-        includeInactive: isAdmin ? true : undefined,
-        limit: 100,
-      });
+      const [result, sub] = await Promise.all([
+        listServices({
+          q: search.trim() || undefined,
+          includeInactive: isAdmin ? true : undefined,
+          limit: 100,
+        }),
+        user?.role === "client" ? getMyActiveSubscription().catch(() => null) : Promise.resolve(null),
+      ]);
       setServices(result.items);
+      setMySubscription(sub);
     } catch (err) {
       setError(getApiMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, search]);
+  }, [isAdmin, search, user?.role]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -271,6 +324,7 @@ export function ServicesPage() {
   function validateForm() {
     const basePrice = parseCurrencyInput(form.basePrice);
     const durationMinutes = Number(form.durationMinutes);
+    const servicePoints = Number(form.servicePoints);
     const commissionPercent = form.commissionPercent.trim()
       ? Number(form.commissionPercent)
       : null;
@@ -280,6 +334,9 @@ export function ServicesPage() {
     if (!Number.isFinite(basePrice) || basePrice <= 0) return "Informe um preco maior que zero.";
     if (!Number.isInteger(durationMinutes) || durationMinutes < 1) {
       return "Informe uma duracao valida.";
+    }
+    if (!Number.isInteger(servicePoints) || servicePoints < 1) {
+      return "Informe uma pontuacao valida para o servico.";
     }
     if (
       commissionPercent !== null &&
@@ -311,6 +368,7 @@ export function ServicesPage() {
       name: form.name.trim(),
       basePrice: parseCurrencyInput(form.basePrice),
       durationMinutes: Number(form.durationMinutes),
+      servicePoints: Number(form.servicePoints),
       commissionPercent,
       promotionalPrice: parseCurrencyInput(form.promotionalPrice || "0"),
       covered_by_plan: form.coveredByPlan,
@@ -455,6 +513,11 @@ export function ServicesPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Duracao
                   </th>
+                  {isFreeChoice && (
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Pontos
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Preco
                   </th>
@@ -476,7 +539,7 @@ export function ServicesPage() {
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={isAdmin ? 8 : canManage ? 7 : 5}
+                      colSpan={(isAdmin ? 9 : canManage ? 8 : 6) - (isFreeChoice ? 0 : 1)}
                       className="p-8 text-center text-sm text-muted-foreground"
                     >
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
@@ -486,7 +549,7 @@ export function ServicesPage() {
                 ) : filteredServices.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={isAdmin ? 8 : canManage ? 7 : 5}
+                      colSpan={(isAdmin ? 9 : canManage ? 8 : 6) - (isFreeChoice ? 0 : 1)}
                       className="p-8 text-center text-sm text-muted-foreground"
                     >
                       Nenhum servico encontrado.
@@ -540,6 +603,11 @@ export function ServicesPage() {
                             {service.durationMinutes} min
                           </div>
                         </td>
+                        {isFreeChoice && (
+                          <td className="px-4 py-3 text-sm font-medium text-foreground">
+                            {service.servicePoints ?? service.service_points ?? 1}
+                          </td>
+                        )}
                         <td className="px-4 py-3 text-sm font-medium text-foreground">
                           {formatCurrency(service.basePrice)}
                         </td>
@@ -549,7 +617,7 @@ export function ServicesPage() {
                           </td>
                         ) : null}
                         <td className="px-4 py-3">
-                          {service.covered_by_plan ? (
+                          {isServiceCovered(service) ? (
                             <Badge
                               variant="outline"
                               className="gap-1 border-primary/20 bg-primary/10 text-primary"
@@ -674,6 +742,20 @@ export function ServicesPage() {
                   required
                 />
               </div>
+              {isFreeChoice && (
+                <div className="space-y-2">
+                  <Label htmlFor="service-points">Pontos do servico</Label>
+                  <Input
+                    id="service-points"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={form.servicePoints}
+                    onChange={(event) => setField("servicePoints", event.target.value)}
+                    required
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="service-commission">Comissao (%)</Label>
                 <Input

@@ -390,13 +390,17 @@ export function UsersPage() {
     setEditingBarber(null);
     setForm({ ...emptyForm, password: "123456" });
     setDialogOpen(true);
-    listServices({ limit: 100 }).then((res) => setServices(res.items)).catch(() => {});
+    void listServices({ limit: 100 })
+      .then((res) => setServices(res.items))
+      .catch((err) => toast.error(getApiMessage(err)));
   }
 
   async function openEditDialog(user: UserProfile) {
     setEditingUser(user);
     setDialogOpen(true);
-    listServices({ limit: 100 }).then((res) => setServices(res.items)).catch(() => {});
+    void listServices({ limit: 100 })
+      .then((res) => setServices(res.items))
+      .catch((err) => toast.error(getApiMessage(err)));
 
     if (roleFromUser(user) === "barber") {
       try {
@@ -520,7 +524,7 @@ export function UsersPage() {
           if (editingBarber) {
             await updateBarber(editingBarber.id, barberData);
           } else {
-            await createBarber({ ...barberData, userId: editingUser.id }).catch(() => {});
+            await createBarber({ ...barberData, userId: editingUser.id });
           }
         }
 
@@ -537,7 +541,7 @@ export function UsersPage() {
             commissionPercent: commissionValue,
             serviceIds: form.serviceIds,
             userId: created.id,
-          }).catch(() => {});
+          });
         }
 
         toast.success("Funcionario cadastrado.");

@@ -39,6 +39,8 @@ export interface Appointment {
     unitPrice: number;
     durationMinutes: number;
     quantity: number;
+    servicePoints?: number;
+    service_points?: number;
     totalPrice: number;
     commissionPercent?: number;
     commissionAmount?: number;

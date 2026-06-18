@@ -13,6 +13,7 @@ export interface SubscriptionPlan {
   name: string;
   price: number;
   color?: string | null;
+  features?: string[];
 }
 
 export interface Subscription {

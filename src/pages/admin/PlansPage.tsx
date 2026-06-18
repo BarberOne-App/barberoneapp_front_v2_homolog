@@ -79,8 +79,6 @@ interface PlanFormState {
   color: string;
   cutsPerMonth: string;
   paymentMethod: PlanPaymentMethod;
-  maxBarbers: string;
-  maxReceptionists: string;
   maxAdmins: string;
   active: boolean;
   recommended: boolean;
@@ -94,8 +92,6 @@ const emptyForm: PlanFormState = {
   color: "#6366f1",
   cutsPerMonth: "4",
   paymentMethod: "credito",
-  maxBarbers: "",
-  maxReceptionists: "",
   maxAdmins: "",
   active: true,
   recommended: false,
@@ -169,8 +165,6 @@ function planToForm(plan: Plan): PlanFormState {
     color: plan.color ?? "#6366f1",
     cutsPerMonth: String(plan.cutsPerMonth ?? 4),
     paymentMethod: plan.paymentMethod ?? "credito",
-    maxBarbers: plan.maxBarbers != null ? String(plan.maxBarbers) : "",
-    maxReceptionists: plan.maxReceptionists != null ? String(plan.maxReceptionists) : "",
     maxAdmins: plan.maxAdmins != null ? String(plan.maxAdmins) : "",
     active: plan.active !== false,
     recommended: plan.recommended === true,
@@ -357,8 +351,6 @@ export function PlansPage() {
       color: form.color || null,
       cutsPerMonth: Number(form.cutsPerMonth),
       paymentMethod: form.paymentMethod,
-      maxBarbers: form.maxBarbers !== "" ? Number(form.maxBarbers) : null,
-      maxReceptionists: form.maxReceptionists !== "" ? Number(form.maxReceptionists) : null,
       maxAdmins: form.maxAdmins !== "" ? Number(form.maxAdmins) : null,
       active: form.active,
       recommended: form.recommended,
@@ -933,33 +925,6 @@ export function PlansPage() {
                 <p className="text-xs text-muted-foreground">
                   No cartao de credito, o cliente so consegue assinar pelo checkout seguro e a renovacao e automatica.
                 </p>
-              </div>
-
-              {/* Limites de funcionários */}
-              <div className="space-y-2">
-                <Label htmlFor="plan-barbers">Max. barbeiros (vazio = ilimitado)</Label>
-                <Input
-                  id="plan-barbers"
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={form.maxBarbers}
-                  onChange={(e) => setField("maxBarbers", e.target.value)}
-                  placeholder="Ilimitado"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="plan-receptionists">Max. recepcionistas (vazio = ilimitado)</Label>
-                <Input
-                  id="plan-receptionists"
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={form.maxReceptionists}
-                  onChange={(e) => setField("maxReceptionists", e.target.value)}
-                  placeholder="Ilimitado"
-                />
               </div>
 
               {/* Cor */}

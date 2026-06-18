@@ -3,6 +3,7 @@ import api from "./api";
 export type BookingPaymentMethod = "cartao" | "pix" | "local";
 export type PaymentFrequency = "weekly" | "biweekly" | "monthly";
 export type SubscriptionBarberRule = "fixed" | "free_choice";
+export type CommissionRuleType = "FIXED_BARBER" | "FREE_BARBER";
 
 export interface Settings {
   pixKey: string;
@@ -10,6 +11,10 @@ export interface Settings {
   termsDocumentName: string;
   hiddenBookingPaymentMethods: BookingPaymentMethod[];
   subscriptionBarberRule: SubscriptionBarberRule;
+  commissionRuleType: CommissionRuleType;
+  commission_rule_type?: CommissionRuleType;
+  commissionPoolPercent?: number;
+  commission_pool_percent?: number;
 }
 
 export interface UpdateSettingsPayload {
@@ -18,6 +23,7 @@ export interface UpdateSettingsPayload {
   termsDocumentName?: string;
   hiddenBookingPaymentMethods: BookingPaymentMethod[];
   subscriptionBarberRule?: SubscriptionBarberRule;
+  commissionPoolPercent?: number;
 }
 
 interface HomeInfoSettingsResponse {
@@ -44,6 +50,7 @@ export async function updateSettings(data: UpdateSettingsPayload) {
     termsDocumentName: data.termsDocumentName ?? "",
     hiddenBookingPaymentMethods: data.hiddenBookingPaymentMethods,
     subscriptionBarberRule: data.subscriptionBarberRule ?? "fixed",
+    commissionPoolPercent: data.commissionPoolPercent,
   });
 
   return response.data;
