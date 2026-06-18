@@ -1,4 +1,4 @@
-import { Banknote, CreditCard, Store } from "lucide-react";
+import { Banknote, CreditCard, Store, Scissors } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-export type PaymentChoice = "cartao" | "pix" | "local";
+export type PaymentChoice = "cartao" | "pix" | "local" | "subscription";
 
 export interface AppointmentSummary {
   barberName: string;
@@ -27,6 +27,7 @@ interface PaymentChoiceModalProps {
   canPayCard?: boolean;
   canPayPix?: boolean;
   canPayLocal?: boolean;
+  canPaySubscription?: boolean;
 }
 
 function formatCurrency(value: number) {
@@ -46,7 +47,7 @@ function ChoiceCard({ icon: Icon, title, description, onClick }: ChoiceCardProps
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-5 text-center",
+        "flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-5 text-center w-full",
         "transition-colors hover:border-primary/60 hover:bg-primary/5",
       )}
     >
@@ -69,13 +70,14 @@ export function PaymentChoiceModal({
   canPayCard = true,
   canPayPix = true,
   canPayLocal = true,
+  canPaySubscription = false,
 }: PaymentChoiceModalProps) {
   function handleChoose(method: PaymentChoice) {
     onChoose(method);
     onClose();
   }
 
-  const hasMethod = canPayCard || canPayPix || canPayLocal;
+  const hasMethod = canPayCard || canPayPix || canPayLocal || canPaySubscription;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -108,7 +110,15 @@ export function PaymentChoiceModal({
 
         {/* Opções de pagamento */}
         {hasMethod ? (
-          <div className={cn("grid gap-3 grid-cols-1", canPayCard && canPayPix && canPayLocal ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+            {canPaySubscription && (
+              <ChoiceCard
+                icon={Scissors}
+                title="Assinatura"
+                description="Usar saldo do plano"
+                onClick={() => handleChoose("subscription")}
+              />
+            )}
             {canPayCard && (
               <ChoiceCard
                 icon={CreditCard}

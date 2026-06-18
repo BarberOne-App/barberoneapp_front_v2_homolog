@@ -5,6 +5,8 @@ export interface Service {
   name: string;
   basePrice: number;
   durationMinutes: number;
+  servicePoints?: number;
+  service_points?: number;
   commissionPercent?: number | null;
   comissionPercent?: number | null;
   commission_percent?: number | null;
@@ -22,6 +24,7 @@ export interface ListServicesParams {
   includeInactive?: boolean;
   page?: number;
   limit?: number;
+  barbershopId?: string;
 }
 
 export interface ListServicesResponse {
@@ -35,6 +38,7 @@ export interface ServicePayload {
   name: string;
   basePrice: number;
   durationMinutes: number;
+  servicePoints?: number;
   commissionPercent?: number | null;
   promotionalPrice?: number;
   covered_by_plan?: boolean;

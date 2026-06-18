@@ -6,6 +6,7 @@ import { GalleryPage } from "../pages/admin/GalleryPage";
 import { PlansPage } from "../pages/admin/PlansPage";
 import { ProductsPage } from "../pages/admin/ProductsPage";
 import { PromotionsPage } from "../pages/admin/PromotionsPage";
+import { SubscriptionCommissionPoolPage } from "../pages/admin/SubscriptionCommissionPoolPage";
 import { BookingsPage } from "../pages/shared/BookingsPage";
 import { FitAppointmentPage } from "../pages/shared/FitAppointmentPage";
 import { CustomersPage } from "../pages/shared/CustomersPage";
@@ -66,6 +67,12 @@ export const adminRoutes: AppRoute[] = [
     title: "Clientes",
     breadcrumbs: ["Administracao", "Clientes"],
     Component: CustomersPage,
+  },
+  {
+    path: "/subscription-commissions",
+    title: "Comissoes Plano",
+    breadcrumbs: ["Administracao", "Comissoes Plano"],
+    Component: SubscriptionCommissionPoolPage,
   },
   {
     path: "/extra-payments",

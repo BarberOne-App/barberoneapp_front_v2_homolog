@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 
 import barberOneLogo from "../assets/image/barberOne-logo.png";
 import { AppCalendar } from "../components/AppCalendar";
+import { useAuth } from "../hooks/useAuth";
 import {
   listPublicBarbershops,
   registerClient,
@@ -78,6 +79,7 @@ function formatDateForApi(date: Date) {
 export function Register() {
   const navigate = useNavigate();
   const { slug: slugFromUrl } = useParams<{ slug?: string }>();
+  const { updateUser } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -166,7 +168,7 @@ export function Register() {
       setLoading(true);
       setError("");
 
-      await registerClient({
+      const res = await registerClient({
         slug: finalSlug,
         name: name.trim(),
         email: normalizedEmail,
@@ -175,6 +177,8 @@ export function Register() {
         birthDate: formatDateForApi(birthDate),
         password,
       });
+
+      updateUser(res.user);
 
       navigate("/", { replace: true });
     } catch (err: unknown) {

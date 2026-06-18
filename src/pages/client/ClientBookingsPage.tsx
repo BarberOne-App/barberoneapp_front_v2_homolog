@@ -264,10 +264,11 @@ export function ClientBookingsPage() {
     if (!bookingOpen) return;
     async function load() {
       try {
+        const barbershopId = getStoredBarbershopId();
         const [b, s, profile] = await Promise.all([
-          listBarbers({ page: 1, limit: 100 }),
-          listServices({ includeInactive: false, page: 1, limit: 100 }),
-          getBarbershopProfile(),
+          listBarbers({ page: 1, limit: 100, barbershopId }),
+          listServices({ includeInactive: false, page: 1, limit: 100, barbershopId }),
+          getBarbershopProfile(barbershopId),
         ]);
         setBarbers(b.items);
         setServices(s.items.filter((sv) => sv.active));
@@ -294,6 +295,25 @@ export function ClientBookingsPage() {
   const lockedBarberId =
     isFixedRule && hasActiveSubscription ? (mySubscription?.monthlyBarberId ?? null) : null;
   const hasLockedBarber = Boolean(lockedBarberId);
+
+  const isServiceCoveredByPlan = useCallback(
+    (s: Service) => {
+      if (!hasActiveSubscription || !mySubscription?.plan?.features) {
+        return s.covered_by_plan === true;
+      }
+      const normServiceName = normalizeText(s.name || "");
+      const isFeatured = mySubscription.plan.features.some((feature: string) => {
+        const normFeature = normalizeText(feature);
+        return (
+          normFeature === normServiceName ||
+          normFeature.includes(normServiceName) ||
+          normServiceName.includes(normFeature)
+        );
+      });
+      return isFeatured || s.covered_by_plan === true;
+    },
+    [hasActiveSubscription, mySubscription],
+  );
 
   useEffect(() => {
     if (!bookingOpen || !form.barberId || !form.date || totalDuration <= 0) { setSlots([]); return; }
@@ -407,6 +427,58 @@ export function ClientBookingsPage() {
     }
   }
 
+  // Escolheu "subscription" → cria agendamento com pagamento via assinatura
+  async function handleSubscriptionPayment() {
+    if (!user?.id) return;
+    setSavingLocal(true);
+    try {
+      const appt = await createAppointment({
+        clientId: user.id,
+        barberId: form.barberId,
+        date: form.date,
+        time: form.time,
+        notes: form.notes.trim() || null,
+        services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
+        products: [],
+      });
+
+      try {
+        await createAppointmentPayment({
+          appointmentId: appt.id,
+          userId: user.id,
+          amount: totalPrice,
+          method: "subscription",
+          status: "covered",
+        });
+      } catch {
+        // ignore duplicate upsert errors
+      }
+
+      setWhatsAppData({
+        clientName: user?.name ?? "",
+        barbershopName: barbershopProfile?.name || "Barbearia",
+        barberName: barbers.find((b) => b.id === form.barberId)?.displayName ?? "",
+        date: formatDateBR(form.date),
+        time: form.time,
+        services: selectedServices.map((s) => s.name),
+        total: 0, // 0 custo extra
+        notes: form.notes?.trim(),
+      });
+      setBookingOpen(false);
+      setForm({ ...emptyForm, date: dateToDateString(new Date()) });
+      await loadAppointments();
+    } catch (err) {
+      if (isConflictError(err)) {
+        toast.error("Voce ja possui um agendamento neste horario. Confira seus agendamentos abaixo.");
+        await loadAppointments();
+      } else {
+        toast.error(getApiMessage(err));
+      }
+    } finally {
+      setSavingLocal(false);
+    }
+  }
+
   // Escolheu cartão ou PIX → cria agendamento + payment record "pending" → abre PaymentModal
   async function handleOnlinePayment(method: "cartao" | "pix") {
     if (!user?.id) return;
@@ -467,10 +539,12 @@ export function ClientBookingsPage() {
 
   // Roteamento de escolha do método
   async function handlePaymentChoice(method: PaymentChoice) {
-    if (method === "local") {
+    if (method === "subscription") {
+      await handleSubscriptionPayment();
+    } else if (method === "local") {
       await handleLocalPayment();
     } else {
-      await handleOnlinePayment(method);
+      await handleOnlinePayment(method as "cartao" | "pix");
     }
   }
 
@@ -758,9 +832,10 @@ export function ClientBookingsPage() {
         onClose={() => setChoiceOpen(false)}
         onChoose={handlePaymentChoice}
         summary={choiceSummary}
-        canPayCard
-        canPayPix
-        canPayLocal
+        canPayCard={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscription)}
+        canPayPix={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscription)}
+        canPayLocal={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscription)}
+        canPaySubscription={hasActiveSubscription && selectedServices.every((s) => isServiceCoveredByPlan(s))}
       />
 
       {/* Loading — processando agendamento */}

@@ -22,8 +22,10 @@ export interface UpdateBarbershopProfilePayload {
   logoUrl?: string;
 }
 
-export async function getBarbershopProfile() {
-  const response = await api.get<BarbershopProfile>("/barbershop/profile");
+export async function getBarbershopProfile(barbershopId?: string) {
+  const response = await api.get<BarbershopProfile>("/barbershop/profile", {
+    params: barbershopId ? { barbershopId } : undefined,
+  });
   return response.data;
 }
 

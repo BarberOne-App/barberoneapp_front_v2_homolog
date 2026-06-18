@@ -23,6 +23,7 @@ export class TrialExpiredError extends Error {
 export interface LoginPayload {
   email: string;
   password: string;
+  barbershopId?: string;
 }
 
 export interface RegisterPayload {

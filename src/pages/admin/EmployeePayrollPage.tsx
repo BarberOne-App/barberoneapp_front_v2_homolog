@@ -760,6 +760,28 @@ export function EmployeePayrollPage() {
                   <span className="text-muted-foreground">Comissoes</span>
                   <span>{formatCurrency(selectedRow?.commission ?? 0)}</span>
                 </div>
+                {(selectedRow?.subscriptionPoolCommission ?? 0) > 0 ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Pote de assinaturas</span>
+                      <span>{formatCurrency(selectedRow?.subscriptionPoolCommission ?? 0)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Participacao</span>
+                      <span>
+                        {(selectedRow?.subscriptionParticipationPercent ?? 0).toFixed(2)}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Atendimentos de plano</span>
+                      <span>{selectedRow?.subscriptionAppointmentsCount ?? 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Pontos de plano</span>
+                      <span>{selectedRow?.subscriptionPoints ?? 0}</span>
+                    </div>
+                  </>
+                ) : null}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Vales/descontos</span>
                   <span>{formatCurrency(selectedRow?.totalVales ?? 0)}</span>

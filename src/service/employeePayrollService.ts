@@ -1,6 +1,30 @@
 import api from "./api";
 
 export type EmployeePaymentStatus = "pending" | "partial" | "paid" | "empty";
+export type CommissionRuleType = "FIXED_BARBER" | "FREE_BARBER";
+
+export interface SubscriptionCommissionDistribution {
+  employeeId: string;
+  barberId?: string | null;
+  barberName?: string | null;
+  appointments: number;
+  points: number;
+  participationPercent: number;
+  commissionAmount: number;
+  revenue: number;
+}
+
+export interface SubscriptionCommissionPool {
+  ruleType: CommissionRuleType;
+  revenue: number;
+  commissionPool: number;
+  totalAppointments: number;
+  totalPoints?: number;
+  status?: "open" | "closed";
+  closedAt?: string | null;
+  closedBy?: string | null;
+  distributions: SubscriptionCommissionDistribution[];
+}
 
 export interface EmployeeVale {
   id: string;
@@ -60,6 +84,12 @@ export interface EmployeePayrollRow {
   paymentId?: string | null;
   appointmentsCount: number;
   servicesCount: number;
+  regularCommission?: number;
+  subscriptionPoolCommission?: number;
+  subscriptionRevenue?: number;
+  subscriptionAppointmentsCount?: number;
+  subscriptionPoints?: number;
+  subscriptionParticipationPercent?: number;
   totalRevenue: number;
   barbershopShare: number;
   extraPago: number;
@@ -72,6 +102,8 @@ export interface EmployeePayrollRow {
 export interface PayrollSummaryResponse {
   periodStart: string;
   periodEnd: string;
+  commissionRuleType?: CommissionRuleType;
+  subscriptionCommissionPool?: SubscriptionCommissionPool;
   totals: {
     employees: number;
     grossAmount: number;
