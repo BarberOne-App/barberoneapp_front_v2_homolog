@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+
 import {
   Dialog,
   DialogContent,
@@ -53,7 +54,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useTableSelection } from "@/hooks/useTableSelection";
+
 import { useAuth } from "@/hooks/useAuth";
 import {
   createPlan,
@@ -212,9 +213,7 @@ export function PlansPage() {
     });
   }, [filter, plans]);
 
-  const { selectedRows, toggleRow, toggleAll } = useTableSelection(
-    filteredPlans.map((p) => p.id),
-  );
+
 
   const stats = useMemo(() => {
     const active = plans.filter((p) => p.active).length;
