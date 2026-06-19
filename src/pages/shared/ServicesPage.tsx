@@ -188,7 +188,7 @@ export function ServicesPage() {
       .catch(() => {});
   }, []);
 
-  const isFreeChoice = subscriptionBarberRule === "free_choice";
+  const isFreeChoice = subscriptionBarberRule === "free_choice" && user?.role !== "client";
 
   const [mySubscription, setMySubscription] = useState<Subscription | null>(null);
 

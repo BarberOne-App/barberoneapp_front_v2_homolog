@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { CircleUserRound, Save, Upload, X } from 'lucide-react';
+import { useRef, useState, useEffect } from 'react';
+import { CircleUserRound, Save, Upload, X, Plus, Edit2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,13 @@ import {
   updateProfilePhoto,
   updateUser,
 } from '@/service/userService';
+import {
+  createDependent,
+  deleteDependent,
+  listDependents,
+  updateDependent,
+  type Dependent,
+} from '@/service/dependentService';
 
 function formatPhone(value: string) {
   const d = value.replace(/\D/g, '').slice(0, 11);
@@ -68,6 +75,130 @@ export function ClientSettingsPage() {
     confirmPassword: '',
   });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // Dependents state
+  const [dependents, setDependents] = useState<Dependent[]>([]);
+  const [showDependentForm, setShowDependentForm] = useState(false);
+  const [editingDependent, setEditingDependent] = useState<Dependent | null>(null);
+  const [dependentForm, setDependentForm] = useState({ name: '', age: '', cpf: '' });
+  const [isSavingDependent, setIsSavingDependent] = useState(false);
+  const [isDeletingDependentId, setIsDeletingDependentId] = useState<string | null>(null);
+  const [isLoadingDependents, setIsLoadingDependents] = useState(false);
+
+  useEffect(() => {
+    if (user?.id) {
+      void loadDependents(user.id);
+    }
+  }, [user?.id]);
+
+  async function loadDependents(userId: string) {
+    setIsLoadingDependents(true);
+    try {
+      const data = await listDependents(userId);
+      setDependents(data);
+    } catch (error) {
+      console.error("Erro ao carregar dependentes:", error);
+    } finally {
+      setIsLoadingDependents(false);
+    }
+  }
+
+  function validateCPF(cpf: string) {
+    const digits = cpf.replace(/[^0-9]/g, '');
+    if (digits.length !== 11) return false;
+    if (/^(.)\1{10}$/.test(digits)) return false;
+    let sum = 0;
+    for (let i = 0; i < 9; i++) sum += parseInt(digits[i]) * (10 - i);
+    let remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) remainder = 0;
+    if (remainder !== parseInt(digits[9])) return false;
+    sum = 0;
+    for (let i = 0; i < 10; i++) sum += parseInt(digits[i]) * (11 - i);
+    remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) remainder = 0;
+    return remainder === parseInt(digits[10]);
+  }
+
+  async function handleSaveDependent() {
+    if (!dependentForm.name.trim() || !dependentForm.age || !dependentForm.cpf) {
+      toast.error('Preencha nome, idade e CPF.');
+      return;
+    }
+
+    if (!validateCPF(dependentForm.cpf)) {
+      toast.error('CPF inválido. Verifique os números digitados.');
+      return;
+    }
+
+    if (!user?.id) return;
+
+    setIsSavingDependent(true);
+    try {
+      const cpfDigits = dependentForm.cpf.replace(/[^0-9]/g, '');
+
+      // Check if CPF already exists in this client's dependents list locally
+      const cpfExistsInLocalDependents = dependents.some((d) => {
+        const isSelf = editingDependent && d.id === editingDependent.id;
+        return !isSelf && d.cpf.replace(/[^0-9]/g, '') === cpfDigits;
+      });
+      if (cpfExistsInLocalDependents) {
+        toast.error('Este CPF já está cadastrado em sua lista de dependentes.');
+        return;
+      }
+
+      if (editingDependent) {
+        await updateDependent(editingDependent.id, {
+          name: dependentForm.name.trim(),
+          age: Number(dependentForm.age),
+          cpf: cpfDigits,
+        });
+        toast.success('Dependente atualizado!');
+      } else {
+        await createDependent({
+          name: dependentForm.name.trim(),
+          age: Number(dependentForm.age),
+          cpf: cpfDigits,
+          parentId: user.id,
+          parentName: user.name,
+        });
+        toast.success('Dependente adicionado!');
+      }
+      await loadDependents(user.id);
+      setShowDependentForm(false);
+      setEditingDependent(null);
+      setDependentForm({ name: '', age: '', cpf: '' });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error) || 'Erro ao salvar dependente.');
+    } finally {
+      setIsSavingDependent(false);
+    }
+  }
+
+  async function handleDeleteDependent(depId: string) {
+    if (!user?.id) return;
+    setIsDeletingDependentId(depId);
+    try {
+      await deleteDependent(depId);
+      await loadDependents(user.id);
+      toast.success('Dependente removido.');
+    } catch (error) {
+      toast.error('Erro ao remover dependente.');
+    } finally {
+      setIsDeletingDependentId(null);
+    }
+  }
+
+  function handleOpenNewDependent() {
+    setEditingDependent(null);
+    setDependentForm({ name: '', age: '', cpf: '' });
+    setShowDependentForm(true);
+  }
+
+  function handleOpenEditDependent(dep: Dependent) {
+    setEditingDependent(dep);
+    setDependentForm({ name: dep.name, age: String(dep.age), cpf: formatCPF(dep.cpf) });
+    setShowDependentForm(true);
+  }
 
   async function handlePhotoUpload(file: File) {
     if (!user?.id) return;
@@ -284,6 +415,156 @@ export function ClientSettingsPage() {
             {isSavingProfile ? 'Salvando...' : 'Salvar informações'}
           </Button>
         </div>
+      </div>
+
+      {/* Dependentes */}
+      <div className="bg-card rounded-xl border border-border p-6">
+        <div className="flex items-center justify-between mb-4 border-b border-border pb-4">
+          <div>
+            <h3 className="text-lg font-medium text-foreground">Dependentes</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Cadastre até 5 dependentes menores de idade para realizar agendamentos em nome deles.
+            </p>
+          </div>
+          {!showDependentForm && dependents.length < 5 && (
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={handleOpenNewDependent}
+            >
+              <Plus size={14} />
+              Adicionar
+            </Button>
+          )}
+        </div>
+
+        {/* List of dependents */}
+        {!showDependentForm && (
+          <div className="space-y-4">
+            {isLoadingDependents ? (
+              <div className="flex justify-center py-4">
+                <Spinner />
+              </div>
+            ) : dependents.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">
+                Nenhum dependente cadastrado.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {dependents.map((dep) => (
+                  <div
+                    key={dep.id}
+                    className="flex items-center justify-between p-4 rounded-lg bg-secondary/30 border border-border"
+                  >
+                    <div>
+                      <h4 className="text-sm font-medium text-foreground">{dep.name}</h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Idade: {dep.age} anos | CPF: {formatCPF(dep.cpf)}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleOpenEditDependent(dep)}
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      >
+                        <Edit2 size={14} />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => void handleDeleteDependent(dep.id)}
+                        disabled={isDeletingDependentId === dep.id}
+                        className="h-8 w-8 text-destructive hover:text-destructive/80 hover:bg-destructive/10"
+                      >
+                        {isDeletingDependentId === dep.id ? <Spinner /> : <Trash2 size={14} />}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {dependents.length >= 5 && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Você atingiu o limite máximo de 5 dependentes.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Dependent Form */}
+        {showDependentForm && (
+          <div className="space-y-4 bg-secondary/20 p-4 rounded-lg border border-border mt-2">
+            <h4 className="text-sm font-medium text-foreground">
+              {editingDependent ? 'Editar Dependente' : 'Novo Dependente'}
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-foreground">Nome completo</label>
+                <input
+                  type="text"
+                  value={dependentForm.name}
+                  onChange={(e) =>
+                    setDependentForm((f) => ({ ...f, name: e.target.value }))
+                  }
+                  placeholder="Nome do dependente"
+                  className="w-full bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-foreground">Idade</label>
+                <input
+                  type="text"
+                  value={dependentForm.age}
+                  onChange={(e) =>
+                    setDependentForm((f) => ({ ...f, age: e.target.value.replace(/\D/g, '').slice(0, 3) }))
+                  }
+                  placeholder="Idade"
+                  maxLength={3}
+                  className="w-full bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-foreground">CPF</label>
+                <input
+                  type="text"
+                  value={dependentForm.cpf}
+                  onChange={(e) =>
+                    setDependentForm((f) => ({ ...f, cpf: formatCPF(e.target.value) }))
+                  }
+                  placeholder="000.000.000-00"
+                  className="w-full bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowDependentForm(false);
+                  setEditingDependent(null);
+                }}
+                disabled={isSavingDependent}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void handleSaveDependent()}
+                disabled={isSavingDependent}
+                className="gap-2"
+              >
+                {isSavingDependent && <Spinner />}
+                Salvar
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Alterar Senha */}

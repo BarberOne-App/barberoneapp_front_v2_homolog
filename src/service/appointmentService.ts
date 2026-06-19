@@ -82,6 +82,7 @@ export interface ListAppointmentsResponse {
 export interface CreateAppointmentPayload {
   barberId: string;
   clientId: string;
+  dependentId?: string | null;
   date: string;
   time: string;
   notes?: string | null;
