@@ -431,17 +431,7 @@ export function ProductsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  {canManage ? (
-                    <th className="w-10 p-4">
-                      <Checkbox
-                        checked={
-                          selectedRows.length === filteredProducts.length &&
-                          filteredProducts.length > 0
-                        }
-                        onCheckedChange={toggleAll}
-                      />
-                    </th>
-                  ) : null}
+
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Produto
                   </th>
@@ -466,14 +456,14 @@ export function ProductsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                       Carregando produtos...
                     </td>
                   </tr>
                 ) : filteredProducts.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
                       Nenhum produto encontrado.
                     </td>
                   </tr>
@@ -489,12 +479,7 @@ export function ProductsPage() {
                         key={product.id}
                         className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
                       >
-                        <td className="p-4">
-                          <Checkbox
-                            checked={selectedRows.includes(product.id)}
-                            onCheckedChange={() => toggleRow(product.id)}
-                          />
-                        </td>
+
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-secondary">

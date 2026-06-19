@@ -84,12 +84,7 @@ export function StaffPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                <th className="w-10 p-4">
-                  <Checkbox 
-                    checked={selectedRows.length === staffMembers.length && staffMembers.length > 0}
-                    onCheckedChange={toggleAll}
-                  />
-                </th>
+
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Funcionário</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Contato</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Avaliação</th>
@@ -105,12 +100,7 @@ export function StaffPage() {
                   key={staff.id} 
                   className="border-b border-border last:border-b-0 hover:bg-secondary/30 transition-colors"
                 >
-                  <td className="p-4">
-                    <Checkbox 
-                      checked={selectedRows.includes(staff.id)}
-                      onCheckedChange={() => toggleRow(staff.id)}
-                    />
-                  </td>
+
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <Avatar className="w-10 h-10">
