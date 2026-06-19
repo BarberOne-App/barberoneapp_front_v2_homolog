@@ -3,7 +3,7 @@ import areschatIcon from '../assets/iconeAresChat.png';
 export function AresChatButton() {
   return (
     <a
-      href="https://rodrigues.areschat.com.br"
+      href="https://adtech.areschat.com.br/"
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Suporte via AresChat"
