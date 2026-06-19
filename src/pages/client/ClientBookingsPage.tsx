@@ -12,7 +12,10 @@ import {
   Scissors,
   XCircle,
   Zap,
+  User as UserIcon,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { listDependents, type Dependent } from "@/service/dependentService";
 import { toast } from "sonner";
 
 import { AppCalendar } from "@/components/AppCalendar";
@@ -200,6 +203,8 @@ export function ClientBookingsPage() {
   // Passo 1 — formulário
   const [bookingOpen, setBookingOpen] = useState(false);
   const [form, setForm] = useState<BookingFormState>(emptyForm);
+  const [userDependents, setUserDependents] = useState<Dependent[]>([]);
+  const [bookingForDependent, setBookingForDependent] = useState<Dependent | null>(null);
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [slots, setSlots] = useState<string[]>([]);
@@ -281,9 +286,18 @@ export function ClientBookingsPage() {
       } catch {
         // fallback para "fixed" se o endpoint não estiver acessível para o usuário
       }
+
+      if (user?.id) {
+        try {
+          const deps = await listDependents(user.id);
+          setUserDependents(deps);
+        } catch {
+          setUserDependents([]);
+        }
+      }
     }
     void load();
-  }, [bookingOpen]);
+  }, [bookingOpen, user?.id]);
 
   const selectedServices = useMemo(() => services.filter((s) => form.serviceIds.includes(s.id)), [form.serviceIds, services]);
   const totalDuration = useMemo(() => selectedServices.reduce((sum, s) => sum + getServiceDuration(s), 0), [selectedServices]);
@@ -381,6 +395,7 @@ export function ClientBookingsPage() {
     try {
       const appt = await createAppointment({
         clientId: user.id,
+        dependentId: bookingForDependent?.id || null,
         barberId: form.barberId,
         date: form.date,
         time: form.time,
@@ -403,7 +418,7 @@ export function ClientBookingsPage() {
       }
 
       setWhatsAppData({
-        clientName: user?.name ?? "",
+        clientName: bookingForDependent ? `${bookingForDependent.name} (Dependente de ${user?.name})` : (user?.name ?? ""),
         barbershopName: barbershopProfile?.name || "Barbearia",
         barberName: barbers.find((b) => b.id === form.barberId)?.displayName ?? "",
         date: formatDateBR(form.date),
@@ -413,6 +428,7 @@ export function ClientBookingsPage() {
         notes: form.notes?.trim(),
       });
       setBookingOpen(false);
+      setBookingForDependent(null);
       setForm({ ...emptyForm, date: dateToDateString(new Date()) });
       await loadAppointments();
     } catch (err) {
@@ -434,6 +450,7 @@ export function ClientBookingsPage() {
     try {
       const appt = await createAppointment({
         clientId: user.id,
+        dependentId: bookingForDependent?.id || null,
         barberId: form.barberId,
         date: form.date,
         time: form.time,
@@ -455,7 +472,7 @@ export function ClientBookingsPage() {
       }
 
       setWhatsAppData({
-        clientName: user?.name ?? "",
+        clientName: bookingForDependent ? `${bookingForDependent.name} (Dependente de ${user?.name})` : (user?.name ?? ""),
         barbershopName: barbershopProfile?.name || "Barbearia",
         barberName: barbers.find((b) => b.id === form.barberId)?.displayName ?? "",
         date: formatDateBR(form.date),
@@ -465,6 +482,7 @@ export function ClientBookingsPage() {
         notes: form.notes?.trim(),
       });
       setBookingOpen(false);
+      setBookingForDependent(null);
       setForm({ ...emptyForm, date: dateToDateString(new Date()) });
       await loadAppointments();
     } catch (err) {
@@ -486,6 +504,7 @@ export function ClientBookingsPage() {
     try {
       const appt = await createAppointment({
         clientId: user.id,
+        dependentId: bookingForDependent?.id || null,
         barberId: form.barberId,
         date: form.date,
         time: form.time,
@@ -507,7 +526,7 @@ export function ClientBookingsPage() {
       } catch {
         // Se falhar o registro de pagamento, confirma como agendamento sem pagamento online
         setWhatsAppData({
-          clientName: user?.name ?? "",
+          clientName: bookingForDependent ? `${bookingForDependent.name} (Dependente de ${user?.name})` : (user?.name ?? ""),
           barbershopName: barbershopProfile?.name || "Barbearia",
           barberName: barbers.find((b) => b.id === form.barberId)?.displayName ?? "",
           date: formatDateBR(form.date),
@@ -517,6 +536,7 @@ export function ClientBookingsPage() {
           notes: form.notes?.trim(),
         });
         setBookingOpen(false);
+        setBookingForDependent(null);
         setForm({ ...emptyForm, date: dateToDateString(new Date()) });
         await loadAppointments();
         return;
@@ -673,9 +693,17 @@ export function ClientBookingsPage() {
                     return (
                       <tr key={appt.id} className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30">
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-2 text-sm text-foreground">
-                            <Scissors size={14} className="text-muted-foreground" />
-                            <span className="max-w-56 truncate">{serviceText}</span>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 text-sm text-foreground">
+                              <Scissors size={14} className="text-muted-foreground" />
+                              <span className="max-w-56 truncate">{serviceText}</span>
+                            </div>
+                            {appt.dependent && (
+                              <div className="flex items-center gap-1.5 text-xs text-primary font-medium">
+                                <UserIcon size={12} className="text-primary" />
+                                <span className="truncate max-w-[200px]">Atendimento para: {appt.dependent.name}</span>
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -734,7 +762,7 @@ export function ClientBookingsPage() {
       </div>
 
       {/* Passo 1 — Formulário */}
-      <Dialog open={bookingOpen} onOpenChange={(open) => { if (!open && !savingLocal) setBookingOpen(false); }}>
+      <Dialog open={bookingOpen} onOpenChange={(open) => { if (!open && !savingLocal) { setBookingOpen(false); setBookingForDependent(null); } }}>
         <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-2xl">
           <form onSubmit={handleBookingSubmit} className="flex min-h-0 flex-1 flex-col gap-5">
             <DialogHeader className="flex-shrink-0">
@@ -743,6 +771,42 @@ export function ClientBookingsPage() {
             </DialogHeader>
 
             <div className="grid flex-1 gap-4 overflow-y-auto md:grid-cols-2">
+              {/* Para quem é o agendamento? */}
+              {userDependents.length > 0 && (
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Para quem é o agendamento?</Label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBookingForDependent(null)}
+                      className={cn(
+                        "flex-1 min-w-[140px] px-4 py-2 text-sm font-medium rounded-lg border transition-all text-center",
+                        !bookingForDependent
+                           ? "bg-primary/10 border-primary text-primary"
+                           : "bg-secondary/40 border-border text-foreground hover:bg-secondary"
+                      )}
+                    >
+                      Para mim ({user?.name})
+                    </button>
+                    {userDependents.map((dep) => (
+                      <button
+                        key={dep.id}
+                        type="button"
+                        onClick={() => setBookingForDependent(dep)}
+                        className={cn(
+                          "flex-1 min-w-[140px] px-4 py-2 text-sm font-medium rounded-lg border transition-all text-center truncate",
+                          bookingForDependent?.id === dep.id
+                            ? "bg-primary/10 border-primary text-primary"
+                            : "bg-secondary/40 border-border text-foreground hover:bg-secondary"
+                        )}
+                      >
+                        {dep.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>Barbeiro</Label>
                 <Select
