@@ -379,7 +379,7 @@ export function CustomersPage() {
   function openSubscriptionDialog(customer: UserProfile) {
     setSubDialogCustomer(customer);
     setSubForm({ planId: "", paymentMethod: "credito", amount: "" });
-    listPlans({ active: true })
+    listPlans({ activeOnly: true } as any)
       .then(setAvailablePlans)
       .catch(() => setAvailablePlans([]));
   }
@@ -388,7 +388,7 @@ export function CustomersPage() {
     e.preventDefault();
     if (!subDialogCustomer || !subForm.planId) return;
     const selectedPlan = availablePlans.find((plan) => plan.id === subForm.planId);
-    if (selectedPlan?.paymentMethod === "credito") {
+    if (subForm.paymentMethod === "credito") {
       toast.error("Planos no cartao devem ser assinados pelo cliente no checkout seguro.");
       return;
     }
@@ -1055,7 +1055,7 @@ export function CustomersPage() {
               <div className="space-y-2">
                 <Label>Plano</Label>
                 <Select
-                  value={subForm.planId}
+                  value={subForm.planId || undefined}
                   onValueChange={(val) => {
                     const plan = availablePlans.find((p) => p.id === val);
                     setSubForm((f) => ({
@@ -1098,7 +1098,7 @@ export function CustomersPage() {
                 <Label>Forma de pagamento</Label>
                 <Select
                   value={subForm.paymentMethod}
-                  disabled
+                  onValueChange={(val: any) => setSubForm(f => ({ ...f, paymentMethod: val }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
