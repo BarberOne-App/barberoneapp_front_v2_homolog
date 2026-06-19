@@ -30,7 +30,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+
 import { AppCalendar } from "@/components/AppCalendar";
 import {
   Dialog,
@@ -60,7 +60,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useTableSelection } from "@/hooks/useTableSelection";
+
 import {
   createUser,
   deleteUser,
@@ -445,9 +445,7 @@ export function CustomersPage() {
     return { active, newCustomers, withPhone, birthdayToday };
   }, [customers]);
 
-  const { selectedRows, toggleRow, toggleAll } = useTableSelection(
-    filteredCustomers.map((customer) => customer.id),
-  );
+
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 

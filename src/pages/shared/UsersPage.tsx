@@ -30,6 +30,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+
 import {
   Dialog,
   DialogContent,
@@ -57,7 +58,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useTableSelection } from "@/hooks/useTableSelection";
+
 import { uploadProfilePhoto } from "@/service/uploadService";
 import {
   createUser,
@@ -372,9 +373,7 @@ export function UsersPage() {
     return { admins, barbers, receptionists };
   }, [users]);
 
-  const { selectedRows, toggleRow, toggleAll } = useTableSelection(
-    users.map((user) => user.id),
-  );
+
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 

@@ -41,6 +41,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+
 import {
   Dialog,
   DialogContent,
@@ -62,7 +63,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useTableSelection } from "@/hooks/useTableSelection";
+
 import {
   createService,
   deleteService,
@@ -226,9 +227,7 @@ export function ServicesPage() {
     });
   }, [filter, services, isServiceCovered]);
 
-  const { selectedRows, toggleRow, toggleAll } = useTableSelection(
-    filteredServices.map((service) => service.id),
-  );
+
 
   const stats = useMemo(() => {
     const active = services.filter((service) => service.active).length;

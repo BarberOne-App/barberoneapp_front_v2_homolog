@@ -37,6 +37,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+
 import {
   Dialog,
   DialogContent,
@@ -56,7 +57,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useTableSelection } from "@/hooks/useTableSelection";
+
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
@@ -188,9 +189,7 @@ export function ProductsPage() {
     });
   }, [filter, products]);
 
-  const { selectedRows, toggleRow, toggleAll } = useTableSelection(
-    filteredProducts.map((product) => product.id),
-  );
+
 
   const stats = useMemo(() => {
     const active = products.filter((product) => product.active).length;
