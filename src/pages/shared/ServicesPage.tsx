@@ -496,17 +496,7 @@ export function ServicesPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  {canManage ? (
-                    <th className="w-10 p-4">
-                      <Checkbox
-                        checked={
-                          selectedRows.length === filteredServices.length &&
-                          filteredServices.length > 0
-                        }
-                        onCheckedChange={toggleAll}
-                      />
-                    </th>
-                  ) : null}
+
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Servico
                   </th>
@@ -539,7 +529,7 @@ export function ServicesPage() {
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={(isAdmin ? 9 : canManage ? 8 : 6) - (isFreeChoice ? 0 : 1)}
+                      colSpan={(isAdmin ? 8 : canManage ? 7 : 6) - (isFreeChoice ? 0 : 1)}
                       className="p-8 text-center text-sm text-muted-foreground"
                     >
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
@@ -549,7 +539,7 @@ export function ServicesPage() {
                 ) : filteredServices.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={(isAdmin ? 9 : canManage ? 8 : 6) - (isFreeChoice ? 0 : 1)}
+                      colSpan={(isAdmin ? 8 : canManage ? 7 : 6) - (isFreeChoice ? 0 : 1)}
                       className="p-8 text-center text-sm text-muted-foreground"
                     >
                       Nenhum servico encontrado.
@@ -564,14 +554,7 @@ export function ServicesPage() {
                         key={service.id}
                         className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
                       >
-                        {canManage ? (
-                          <td className="p-4">
-                            <Checkbox
-                              checked={selectedRows.includes(service.id)}
-                              onCheckedChange={() => toggleRow(service.id)}
-                            />
-                          </td>
-                        ) : null}
+
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-secondary">

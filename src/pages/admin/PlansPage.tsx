@@ -484,15 +484,7 @@ export function PlansPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="w-10 p-4">
-                    <Checkbox
-                      checked={
-                        selectedRows.length === filteredPlans.length &&
-                        filteredPlans.length > 0
-                      }
-                      onCheckedChange={toggleAll}
-                    />
-                  </th>
+
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Plano
                   </th>
@@ -514,14 +506,14 @@ export function PlansPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                       Carregando planos...
                     </td>
                   </tr>
                 ) : filteredPlans.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">
                       Nenhum plano encontrado.
                     </td>
                   </tr>
@@ -531,12 +523,7 @@ export function PlansPage() {
                       key={plan.id}
                       className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
                     >
-                      <td className="p-4">
-                        <Checkbox
-                          checked={selectedRows.includes(plan.id)}
-                          onCheckedChange={() => toggleRow(plan.id)}
-                        />
-                      </td>
+
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div
@@ -732,14 +719,14 @@ export function PlansPage() {
             <tbody>
               {loadingSubscriptions ? (
                 <tr>
-                  <td colSpan={isAdmin ? 6 : 5} className="p-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={isAdmin ? 5 : 4} className="p-8 text-center text-sm text-muted-foreground">
                     <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                     Carregando assinaturas...
                   </td>
                 </tr>
               ) : subscriptions.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 6 : 5} className="p-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={isAdmin ? 5 : 4} className="p-8 text-center text-sm text-muted-foreground">
                     Nenhuma assinatura encontrada.
                   </td>
                 </tr>
