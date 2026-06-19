@@ -388,7 +388,7 @@ export function CustomersPage() {
     e.preventDefault();
     if (!subDialogCustomer || !subForm.planId) return;
     const selectedPlan = availablePlans.find((plan) => plan.id === subForm.planId);
-    if (subForm.paymentMethod === "credito") {
+    if (selectedPlan?.paymentMethod === "credito") {
       toast.error("Planos no cartao devem ser assinados pelo cliente no checkout seguro.");
       return;
     }
@@ -1098,7 +1098,7 @@ export function CustomersPage() {
                 <Label>Forma de pagamento</Label>
                 <Select
                   value={subForm.paymentMethod}
-                  onValueChange={(val: any) => setSubForm(f => ({ ...f, paymentMethod: val }))}
+                  disabled
                 >
                   <SelectTrigger>
                     <SelectValue />
