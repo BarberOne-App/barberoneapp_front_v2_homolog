@@ -387,7 +387,7 @@ export function CustomersPage() {
   async function handleCreateSubscription(e: FormEvent) {
     e.preventDefault();
     if (!subDialogCustomer || !subForm.planId) return;
-    const selectedPlan = availablePlans.find((plan) => plan.id === subForm.planId);
+    // const selectedPlan = availablePlans.find((plan) => plan.id === subForm.planId);
     if (subForm.paymentMethod === "credito") {
       toast.error("Planos no cartao devem ser assinados pelo cliente no checkout seguro.");
       return;
