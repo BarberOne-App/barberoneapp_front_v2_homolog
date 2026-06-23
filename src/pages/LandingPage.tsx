@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { PasswordInput } from '@/components/PasswordInput';
 import {
   ArrowRight, BadgeCheck, CalendarCheck, CheckCircle2, ClipboardCheck,
   Clock, CreditCard, Lock, Menu, MessageCircle, Scissors,
@@ -395,11 +396,11 @@ function RegisterModal({ plan, onClose, onRegistered }: {
               <div className="grid grid-cols-2 gap-3">
                 <label className="block text-neutral-400 text-sm">
                   Senha *
-                  <input type="password" className={inputClass} value={form.password} onChange={(e) => set("password", e.target.value)} placeholder="Mínimo 4 caracteres" required disabled={submitting} />
+                  <PasswordInput className={inputClass} value={form.password} onChange={(e) => set("password", e.target.value)} placeholder="Mínimo 4 caracteres" required disabled={submitting} />
                 </label>
                 <label className="block text-neutral-400 text-sm">
                   Confirmar senha *
-                  <input type="password" className={inputClass} value={form.confirmPassword} onChange={(e) => set("confirmPassword", e.target.value)} placeholder="Repita sua senha" required disabled={submitting} />
+                  <PasswordInput className={inputClass} value={form.confirmPassword} onChange={(e) => set("confirmPassword", e.target.value)} placeholder="Repita sua senha" required disabled={submitting} />
                 </label>
               </div>
             </div>
