@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { CircleUserRound, Save, Upload, X, Plus, Edit2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { PasswordInput } from '@/components/PasswordInput';
 
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -573,8 +574,7 @@ export function ClientSettingsPage() {
         <div className="space-y-4 max-w-md">
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Senha atual</label>
-            <input
-              type="password"
+            <PasswordInput
               value={passwordForm.currentPassword}
               onChange={(e) =>
                 setPasswordForm((f) => ({ ...f, currentPassword: e.target.value }))
@@ -586,8 +586,7 @@ export function ClientSettingsPage() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Nova senha</label>
-            <input
-              type="password"
+            <PasswordInput
               value={passwordForm.newPassword}
               onChange={(e) =>
                 setPasswordForm((f) => ({ ...f, newPassword: e.target.value }))
@@ -599,8 +598,7 @@ export function ClientSettingsPage() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Confirmar nova senha</label>
-            <input
-              type="password"
+            <PasswordInput
               value={passwordForm.confirmPassword}
               onChange={(e) =>
                 setPasswordForm((f) => ({ ...f, confirmPassword: e.target.value }))

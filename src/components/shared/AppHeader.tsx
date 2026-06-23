@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { getProfileConfig } from "../../config/profileConfig";
 import { useAuth } from "../../hooks/useAuth";
 import { useSidebarMobile } from "../../layouts/ProfileLayout";
+import { AresChatButton } from "../AresChatButton";
 
 interface AppHeaderProps {
   title: string;
@@ -116,6 +117,8 @@ export function AppHeader({
         >
           <Link to={actionHref}>{actionLabel}</Link>
         </Button>
+
+        {user?.role === "admin" && <AresChatButton />}
 
         <div className="flex items-center gap-3 border-l border-border pl-3">
           <Avatar className="h-9 w-9">

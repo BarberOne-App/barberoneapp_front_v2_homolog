@@ -195,3 +195,13 @@ export async function fetchMe() {
   }>("/auth/me");
   return response.data;
 }
+
+export async function forgotPassword(email: string) {
+  const response = await api.post<{ message: string }>("/auth/forgot-password", { email });
+  return response.data;
+}
+
+export async function resetPassword(password: string, token: string) {
+  const response = await api.post<{ message: string }>("/auth/reset-password", { password, token });
+  return response.data;
+}

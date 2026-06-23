@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { PlatformSubscriptionTab } from '@/components/PlatformSubscriptionTab';
 import { toast } from 'sonner';
+import { PasswordInput } from '@/components/PasswordInput';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
@@ -2081,8 +2082,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
             <div className="space-y-4 max-w-md">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">Senha Atual</label>
-                <input 
-                  type="password" 
+                <PasswordInput 
                   value={currentPassword}
                   onChange={(event) => setCurrentPassword(event.target.value)}
                   disabled={isChangingPassword}
@@ -2092,8 +2092,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">Nova Senha</label>
-                <input 
-                  type="password" 
+                <PasswordInput 
                   value={newPassword}
                   onChange={(event) => setNewPassword(event.target.value)}
                   disabled={isChangingPassword}
@@ -2103,8 +2102,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">Confirmar Nova Senha</label>
-                <input 
-                  type="password" 
+                <PasswordInput 
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
                   disabled={isChangingPassword}
@@ -2326,8 +2324,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">SMTP Password</label>
-                <input 
-                  type="password" 
+                <PasswordInput 
                   placeholder="••••••••••••"
                   className="w-full bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
                 />
