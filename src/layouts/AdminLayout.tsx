@@ -1,12 +1,8 @@
-import { AresChatButton } from "../components/AresChatButton";
 import { AdminSidebar } from "../components/sidebars/AdminSidebar";
 import { ProfileLayout } from "./ProfileLayout";
 
 export function AdminLayout() {
   return (
-    <>
-      <ProfileLayout Sidebar={AdminSidebar} />
-      <AresChatButton />
-    </>
+    <ProfileLayout Sidebar={AdminSidebar} />
   );
 }

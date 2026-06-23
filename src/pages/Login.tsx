@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Lock, Loader2, AlertTriangle, X, Phone, CreditCard, Calendar, KeyRound, Scissors, ChevronDown } from "lucide-react";
+import { Lock, Loader2, AlertTriangle, X, Phone, CreditCard, Calendar, KeyRound, Scissors, ChevronDown, Eye, EyeOff } from "lucide-react";
 import api from "../service/api";
 import { useGoogleLogin } from "@react-oauth/google";
 
@@ -72,6 +72,8 @@ export function Login() {
   const [modalCpf, setModalCpf] = useState("");
   const [modalBirthDate, setModalBirthDate] = useState("");
   const [modalPassword, setModalPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showModalPassword, setShowModalPassword] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState("");
   const [modalBarbershopSlug, setModalBarbershopSlug] = useState("");
@@ -406,13 +408,21 @@ export function Login() {
                 <div className="relative">
                   <KeyRound className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <input
-                    type="password"
+                    type={showModalPassword ? "text" : "password"}
                     value={modalPassword}
                     onChange={(e) => setModalPassword(e.target.value)}
                     placeholder="Mínimo 4 caracteres"
                     minLength={4}
-                    className="h-12 w-full rounded-lg border border-border bg-background pl-11 pr-4 text-foreground placeholder:text-muted-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
+                    className="h-12 w-full rounded-lg border border-border bg-background pl-11 pr-10 text-foreground placeholder:text-muted-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowModalPassword(!showModalPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showModalPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
               </div>
 
@@ -471,17 +481,33 @@ export function Login() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-foreground">Senha</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-foreground">Senha</label>
+              <Link
+                to="/forgot-password"
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                Esqueceu sua senha?
+              </Link>
+            </div>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="Digite sua senha"
-                className="h-12 w-full rounded-lg border border-border bg-background pl-12 pr-4 text-foreground placeholder:text-muted-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
+                className="h-12 w-full rounded-lg border border-border bg-background pl-12 pr-10 text-foreground placeholder:text-muted-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
                 required
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
             </div>
           </div>
         </div>
