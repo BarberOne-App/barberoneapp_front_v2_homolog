@@ -308,6 +308,18 @@ export function EmployeePayrollPage() {
       return;
     }
 
+    const availableCommission = Math.max(
+      Number(selectedRow.commission || 0) - Number(selectedRow.totalVales || 0),
+      0,
+    );
+
+    if (amount > availableCommission) {
+      toast.error(
+        `O vale nao pode ultrapassar a comissao disponivel de ${formatCurrency(availableCommission)}.`,
+      );
+      return;
+    }
+
     if (!valeForm.descricao.trim()) {
       toast.error("Informe a descricao ou motivo do vale.");
       return;
@@ -322,6 +334,8 @@ export function EmployeePayrollPage() {
         data: valeForm.data,
         descricao: valeForm.descricao.trim(),
         observacao: valeForm.observacao.trim() || null,
+        periodStart: selectedRow.periodStart,
+        periodEnd: selectedRow.periodEnd,
       });
       toast.success("Vale registrado.");
       setValeOpen(false);
