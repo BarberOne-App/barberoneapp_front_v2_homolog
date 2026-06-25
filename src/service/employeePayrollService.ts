@@ -133,6 +133,8 @@ export interface CreateEmployeeValePayload {
   data: string;
   descricao: string;
   observacao?: string | null;
+  periodStart: string;
+  periodEnd: string;
 }
 
 export interface CreateEmployeePaymentPayload {
