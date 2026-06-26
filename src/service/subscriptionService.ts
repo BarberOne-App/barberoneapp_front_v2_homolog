@@ -11,9 +11,11 @@ export interface SubscriptionUser {
 export interface SubscriptionPlan {
   id: string;
   name: string;
+  subtitle?: string | null;
   price: number;
   color?: string | null;
   features?: string[];
+  cutsPerMonth?: number;
 }
 
 export interface Subscription {
@@ -26,10 +28,23 @@ export interface Subscription {
   amount: number;
   status: "active" | "paused" | "cancelled" | "expired";
   nextBillingAt: string | null;
+  lastBillingAt?: string | null;
+  endedAt?: string | null;
   startedAt: string | null;
   paymentMethod?: string | null;
+  isRecurring?: boolean;
+  autoRenewal?: boolean;
+  daysOverdue?: number;
   monthlyBarberId?: string | null;
   monthlyBarber?: { id: string; displayName: string; photoUrl?: string | null } | null;
+  currentCycle?: {
+    id: string;
+    periodStart: string;
+    periodEnd: string;
+    cutsIncluded: number;
+    cutsUsed: number;
+    cutsRemaining: number;
+  } | null;
 }
 
 export interface ListSubscriptionsParams {
@@ -54,9 +69,40 @@ export async function listSubscriptions(params: ListSubscriptionsParams = {}) {
 
 export async function updateSubscription(
   id: string,
-  data: { status?: Subscription["status"] },
+  data: {
+    status?: Subscription["status"];
+    autoRenewal?: boolean;
+    isRecurring?: boolean;
+    paymentMethod?: string;
+  },
 ) {
   const response = await api.patch<Subscription>(`/subscriptions/${id}`, data);
+  return response.data;
+}
+
+export async function cancelSubscription(id: string) {
+  const response = await api.patch<Subscription>(`/subscriptions/${id}/cancel`);
+  return response.data;
+}
+
+export async function renewSubscription(id: string) {
+  const response = await api.patch<Subscription>(`/subscriptions/${id}/renew`);
+  return response.data;
+}
+
+export async function toggleSubscriptionRecurring(id: string) {
+  const response = await api.patch<Subscription>(`/subscriptions/${id}/toggle-recurring`);
+  return response.data;
+}
+
+export async function checkOverdueSubscriptions() {
+  const response = await api.post<{
+    processed: number;
+    paused?: number;
+    cancelled?: number;
+    message: string;
+    subscriptionIds?: string[];
+  }>("/subscriptions/check-overdue");
   return response.data;
 }
 
