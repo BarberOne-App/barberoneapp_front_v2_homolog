@@ -7,11 +7,17 @@ import type { SidebarItem, SidebarSection } from "../shared/ProfileSidebar";
 export function BarberSidebar() {
   const { can } = usePermissions();
 
-  const barberItems: SidebarItem[] = [
+  const operationItems: SidebarItem[] = [
     { icon: Calendar, label: "Agenda do dia", href: "/schedules" },
     { icon: Calendar, label: "Agendamentos", href: "/bookings" },
+  ];
+
+  const serviceItems: SidebarItem[] = [
     { icon: UserCheck, label: "Clientes", href: "/customers" },
     { icon: Scissors, label: "Servicos", href: "/services" },
+  ];
+
+  const financialItems: SidebarItem[] = [
     { icon: Wallet, label: "Ganhos", href: "/payments" },
   ];
 
@@ -23,7 +29,33 @@ export function BarberSidebar() {
 
   const sections: SidebarSection[] = [
     { items: [{ icon: Home, label: "Home", href: "/home" }] },
-    { title: "Barbeiro", items: barberItems },
+    {
+      items: [
+        {
+          icon: Calendar,
+          label: "Operacao",
+          children: operationItems,
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          icon: UserCheck,
+          label: "Atendimento",
+          children: serviceItems,
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          icon: Wallet,
+          label: "Financeiro",
+          children: financialItems,
+        },
+      ],
+    },
     ...(bottomItems.length > 0 ? [{ items: bottomItems }] : []),
   ];
 

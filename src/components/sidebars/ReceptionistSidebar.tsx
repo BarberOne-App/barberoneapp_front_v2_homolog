@@ -1,4 +1,4 @@
-import { Calendar, CreditCard, Home, LayoutList, Package, Scissors, Settings, UserCheck, Zap } from "lucide-react";
+import { Calendar, CircleDollarSign, CreditCard, Home, LayoutList, Package, Scissors, Settings, UserCheck, Zap } from "lucide-react";
 
 import { ProfileSidebar } from "../shared/ProfileSidebar";
 import type { SidebarSection } from "../shared/ProfileSidebar";
@@ -8,29 +8,52 @@ const sections: SidebarSection[] = [
     items: [{ icon: Home, label: "Home", href: "/home" }],
   },
   {
-    title: "Operacao",
     items: [
-      /* Agendamentos, Encaixe e Configuracoes aparecem sempre para o recepcionista.
-         O acesso real é controlado pela rota (requiredPermission na rota).
-         O restante fica oculto até o admin conceder a permissão. */
-      { icon: Calendar, label: "Agendamentos", href: "/bookings" },
-      { icon: Zap, label: "Encaixe", href: "/encaixe" },
-      { icon: Calendar, label: "Agenda", href: "/schedules", requiredPermission: "manageBlockedDates" },
-      { icon: CreditCard, label: "Pagamentos", href: "/payments", requiredPermission: "managePayments" },
+      {
+        icon: Calendar,
+        label: "Operacao",
+        children: [
+          { icon: Calendar, label: "Agendamentos", href: "/bookings" },
+          { icon: Zap, label: "Encaixe", href: "/encaixe" },
+          { icon: Calendar, label: "Agenda", href: "/schedules", requiredPermission: "manageBlockedDates" },
+        ],
+      },
     ],
   },
   {
-    title: "Atendimento",
     items: [
-      { icon: UserCheck, label: "Clientes", href: "/customers", requiredPermission: "manageCustomers" },
+      {
+        icon: CreditCard,
+        label: "Financeiro",
+        children: [
+          { icon: CreditCard, label: "Pagamentos", href: "/payments", requiredPermission: "managePayments" },
+          { icon: CircleDollarSign, label: "Fechamento de caixa", href: "/cash-closing", requiredPermission: "managePayments" },
+        ],
+      },
     ],
   },
   {
-    title: "Catalogo",
     items: [
-      { icon: Scissors, label: "Servicos", href: "/services" },
-      { icon: Package, label: "Produtos", href: "/products" },
-      { icon: LayoutList, label: "Planos", href: "/plans" },
+      {
+        icon: UserCheck,
+        label: "Atendimento",
+        children: [
+          { icon: UserCheck, label: "Clientes", href: "/customers", requiredPermission: "manageCustomers" },
+        ],
+      },
+    ],
+  },
+  {
+    items: [
+      {
+        icon: LayoutList,
+        label: "Catalogo",
+        children: [
+          { icon: Scissors, label: "Servicos", href: "/services" },
+          { icon: Package, label: "Produtos", href: "/products" },
+          { icon: LayoutList, label: "Planos", href: "/plans" },
+        ],
+      },
     ],
   },
   {
