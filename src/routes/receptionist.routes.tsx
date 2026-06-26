@@ -1,6 +1,7 @@
 import { ReceptionistDashboard } from "../pages/receptionist/ReceptionistDashboard";
 import { ReceptionistSettingsPage } from "../pages/receptionist/ReceptionistSettingsPage";
 import { BookingsPage } from "../pages/shared/BookingsPage";
+import { CashClosingPage } from "../pages/shared/CashClosingPage";
 import { CustomersPage } from "../pages/shared/CustomersPage";
 import { FitAppointmentPage } from "../pages/shared/FitAppointmentPage";
 import { PaymentsPage } from "../pages/shared/PaymentsPage";
@@ -39,8 +40,15 @@ export const receptionistRoutes: AppRoute[] = [
   {
     path: "/payments",
     title: "Pagamentos",
-    breadcrumbs: ["Operacao", "Pagamentos"],
+    breadcrumbs: ["Financeiro", "Pagamentos"],
     Component: PaymentsPage,
+    requiredPermission: "managePayments",
+  },
+  {
+    path: "/cash-closing",
+    title: "Fechamento de caixa",
+    breadcrumbs: ["Financeiro", "Fechamento de caixa"],
+    Component: CashClosingPage,
     requiredPermission: "managePayments",
   },
   {
