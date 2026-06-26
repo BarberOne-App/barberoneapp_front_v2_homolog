@@ -3,6 +3,7 @@ import {
   Calendar,
   CircleDollarSign,
   CreditCard,
+  BanknoteArrowDown,
   HandCoins,
   Image,
   LayoutList,
@@ -12,6 +13,7 @@ import {
   Settings,
   UserCog,
   Users,
+  UserX,
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -65,8 +67,22 @@ function buildSections(showSubscriptionCommissions: boolean): SidebarSection[] {
           children: [
             { icon: Scissors, label: "Servicos", href: "/services" },
             { icon: Package, label: "Produtos", href: "/products" },
-            { icon: LayoutList, label: "Planos", href: "/plans" },
             { icon: Image, label: "Galeria", href: "/gallery" },
+          ],
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          icon: LayoutList,
+          label: "Assinaturas",
+          children: [
+            { icon: LayoutList, label: "Planos", href: "/plans" },
+            { icon: Users, label: "Assinantes", href: "/subscriptions" },
+            { icon: Calendar, label: "Calendario de Recebiveis", href: "/subscription-receivables" },
+            { icon: UserX, label: "Inadimplentes", href: "/subscription-defaulters" },
+            { icon: BanknoteArrowDown, label: "Solicitar Saque", href: "/subscription-withdrawals" },
           ],
         },
       ],
