@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import type { DateRange } from "react-day-picker";
-import { Calendar, Loader2, Plus, Users } from "lucide-react";
+import { Calendar, Download, Loader2, Plus, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppCalendar } from "@/components/AppCalendar";
@@ -28,6 +28,7 @@ import {
   type ExtraEmployeePayment,
 } from "@/service/employeePayrollService";
 import { listUsers, type UserProfile } from "@/service/userService";
+import { downloadCsvReport, downloadPdfReport, type ReportColumn } from "@/utils/reportExport";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -163,6 +164,59 @@ export function ExtraPaymentsPage() {
     return { total, totalPago, thisMes };
   }, [payments]);
 
+  const reportColumns: ReportColumn<ExtraEmployeePayment>[] = useMemo(() => [
+    { header: "Funcionario", getValue: (payment) => payment.employeeName },
+    { header: "Valor", getValue: (payment) => formatCurrency(payment.liquido), align: "right" },
+    { header: "Data do pagamento", getValue: (payment) => formatDate(payment.periodStart), align: "center" },
+    { header: "Registrado por", getValue: (payment) => payment.paidByName || "Admin" },
+  ], []);
+
+  const filteredTotal = useMemo(
+    () => filteredPayments.reduce((sum, payment) => sum + Number(payment.liquido || 0), 0),
+    [filteredPayments],
+  );
+
+  function reportPeriodLabel() {
+    const from = filterRange.from ? formatDate(toDateString(filterRange.from)) : "-";
+    const to = filterRange.to ? formatDate(toDateString(filterRange.to)) : from;
+    return `${from} - ${to}`;
+  }
+
+  function ensureReportRows() {
+    if (filteredPayments.length === 0) {
+      toast.error("Nao ha registros para gerar o relatorio.");
+      return false;
+    }
+
+    return true;
+  }
+
+  function handleExportPdf() {
+    if (!ensureReportRows()) return;
+    downloadPdfReport(
+      `pagamentos-extras-${new Date().toISOString().slice(0, 10)}.pdf`,
+      {
+        title: "Relatorio de Pagamentos Extras",
+        subtitle: `Periodo: ${reportPeriodLabel()}`,
+        columns: reportColumns,
+        rows: filteredPayments,
+        summary: [
+          ["Registros", filteredPayments.length],
+          ["Total pago", formatCurrency(filteredTotal)],
+        ],
+      },
+    );
+  }
+
+  function handleExportCsv() {
+    if (!ensureReportRows()) return;
+    downloadCsvReport(
+      `pagamentos-extras-${new Date().toISOString().slice(0, 10)}.csv`,
+      reportColumns,
+      filteredPayments,
+    );
+  }
+
   function setField<K extends keyof ExtraPaymentForm>(key: K, value: ExtraPaymentForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
@@ -229,6 +283,14 @@ export function ExtraPaymentsPage() {
               placeholder="Filtrar periodo"
               className="h-9 rounded-md text-sm sm:w-64"
             />
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleExportPdf}>
+              <Download size={14} />
+              PDF
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleExportCsv}>
+              <Download size={14} />
+              CSV
+            </Button>
             <Button size="sm" className="gap-2" onClick={openDialog}>
               <Plus size={14} />
               Registrar Pagamento Extra
