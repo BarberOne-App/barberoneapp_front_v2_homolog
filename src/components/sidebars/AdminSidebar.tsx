@@ -22,42 +22,68 @@ import { getSettings } from "@/service/settingsService";
 
 function buildSections(showSubscriptionCommissions: boolean): SidebarSection[] {
   return [
-  {
-    items: [
-      { icon: BarChart3, label: "Dashboard", href: "/overview" },
-    ],
-  },
-  {
-    title: "Operacao",
-    items: [
-      { icon: Calendar, label: "Agendamentos", href: "/bookings" },
-      { icon: Zap, label: "Encaixe", href: "/encaixe" },
-      { icon: CreditCard, label: "Pagamentos", href: "/payments" },
-    ],
-  },
-  {
-    title: "Gerenciar",
-    items: [
-      { icon: Scissors, label: "Servicos", href: "/services" },
-      { icon: Package, label: "Produtos", href: "/products" },
-      { icon: LayoutList, label: "Planos", href: "/plans" },
-      { icon: Image, label: "Galeria", href: "/gallery" },
-      { icon: Calendar, label: "Calendario", href: "/schedules" },
-    ],
-  },
-  {
-    title: "Administracao",
-    items: [
-      { icon: UserCog, label: "Funcionarios", href: "/users" },
-      { icon: HandCoins, label: "Pagamento Funcionário", href: "/employee-payroll" },
-      ...(showSubscriptionCommissions
-        ? [{ icon: CircleDollarSign, label: "Comissoes Plano", href: "/subscription-commissions" }]
-        : []),
-      { icon: Users, label: "Clientes", href: "/customers" },
-      { icon: PlusCircle, label: "Pagamentos Extras", href: "/extra-payments" },
-      { icon: Settings, label: "Configuracoes", href: "/settings" },
-    ],
-  },
+    {
+      items: [
+        { icon: BarChart3, label: "Dashboard", href: "/overview" },
+      ],
+    },
+    {
+      items: [
+        {
+          icon: Calendar,
+          label: "Operacao",
+          children: [
+            { icon: Calendar, label: "Agendamentos", href: "/bookings" },
+            { icon: Zap, label: "Encaixe", href: "/encaixe" },
+            { icon: Calendar, label: "Calendario", href: "/schedules" },
+          ],
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          icon: CreditCard,
+          label: "Financeiro",
+          children: [
+            { icon: CreditCard, label: "Pagamentos", href: "/payments" },
+            { icon: CircleDollarSign, label: "Fechamento de caixa", href: "/cash-closing" },
+            { icon: HandCoins, label: "Pagamento Funcionario", href: "/employee-payroll" },
+            ...(showSubscriptionCommissions
+              ? [{ icon: CircleDollarSign, label: "Comissoes Plano", href: "/subscription-commissions" }]
+              : []),
+            { icon: PlusCircle, label: "Pagamentos Extras", href: "/extra-payments" },
+          ],
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          icon: Scissors,
+          label: "Gerenciar",
+          children: [
+            { icon: Scissors, label: "Servicos", href: "/services" },
+            { icon: Package, label: "Produtos", href: "/products" },
+            { icon: LayoutList, label: "Planos", href: "/plans" },
+            { icon: Image, label: "Galeria", href: "/gallery" },
+          ],
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          icon: UserCog,
+          label: "Administracao",
+          children: [
+            { icon: UserCog, label: "Funcionarios", href: "/users" },
+            { icon: Users, label: "Clientes", href: "/customers" },
+            { icon: Settings, label: "Configuracoes", href: "/settings" },
+          ],
+        },
+      ],
+    },
   ];
 }
 

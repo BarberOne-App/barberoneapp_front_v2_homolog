@@ -12,8 +12,9 @@ import { useSidebarMobile } from "../../layouts/ProfileLayout";
 export interface SidebarItem {
   icon: LucideIcon;
   label: string;
-  href: string;
+  href?: string;
   requiredPermission?: PermissionKey;
+  children?: SidebarItem[];
 }
 
 export interface SidebarSection {
@@ -48,6 +49,7 @@ function getStoredBarbershop() {
 
 export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [barbershop, setBarbershop] = useState<StoredBarbershop | null>(() =>
     getStoredBarbershop()
   );
@@ -61,17 +63,30 @@ export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProp
   const logoUrl = barbershop?.logoUrl?.trim() || "";
   const fallbackInitial = sidebarTitle.trim()[0]?.toUpperCase() || "B";
 
+  const filterItems = (items: SidebarItem[]): SidebarItem[] =>
+    items
+      .filter((item) => !item.requiredPermission || can(item.requiredPermission))
+      .map((item) => {
+        const children = item.children ? filterItems(item.children) : undefined;
+        return {
+          ...item,
+          children,
+        };
+      })
+      .filter((item) => item.href || (item.children && item.children.length > 0));
+
   const menuSections = [
     ...sections,
     { items: [{ icon: LogOut, label: "Sair", href: "/logout" }] },
   ].map((section) => ({
     ...section,
-    items: section.items.filter(
-      (item) => !item.requiredPermission || can(item.requiredPermission)
-    ),
+    items: filterItems(section.items),
   })).filter((section) => section.items.length > 0);
 
   const isActive = (href: string) => location.pathname === href;
+  const isItemActive = (item: SidebarItem): boolean =>
+    Boolean(item.href && isActive(item.href)) ||
+    Boolean(item.children?.some((child) => isItemActive(child)));
 
   const handleLogout = () => {
     logout();
@@ -79,6 +94,17 @@ export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProp
   };
 
   const closeMobile = () => setMobileOpen(false);
+
+  const toggleGroup = (item: SidebarItem) => {
+    if (collapsed) {
+      setCollapsed(false);
+    }
+
+    setOpenGroups((current) => ({
+      ...current,
+      [item.label]: !(current[item.label] ?? isItemActive(item)),
+    }));
+  };
 
   useEffect(() => {
     function refreshBarbershop() {
@@ -97,6 +123,23 @@ export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProp
   /* Fecha o drawer quando a rota muda (navegação mobile) */
   useEffect(() => {
     setMobileOpen(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const activeGroups = menuSections.reduce<Record<string, boolean>>((groups, section) => {
+      section.items.forEach((item) => {
+        if (item.children?.length && isItemActive(item)) {
+          groups[item.label] = true;
+        }
+      });
+
+      return groups;
+    }, {});
+
+    if (Object.keys(activeGroups).length > 0) {
+      setOpenGroups((current) => ({ ...current, ...activeGroups }));
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
@@ -176,9 +219,12 @@ export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProp
             <ul className="space-y-0.5">
               {section.items.map((item) => {
                 const isLogout = item.href === "/logout";
+                const hasChildren = Boolean(item.children?.length);
+                const active = isItemActive(item);
+                const open = openGroups[item.label] ?? active;
 
                 return (
-                  <li key={`${item.href}-${item.label}`}>
+                  <li key={`${item.href ?? item.label}-${item.label}`}>
                     {isLogout ? (
                       <button
                         type="button"
@@ -188,20 +234,73 @@ export function ProfileSidebar({ title, homeHref, sections }: ProfileSidebarProp
                         <item.icon size={18} className="flex-shrink-0" />
                         {!collapsed && <span>{item.label}</span>}
                       </button>
-                    ) : (
-                      <Link
-                        to={item.href}
-                        onClick={closeMobile}
-                        className={cn(
-                          "mx-2 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                          isActive(item.href)
-                            ? "bg-primary text-primary-foreground"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    ) : hasChildren ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(item)}
+                          className={cn(
+                            "mx-2 flex w-[calc(100%-1rem)] items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                            active
+                              ? "bg-sidebar-accent text-sidebar-foreground"
+                              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                          )}
+                        >
+                          <item.icon size={18} className="flex-shrink-0" />
+                          {!collapsed && (
+                            <>
+                              <span className="flex-1">{item.label}</span>
+                              <ChevronRight
+                                size={14}
+                                className={cn(
+                                  "flex-shrink-0 transition-transform",
+                                  open && "rotate-90"
+                                )}
+                              />
+                            </>
+                          )}
+                        </button>
+
+                        {!collapsed && open && (
+                          <ul className="mt-0.5 space-y-0.5">
+                            {item.children?.map((child) => (
+                              <li key={`${child.href ?? child.label}-${child.label}`}>
+                                {child.href && (
+                                  <Link
+                                    to={child.href}
+                                    onClick={closeMobile}
+                                    className={cn(
+                                      "ml-7 mr-2 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                                      isItemActive(child)
+                                        ? "bg-primary text-primary-foreground"
+                                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                                    )}
+                                  >
+                                    <child.icon size={16} className="flex-shrink-0" />
+                                    <span>{child.label}</span>
+                                  </Link>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
                         )}
-                      >
-                        <item.icon size={18} className="flex-shrink-0" />
-                        {!collapsed && <span>{item.label}</span>}
-                      </Link>
+                      </>
+                    ) : (
+                      item.href && (
+                        <Link
+                          to={item.href}
+                          onClick={closeMobile}
+                          className={cn(
+                            "mx-2 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                            isActive(item.href)
+                              ? "bg-primary text-primary-foreground"
+                              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                          )}
+                        >
+                          <item.icon size={18} className="flex-shrink-0" />
+                          {!collapsed && <span>{item.label}</span>}
+                        </Link>
+                      )
                     )}
                   </li>
                 );

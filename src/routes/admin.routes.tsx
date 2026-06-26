@@ -8,6 +8,7 @@ import { ProductsPage } from "../pages/admin/ProductsPage";
 import { PromotionsPage } from "../pages/admin/PromotionsPage";
 import { SubscriptionCommissionPoolPage } from "../pages/admin/SubscriptionCommissionPoolPage";
 import { BookingsPage } from "../pages/shared/BookingsPage";
+import { CashClosingPage } from "../pages/shared/CashClosingPage";
 import { FitAppointmentPage } from "../pages/shared/FitAppointmentPage";
 import { CustomersPage } from "../pages/shared/CustomersPage";
 import { HelpCenterPage } from "../pages/shared/HelpCenterPage";
@@ -49,6 +50,12 @@ export const adminRoutes: AppRoute[] = [
     title: "Pagamentos",
     breadcrumbs: ["Financeiro", "Pagamentos"],
     Component: PaymentsPage,
+  },
+  {
+    path: "/cash-closing",
+    title: "Fechamento de caixa",
+    breadcrumbs: ["Financeiro", "Fechamento de caixa"],
+    Component: CashClosingPage,
   },
   {
     path: "/users",
