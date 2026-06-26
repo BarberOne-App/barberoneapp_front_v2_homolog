@@ -1,12 +1,16 @@
 import { AdminDashboard } from "../pages/admin/AdminDashboard";
 import { AdminSettingsPage } from "../pages/admin/AdminSettingsPage";
+import { AdminSubscriptionsPage } from "../pages/admin/AdminSubscriptionsPage";
 import { EmployeePayrollPage } from "../pages/admin/EmployeePayrollPage";
 import { ExtraPaymentsPage } from "../pages/admin/ExtraPaymentsPage";
 import { GalleryPage } from "../pages/admin/GalleryPage";
 import { PlansPage } from "../pages/admin/PlansPage";
 import { ProductsPage } from "../pages/admin/ProductsPage";
 import { PromotionsPage } from "../pages/admin/PromotionsPage";
+import { SubscriptionDefaultersPage } from "../pages/admin/SubscriptionDefaultersPage";
 import { SubscriptionCommissionPoolPage } from "../pages/admin/SubscriptionCommissionPoolPage";
+import { SubscriptionReceivablesCalendarPage } from "../pages/admin/SubscriptionReceivablesCalendarPage";
+import { SubscriptionWithdrawalRequestPage } from "../pages/admin/SubscriptionWithdrawalRequestPage";
 import { BookingsPage } from "../pages/shared/BookingsPage";
 import { CashClosingPage } from "../pages/shared/CashClosingPage";
 import { FitAppointmentPage } from "../pages/shared/FitAppointmentPage";
@@ -52,6 +56,13 @@ export const adminRoutes: AppRoute[] = [
     Component: PaymentsPage,
   },
   {
+    path: "/subscriptions",
+    title: "Assinaturas",
+    breadcrumbs: ["Financeiro", "Assinaturas"],
+    Component: AdminSubscriptionsPage,
+    requiredPermission: "manageBenefits",
+  },
+  {
     path: "/cash-closing",
     title: "Fechamento de caixa",
     breadcrumbs: ["Financeiro", "Fechamento de caixa"],
@@ -80,6 +91,27 @@ export const adminRoutes: AppRoute[] = [
     title: "Comissoes Plano",
     breadcrumbs: ["Administracao", "Comissoes Plano"],
     Component: SubscriptionCommissionPoolPage,
+  },
+  {
+    path: "/subscription-receivables",
+    title: "Calendario de Recebiveis",
+    breadcrumbs: ["Assinaturas", "Calendario de Recebiveis"],
+    Component: SubscriptionReceivablesCalendarPage,
+    requiredPermission: "manageBenefits",
+  },
+  {
+    path: "/subscription-defaulters",
+    title: "Inadimplentes",
+    breadcrumbs: ["Assinaturas", "Inadimplentes"],
+    Component: SubscriptionDefaultersPage,
+    requiredPermission: "manageBenefits",
+  },
+  {
+    path: "/subscription-withdrawals",
+    title: "Solicitar Saque",
+    breadcrumbs: ["Assinaturas", "Solicitar Saque"],
+    Component: SubscriptionWithdrawalRequestPage,
+    requiredPermission: "manageBenefits",
   },
   {
     path: "/extra-payments",
