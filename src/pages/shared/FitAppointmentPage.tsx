@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import {
   Calendar,
   CalendarCheck,
+  Copy,
   Loader2,
   Scissors,
   Users,
@@ -25,12 +26,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
 import {
   createAppointment,
   listAppointments,
   type Appointment,
 } from "@/service/appointmentService";
 import { listBarbers, type Barber } from "@/service/barberService";
+import { getBarbershopProfile, type BarbershopProfile } from "@/service/barbershopProfileService";
 import { listServices, type Service } from "@/service/serviceService";
 import {
   buildCalendarAppointmentsByBarber,
@@ -45,8 +48,10 @@ import {
   getStableCalendarColor,
   minutesToTime,
   type CalendarColor,
+  type FreeSlot,
 } from "@/utils/adminCalendar";
 import { buildFitNotes } from "@/utils/fitAppointment";
+import { openWhatsAppShare } from "@/utils/whatsapp";
 
 /* ── helpers ── */
 
@@ -70,6 +75,69 @@ function formatDateShort(date: Date): string {
     day: "2-digit",
     month: "2-digit",
   }).format(date);
+}
+
+function formatDateLong(date: Date): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function buildAvailableSlotsMessage({
+  barbers,
+  barbershop,
+  date,
+  freeSlotsByBarber,
+}: {
+  barbers: Barber[];
+  barbershop: BarbershopProfile | null;
+  date: Date;
+  freeSlotsByBarber: Map<string, FreeSlot[]>;
+}): string {
+  const lines: string[] = [
+    `*Horarios disponiveis${barbershop?.name ? ` - ${barbershop.name}` : ""}*`,
+    `Data: ${formatDateLong(date)}`,
+    "",
+  ];
+
+  let hasAnySlot = false;
+
+  barbers.forEach((barber) => {
+    const slots = freeSlotsByBarber.get(barber.id) ?? [];
+    const times = slots
+      .flatMap((slot) => {
+        const result: string[] = [];
+        const endMinutes = slot.startMinutes + slot.durationMinutes;
+
+        for (let minutes = slot.startMinutes; minutes < endMinutes; minutes += CALENDAR_MINUTES_PER_SLOT) {
+          result.push(minutesToTime(minutes));
+        }
+
+        return result;
+      })
+      .join(", ");
+
+    if (times) {
+      hasAnySlot = true;
+      lines.push(`*${barber.displayName}:* ${times}`);
+      return;
+    }
+
+    lines.push(`*${barber.displayName}:* sem horarios disponiveis`);
+  });
+
+  if (barbers.length === 0) {
+    lines.push("Nenhum barbeiro cadastrado.");
+  } else if (!hasAnySlot) {
+    lines.push("No momento nao temos horarios disponiveis para essa data.");
+  }
+
+  lines.push("", "Responda esta mensagem para reservar seu horario.");
+
+  return lines.join("\n");
 }
 
 function getTodaySaoPaulo(): Date {
@@ -325,6 +393,8 @@ export function FitAppointmentPage() {
   const [loadingBarbers, setLoadingBarbers] = useState(true);
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [fitSlot, setFitSlot] = useState<FitSlotInfo | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [barbershopProfile, setBarbershopProfile] = useState<BarbershopProfile | null>(null);
 
   const activeDateKey = getLocalDateKey(selectedDate);
   const isToday = activeDateKey === getLocalDateKey(getTodaySaoPaulo());
@@ -352,6 +422,10 @@ export function FitAppointmentPage() {
       .then((r) => setBarbers(r.items))
       .catch((err) => toast.error(getApiMessage(err)))
       .finally(() => setLoadingBarbers(false));
+  }, []);
+
+  useEffect(() => {
+    getBarbershopProfile().then(setBarbershopProfile).catch(() => null);
   }, []);
 
   /* Load appointments when date changes */
@@ -405,6 +479,17 @@ export function FitAppointmentPage() {
     [barbers, appointmentsByBarber, nowMinutes],
   );
 
+  const shareFreeSlotsByBarber = useMemo(
+    () => buildCalendarFreeSlotsByBarber({
+      barbers, appointmentsByBarber,
+      startMinutes: CALENDAR_START_MINUTES, endMinutes: CALENDAR_END_MINUTES,
+      minutesPerSlot: CALENDAR_MINUTES_PER_SLOT,
+      fitSlotMaxMinutes: CALENDAR_END_MINUTES - CALENDAR_START_MINUTES,
+      nowMinutes,
+    }),
+    [barbers, appointmentsByBarber, nowMinutes],
+  );
+
   const timeSlots = useMemo(() => buildCalendarTimeSlots(), []);
   const bodyHeight =
     ((CALENDAR_END_MINUTES - CALENDAR_START_MINUTES) / CALENDAR_MINUTES_PER_SLOT) *
@@ -415,6 +500,29 @@ export function FitAppointmentPage() {
     freeSlotsByBarber.forEach((s) => { n += s.length; });
     return n;
   }, [freeSlotsByBarber]);
+
+  const availableSlotsMessage = useMemo(
+    () =>
+      buildAvailableSlotsMessage({
+        barbers,
+        barbershop: barbershopProfile,
+        date: selectedDate,
+        freeSlotsByBarber: shareFreeSlotsByBarber,
+      }),
+    [barbers, barbershopProfile, selectedDate, shareFreeSlotsByBarber],
+  );
+
+  const totalShareableSlots = useMemo(() => {
+    let total = 0;
+
+    shareFreeSlotsByBarber.forEach((slots) => {
+      slots.forEach((slot) => {
+        total += Math.ceil(slot.durationMinutes / CALENDAR_MINUTES_PER_SLOT);
+      });
+    });
+
+    return total;
+  }, [shareFreeSlotsByBarber]);
 
   const activeAptCount = useMemo(
     () => appointments.filter((a) => a.status === "scheduled" || a.status === "confirmed").length,
@@ -435,6 +543,15 @@ export function FitAppointmentPage() {
       startMinutes: startMins,
       durationMinutes: durationMins,
     });
+  }
+
+  async function copyAvailableSlotsMessage() {
+    try {
+      await navigator.clipboard.writeText(availableSlotsMessage);
+      toast.success("Horarios copiados.");
+    } catch {
+      toast.error("Nao foi possivel copiar os horarios.");
+    }
   }
 
   const activeDateLabel = selectedDate.toLocaleDateString("pt-BR", {
@@ -556,6 +673,18 @@ export function FitAppointmentPage() {
               toYear={new Date().getFullYear() + 1}
               className="h-9 w-auto min-w-[160px] rounded-lg"
             />
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={loadingBarbers || loadingAppointments}
+              onClick={() => setShareDialogOpen(true)}
+            >
+              <WhatsAppIcon size={14} />
+              Compartilhar horarios
+            </Button>
           </div>
         </div>
 
@@ -617,6 +746,40 @@ export function FitAppointmentPage() {
           }}
         />
       )}
+
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Compartilhar horarios disponiveis</DialogTitle>
+            <DialogDescription>
+              Envie a lista de horarios livres do dia selecionado para seus clientes.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <Textarea
+              value={availableSlotsMessage}
+              readOnly
+              rows={10}
+              className="resize-none font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              {totalShareableSlots} horarios disponiveis em {formatDateShort(selectedDate)}.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={copyAvailableSlotsMessage}>
+              <Copy size={14} />
+              Copiar
+            </Button>
+            <Button type="button" onClick={() => openWhatsAppShare(availableSlotsMessage)}>
+              <WhatsAppIcon size={14} />
+              Enviar no WhatsApp
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

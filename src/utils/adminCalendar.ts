@@ -239,6 +239,8 @@ export const buildCalendarFreeSlotsByBarber = ({
     const freeSlots: FreeSlot[] = [];
 
     if (apts.length === 0) {
+      const gapStart = nowMinutes !== null ? Math.max(startMinutes, nowMinutes) : startMinutes;
+      createFreeFitSlot({ freeSlots, gapStart, gapEnd: endMinutes, minutesPerSlot, fitSlotMaxMinutes, endMinutes });
       map.set(barber.id, freeSlots);
       return;
     }
