@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Calendar, CheckCircle, Download, Loader2, Search } from "lucide-react";
+import { Calendar, CheckCircle, CreditCard, Download, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import {
   createCashClosing,
@@ -15,7 +24,11 @@ import {
   type CashClosingPayment,
   type CashClosingSummary,
 } from "@/service/cashClosingService";
-import type { PaymentMethod } from "@/service/paymentService";
+import {
+  createManualSubscriptionPayment,
+  type PaymentMethod,
+} from "@/service/paymentService";
+import { listSubscriptions, type Subscription } from "@/service/subscriptionService";
 import { downloadPdfReport, type ReportColumn } from "@/utils/reportExport";
 
 type OpenCashSession = {
@@ -34,6 +47,19 @@ const methodLabels: Record<PaymentMethod, string> = {
   pix: "PIX",
   subscription: "Assinatura",
 };
+
+const manualSubscriptionMethods: Array<Exclude<PaymentMethod, "subscription">> = [
+  "dinheiro",
+  "pix",
+  "debito",
+  "credito",
+  "local",
+];
+
+function toDateTimeLocalValue(date: Date) {
+  const offsetMs = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -276,6 +302,16 @@ export function CashClosingPage() {
   const [dateFilter, setDateFilter] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [manualPaymentOpen, setManualPaymentOpen] = useState(false);
+  const [subscriptionSearch, setSubscriptionSearch] = useState("");
+  const [subscriptionOptions, setSubscriptionOptions] = useState<Subscription[]>([]);
+  const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState("");
+  const [manualPaymentAmount, setManualPaymentAmount] = useState("");
+  const [manualPaymentMethod, setManualPaymentMethod] =
+    useState<Exclude<PaymentMethod, "subscription">>("dinheiro");
+  const [manualPaidAt, setManualPaidAt] = useState(() => toDateTimeLocalValue(new Date()));
+  const [savingManualPayment, setSavingManualPayment] = useState(false);
   const limit = 10;
 
   const loadCashClosings = useCallback(async () => {
@@ -300,6 +336,29 @@ export function CashClosingPage() {
   useEffect(() => {
     void loadCashClosings();
   }, [loadCashClosings]);
+
+  const loadSubscriptionOptions = useCallback(async () => {
+    setLoadingSubscriptions(true);
+    try {
+      const result = await listSubscriptions({
+        search: subscriptionSearch.trim() || undefined,
+        searchType: "name",
+        page: 1,
+        limit: 50,
+      });
+      setSubscriptionOptions(result.items);
+    } catch (err) {
+      setSubscriptionOptions([]);
+      toast.error(getApiMessage(err));
+    } finally {
+      setLoadingSubscriptions(false);
+    }
+  }, [subscriptionSearch]);
+
+  useEffect(() => {
+    if (!manualPaymentOpen) return;
+    void loadSubscriptionOptions();
+  }, [manualPaymentOpen, loadSubscriptionOptions]);
 
   useEffect(() => {
     setPage(1);
@@ -407,6 +466,54 @@ export function CashClosingPage() {
     }
   }
 
+  function handleSelectSubscription(subscriptionId: string) {
+    setSelectedSubscriptionId(subscriptionId);
+    const selected = subscriptionOptions.find((subscription) => subscription.id === subscriptionId);
+    if (selected) {
+      setManualPaymentAmount(String(selected.amount || selected.plan?.price || ""));
+    }
+  }
+
+  async function handleRegisterManualSubscriptionPayment() {
+    if (!cashIsOpen) {
+      toast.error("Abra o caixa antes de registrar pagamentos.");
+      return;
+    }
+
+    if (!selectedSubscriptionId) {
+      toast.error("Selecione uma assinatura.");
+      return;
+    }
+
+    const amount = Number(String(manualPaymentAmount).replace(",", "."));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Informe um valor valido.");
+      return;
+    }
+
+    setSavingManualPayment(true);
+    try {
+      await createManualSubscriptionPayment({
+        subscriptionId: selectedSubscriptionId,
+        amount,
+        method: manualPaymentMethod,
+        paidAt: manualPaidAt ? new Date(manualPaidAt).toISOString() : undefined,
+      });
+      toast.success("Pagamento de assinatura registrado.");
+      setManualPaymentOpen(false);
+      setSelectedSubscriptionId("");
+      setManualPaymentAmount("");
+      setSubscriptionSearch("");
+      setManualPaymentMethod("dinheiro");
+      setManualPaidAt(toDateTimeLocalValue(new Date()));
+      await loadCashClosings();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSavingManualPayment(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
@@ -457,6 +564,15 @@ export function CashClosingPage() {
             ) : null}
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => setManualPaymentOpen(true)}
+              disabled={!cashIsOpen || loading}
+              className="gap-2"
+            >
+              <CreditCard size={14} />
+              Registrar assinatura
+            </Button>
             <Button
               variant="outline"
               onClick={handleExportCashClosingsPdf}
@@ -644,6 +760,122 @@ export function CashClosingPage() {
           </div>
         </div>
       </div>
+
+      <Dialog open={manualPaymentOpen} onOpenChange={setManualPaymentOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Registrar pagamento de assinatura</DialogTitle>
+            <DialogDescription>
+              Use quando o cliente pagar presencialmente em dinheiro, PIX ou cartao.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="subscription-search">Buscar cliente</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="subscription-search"
+                  value={subscriptionSearch}
+                  onChange={(event) => setSubscriptionSearch(event.target.value)}
+                  placeholder="Nome do cliente"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void loadSubscriptionOptions()}
+                  disabled={loadingSubscriptions}
+                >
+                  {loadingSubscriptions ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buscar"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="subscription-id">Assinatura</Label>
+              <select
+                id="subscription-id"
+                value={selectedSubscriptionId}
+                onChange={(event) => handleSelectSubscription(event.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Selecione a assinatura</option>
+                {subscriptionOptions.map((subscription) => (
+                  <option key={subscription.id} value={subscription.id}>
+                    {subscription.user?.name || "Cliente"} - {subscription.plan?.name || "Plano"} - {formatCurrency(subscription.amount || subscription.plan?.price || 0)}
+                  </option>
+                ))}
+              </select>
+              {loadingSubscriptions ? (
+                <p className="text-xs text-muted-foreground">Carregando assinaturas...</p>
+              ) : subscriptionOptions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhuma assinatura encontrada.</p>
+              ) : null}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="manual-payment-amount">Valor</Label>
+                <Input
+                  id="manual-payment-amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={manualPaymentAmount}
+                  onChange={(event) => setManualPaymentAmount(event.target.value)}
+                  placeholder="0,00"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="manual-payment-method">Forma</Label>
+                <select
+                  id="manual-payment-method"
+                  value={manualPaymentMethod}
+                  onChange={(event) => setManualPaymentMethod(event.target.value as Exclude<PaymentMethod, "subscription">)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {manualSubscriptionMethods.map((method) => (
+                    <option key={method} value={method}>
+                      {methodLabels[method]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="manual-paid-at">Pago em</Label>
+                <Input
+                  id="manual-paid-at"
+                  type="datetime-local"
+                  value={manualPaidAt}
+                  onChange={(event) => setManualPaidAt(event.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setManualPaymentOpen(false)}
+              disabled={savingManualPayment}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleRegisterManualSubscriptionPayment}
+              disabled={savingManualPayment || loadingSubscriptions}
+              className="gap-2"
+            >
+              {savingManualPayment && <Loader2 className="h-4 w-4 animate-spin" />}
+              Registrar pagamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
