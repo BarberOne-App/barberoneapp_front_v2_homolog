@@ -287,8 +287,8 @@ export function EmployeePayrollPage() {
       getValue: (row) => `${formatDate(row.periodStart)} - ${formatDate(row.periodEnd)}`,
     },
     { header: "Salario Fixo", getValue: (row) => formatCurrency(row.baseSalary), align: "center" },
-    { header: "Comissao Total", getValue: (row) => formatCurrency(row.commission), align: "center" },
-    { header: "Comissao Paga", getValue: (row) => formatCurrency(row.folhaPago), align: "center" },
+    { header: "Comissao Avulsa", getValue: (row) => formatCurrency(row.regularCommission ?? row.commission), align: "center" },
+    { header: "Comissao Avulsa Paga", getValue: (row) => formatCurrency(row.folhaPago), align: "center" },
     { header: "Vales", getValue: (row) => formatCurrency(row.totalVales), align: "center" },
     { header: "Liquido", getValue: (row) => formatCurrency(row.netAmount), align: "center" },
     { header: "Pendente", getValue: (row) => formatCurrency(row.amountDue), align: "center" },
@@ -323,7 +323,7 @@ export function EmployeePayrollPage() {
         columns: reportColumns,
         rows: filteredRows,
         summary: [
-          ["Comissoes", formatCurrency(totals.commission)],
+          ["Comissoes avulsas", formatCurrency(totals.commission)],
           ["Vales/descontos", formatCurrency(totals.totalVales)],
           ["Valor liquido", formatCurrency(totals.netAmount)],
           ["Saldo pendente", formatCurrency(totals.amountDue)],
@@ -432,7 +432,7 @@ export function EmployeePayrollPage() {
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
         <div className="rounded-xl border border-border bg-card p-5">
-          <p className="mb-1 text-sm text-muted-foreground">Comissoes</p>
+          <p className="mb-1 text-sm text-muted-foreground">Comissoes avulsas</p>
           <h3 className="text-2xl font-semibold text-foreground">
             {formatCurrency(totals.commission)}
           </h3>
@@ -471,6 +471,8 @@ export function EmployeePayrollPage() {
               Barbeiros: {frequencyLabels[paymentFrequency.barberPaymentFrequency]}
               {" · "}
               Outros: {frequencyLabels[paymentFrequency.employeePaymentFrequency]}
+              {" · "}
+              Assinaturas sao apuradas separadamente em Comissoes Plano.
             </p>
           </div>
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
@@ -564,10 +566,10 @@ export function EmployeePayrollPage() {
                     Salario Fixo
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Comissao Total
+                    Comissao Avulsa
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Comissao Paga
+                    Comissao Avulsa Paga
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Vales
@@ -633,7 +635,7 @@ export function EmployeePayrollPage() {
                         {formatCurrency(row.baseSalary)}
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-foreground">
-                        {formatCurrency(row.commission)}
+                        {formatCurrency(row.regularCommission ?? row.commission)}
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-emerald-600">
                         {row.folhaPago > 0 ? formatCurrency(row.folhaPago) : "—"}
@@ -834,8 +836,8 @@ export function EmployeePayrollPage() {
                   <span>{formatCurrency(selectedRow?.baseSalary ?? 0)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Comissoes</span>
-                  <span>{formatCurrency(selectedRow?.commission ?? 0)}</span>
+                  <span className="text-muted-foreground">Comissoes avulsas</span>
+                  <span>{formatCurrency(selectedRow?.regularCommission ?? selectedRow?.commission ?? 0)}</span>
                 </div>
                 {(selectedRow?.subscriptionPoolCommission ?? 0) > 0 ? (
                   <>
