@@ -26,6 +26,16 @@ export interface Appointment {
     name: string;
     email?: string | null;
     phone?: string | null;
+    subscription?: {
+      id: string;
+      status: "active" | "paused" | "cancelled" | "expired" | string;
+      daysOverdue?: number;
+      nextBillingAt?: string | null;
+      plan?: {
+        id: string;
+        name: string;
+      } | null;
+    } | null;
   } | null;
   dependent?: {
     id: string;

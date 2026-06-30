@@ -10,10 +10,26 @@ export interface CalendarColor {
   cardText: string;
 }
 
+export type AppointmentClientStatusKey =
+  | 'no_show'
+  | 'no_plan'
+  | 'with_plan'
+  | 'overdue'
+  | 'in_progress'
+  | 'completed';
+
+export interface AppointmentClientStatus {
+  key: AppointmentClientStatusKey;
+  label: string;
+  description: string;
+  color: CalendarColor;
+}
+
 export interface CalendarAppointment extends Appointment {
   startTime: string;
   duration: number;
   color: CalendarColor;
+  clientStatus: AppointmentClientStatus;
   isFitAppointment: boolean;
   visibleNotes: string;
   index: number;
@@ -44,6 +60,87 @@ export const FIT_APPOINTMENT_COLOR: CalendarColor = {
   cardText: '#e0f2fe',
   tint: 'rgba(14,165,233,0.055)',
   tintStrong: 'rgba(14,165,233,0.13)',
+};
+
+export const APPOINTMENT_CLIENT_STATUS_CONFIG: Record<AppointmentClientStatusKey, AppointmentClientStatus> = {
+  no_show: {
+    key: 'no_show',
+    label: 'Cliente faltou',
+    description: 'Agendamento marcado como falta.',
+    color: {
+      accent: '#ef4444',
+      border: 'rgba(239,68,68,0.52)',
+      cardBg: 'rgba(69,10,10,0.94)',
+      cardText: '#fecaca',
+      tint: 'rgba(239,68,68,0.055)',
+      tintStrong: 'rgba(239,68,68,0.13)',
+    },
+  },
+  no_plan: {
+    key: 'no_plan',
+    label: 'Cliente sem plano',
+    description: 'Cliente nao possui assinatura ativa nesta barbearia.',
+    color: {
+      accent: '#f59e0b',
+      border: 'rgba(245,158,11,0.50)',
+      cardBg: 'rgba(69,26,3,0.94)',
+      cardText: '#fde68a',
+      tint: 'rgba(245,158,11,0.055)',
+      tintStrong: 'rgba(245,158,11,0.13)',
+    },
+  },
+  with_plan: {
+    key: 'with_plan',
+    label: 'Cliente com plano',
+    description: 'Cliente possui assinatura ativa.',
+    color: {
+      accent: '#22c55e',
+      border: 'rgba(34,197,94,0.50)',
+      cardBg: 'rgba(5,46,22,0.94)',
+      cardText: '#bbf7d0',
+      tint: 'rgba(34,197,94,0.055)',
+      tintStrong: 'rgba(34,197,94,0.13)',
+    },
+  },
+  overdue: {
+    key: 'overdue',
+    label: 'Cliente inadimplente',
+    description: 'Assinatura pausada, vencida ou com dias em atraso.',
+    color: {
+      accent: '#f97316',
+      border: 'rgba(249,115,22,0.52)',
+      cardBg: 'rgba(67,20,7,0.94)',
+      cardText: '#fed7aa',
+      tint: 'rgba(249,115,22,0.055)',
+      tintStrong: 'rgba(249,115,22,0.13)',
+    },
+  },
+  in_progress: {
+    key: 'in_progress',
+    label: 'Em andamento/finalizando',
+    description: 'Agendamento acontecendo agora ou perto do horario final.',
+    color: {
+      accent: '#38bdf8',
+      border: 'rgba(56,189,248,0.52)',
+      cardBg: 'rgba(8,47,73,0.94)',
+      cardText: '#bae6fd',
+      tint: 'rgba(56,189,248,0.055)',
+      tintStrong: 'rgba(56,189,248,0.13)',
+    },
+  },
+  completed: {
+    key: 'completed',
+    label: 'Agendamento finalizado',
+    description: 'Atendimento concluido.',
+    color: {
+      accent: '#a78bfa',
+      border: 'rgba(167,139,250,0.52)',
+      cardBg: 'rgba(46,16,101,0.94)',
+      cardText: '#ddd6fe',
+      tint: 'rgba(167,139,250,0.055)',
+      tintStrong: 'rgba(167,139,250,0.13)',
+    },
+  },
 };
 
 export const CALENDAR_SLOT_HEIGHT = 14;
@@ -112,6 +209,52 @@ export const getAppointmentDurationMinutes = (
   return 30;
 };
 
+export const getAppointmentClientStatus = (
+  appointment: Appointment,
+  getStartDate: (a: Appointment) => Date | null,
+): AppointmentClientStatus => {
+  if (appointment.status === 'no_show') return APPOINTMENT_CLIENT_STATUS_CONFIG.no_show;
+  if (appointment.status === 'completed') return APPOINTMENT_CLIENT_STATUS_CONFIG.completed;
+
+  const startDate = getStartDate(appointment);
+  const duration = getAppointmentDurationMinutes(appointment, getStartDate);
+  const endDate = startDate ? new Date(startDate.getTime() + duration * 60000) : null;
+  const now = new Date();
+
+  if (
+    startDate &&
+    endDate &&
+    appointment.status !== 'cancelled' &&
+    now >= startDate &&
+    now <= endDate
+  ) {
+    return APPOINTMENT_CLIENT_STATUS_CONFIG.in_progress;
+  }
+
+  if (
+    endDate &&
+    appointment.status !== 'cancelled' &&
+    now > endDate &&
+    now.getTime() - endDate.getTime() <= 15 * 60000
+  ) {
+    return APPOINTMENT_CLIENT_STATUS_CONFIG.in_progress;
+  }
+
+  const subscription = appointment.client?.subscription;
+  const subStatus = String(subscription?.status || '').toLowerCase();
+  const daysOverdue = Number(subscription?.daysOverdue ?? 0);
+
+  if (subscription && (subStatus === 'paused' || subStatus === 'expired' || daysOverdue > 0)) {
+    return APPOINTMENT_CLIENT_STATUS_CONFIG.overdue;
+  }
+
+  if (subscription && subStatus === 'active') {
+    return APPOINTMENT_CLIENT_STATUS_CONFIG.with_plan;
+  }
+
+  return APPOINTMENT_CLIENT_STATUS_CONFIG.no_plan;
+};
+
 export const buildCalendarAppointmentsByBarber = ({
   appointments,
   barbers,
@@ -140,15 +283,15 @@ export const buildCalendarAppointmentsByBarber = ({
     const startTime = startDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const duration = getAppointmentDurationMinutes(appointment, getAppointmentStartDate);
     const isFit = isFitAppointment(appointment);
-    const color = isFit
-      ? FIT_APPOINTMENT_COLOR
-      : (barberColors.get(barberId) ?? getStableCalendarColor(appointment.barber ?? { id: barberId }, index));
+    const clientStatus = getAppointmentClientStatus(appointment, getAppointmentStartDate);
+    const color = clientStatus.color;
 
     map.get(barberId)!.push({
       ...appointment,
       startTime,
       duration,
       color,
+      clientStatus,
       isFitAppointment: isFit,
       visibleNotes: getVisibleAppointmentNotes(appointment.notes),
       index,

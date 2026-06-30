@@ -34,6 +34,43 @@ export interface ProductPayload {
   active?: boolean;
 }
 
+export type ProductStockMovementType = "entry" | "exit";
+
+export interface ProductStockMovement {
+  id: string;
+  productId: string;
+  productName: string;
+  productCode: string;
+  barbershopId: string;
+  type: ProductStockMovementType;
+  quantity: number;
+  purchasePrice?: number | null;
+  salePrice?: number | null;
+  occurredAt: string;
+  note?: string | null;
+  createdBy?: string | null;
+  createdByName?: string | null;
+  createdAt: string;
+  stockAfter: number;
+}
+
+export interface ListProductStockMovementsParams {
+  productId?: string;
+  type?: ProductStockMovementType;
+  q?: string;
+  limit?: number;
+}
+
+export interface ProductStockMovementPayload {
+  productId: string;
+  type: ProductStockMovementType;
+  quantity: number;
+  purchasePrice?: number | null;
+  salePrice?: number | null;
+  occurredAt?: string;
+  note?: string | null;
+}
+
 export async function listProducts(params: ListProductsParams = {}) {
   const response = await api.get<Product[]>("/products", { params });
 
@@ -69,6 +106,25 @@ export async function reactivateProduct(productId: string) {
     product: Product;
     reason: string;
   }>(`/products/${productId}/reactivate`);
+
+  return response.data;
+}
+
+export async function listProductStockMovements(
+  params: ListProductStockMovementsParams = {},
+) {
+  const response = await api.get<ProductStockMovement[]>("/products/stock-movements", {
+    params,
+  });
+
+  return response.data;
+}
+
+export async function createProductStockMovement(data: ProductStockMovementPayload) {
+  const response = await api.post<{
+    product: Product;
+    movement: ProductStockMovement;
+  }>("/products/stock-movements", data);
 
   return response.data;
 }

@@ -71,7 +71,7 @@ export function SubscriptionCommissionPoolPage() {
 
   const periodStartDate = dateStringToDate(periodStart);
   const periodEndDate = dateStringToDate(periodEnd);
-  const isEnabled = subscriptionBarberRule === "free_choice";
+  const isFreeChoice = subscriptionBarberRule === "free_choice";
 
   function handlePeriodRangeChange(range?: DateRange) {
     if (range?.from) setPeriodStart(toDateInput(range.from));
@@ -108,6 +108,7 @@ export function SubscriptionCommissionPoolPage() {
   const customPercent = parsePercentInput(customPercentInput);
   const customPercentLabel = customPercentInput.trim() || "0";
   const customPoolAmount = (totalRevenue * customPercent) / 100;
+  const effectivePoolAmount = isFreeChoice ? customPoolAmount : (pool?.commissionPool ?? 0);
 
   function handleCustomPercentChange(value: string) {
     const normalized = value.replace(/[^\d,.]/g, "");
@@ -225,7 +226,7 @@ export function SubscriptionCommissionPoolPage() {
           <div class="header">
             <h1 class="title">Relatório de Comissão de Assinaturas</h1>
             <div class="subtitle">Período: ${periodStart.split("-").reverse().join("/")} a ${periodEnd.split("-").reverse().join("/")}</div>
-            <div class="subtitle">Regra de Agendamento: Livre Escolha | Comissão do Pote: ${customPercentLabel}%</div>
+            <div class="subtitle">Regra de Agendamento: ${isFreeChoice ? "Livre Escolha" : "Barbeiro Fixo"}${isFreeChoice ? ` | Comissão do Pote: ${customPercentLabel}%` : ""}</div>
           </div>
           
           <div class="info-grid">
@@ -235,7 +236,7 @@ export function SubscriptionCommissionPoolPage() {
             </div>
             <div class="info-card">
               <div class="info-card-label">Pote de Comissão (${customPercentLabel}%)</div>
-              <div class="info-card-value">${formatCurrency(customPoolAmount)}</div>
+              <div class="info-card-value">${formatCurrency(effectivePoolAmount)}</div>
             </div>
             <div class="info-card">
               <div class="info-card-label">Atendimentos</div>
@@ -267,7 +268,7 @@ export function SubscriptionCommissionPoolPage() {
                   <td class="text-right">${item.appointments}</td>
                   <td class="text-right">${item.points}</td>
                   <td class="text-right">${item.participationPercent.toFixed(2)}%</td>
-                  <td class="text-right font-semibold">${formatCurrency((customPoolAmount * item.participationPercent) / 100)}</td>
+                  <td class="text-right font-semibold">${formatCurrency(isFreeChoice ? (effectivePoolAmount * item.participationPercent) / 100 : item.commissionAmount)}</td>
                 </tr>
               `).join("")}
             </tbody>
@@ -287,7 +288,7 @@ export function SubscriptionCommissionPoolPage() {
     `;
     printWindow.document.write(html);
     printWindow.document.close();
-  }, [pool, customPercentLabel, customPoolAmount, periodStart, periodEnd, totalRevenue, distributions]);
+  }, [pool, customPercentLabel, effectivePoolAmount, isFreeChoice, periodStart, periodEnd, totalRevenue, distributions]);
 
   return (
     <div className="space-y-6">
@@ -295,12 +296,12 @@ export function SubscriptionCommissionPoolPage() {
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-lg font-semibold text-foreground">Pote de comissao de assinaturas</h3>
-            <Badge variant={isEnabled ? "default" : "secondary"}>
-              {isEnabled ? "Livre escolha ativo" : "Barbeiro fixo"}
+            <Badge variant={isFreeChoice ? "default" : "secondary"}>
+              {isFreeChoice ? "Livre escolha" : "Barbeiro fixo"}
             </Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            A distribuicao usa apenas atendimentos cobertos por plano no periodo selecionado.
+            Esta tela mostra apenas comissoes de assinaturas. Servicos avulsos ficam em Pagamento Funcionario.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -320,11 +321,6 @@ export function SubscriptionCommissionPoolPage() {
       {loading ? (
         <div className="flex items-center justify-center rounded-xl border border-border bg-card py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : !isEnabled ? (
-        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">
-          Para habilitar esta tela, altere a regra de barbeiro para assinantes em Configuracoes Gerais para
-          Livre escolha.
         </div>
       ) : (
         <>
@@ -347,6 +343,11 @@ export function SubscriptionCommissionPoolPage() {
                 </div>
                 <span className="text-xs text-muted-foreground">do faturamento total acumulado no pote</span>
               </div>
+              {!isFreeChoice && (
+                <p className="text-xs text-muted-foreground">
+                  No modo barbeiro fixo, a comissao usa o percentual configurado no servico/barbeiro.
+                </p>
+              )}
             </div>
             
             <Button
@@ -366,9 +367,11 @@ export function SubscriptionCommissionPoolPage() {
               </p>
             </div>
             <div className="rounded-xl border border-border bg-card p-5">
-              <p className="text-sm text-muted-foreground">Pote de comissao ({customPercentLabel}%)</p>
+              <p className="text-sm text-muted-foreground">
+                {isFreeChoice ? `Pote de comissao (${customPercentLabel}%)` : "Comissao de assinaturas"}
+              </p>
               <p className="mt-1 text-2xl font-semibold text-foreground">
-                {formatCurrency(customPoolAmount)}
+                {formatCurrency(effectivePoolAmount)}
               </p>
             </div>
             <div className="rounded-xl border border-border bg-card p-5">
@@ -441,7 +444,7 @@ export function SubscriptionCommissionPoolPage() {
                           {item.participationPercent.toFixed(2)}%
                         </td>
                         <td className="px-4 py-3 text-right font-semibold text-foreground">
-                          {formatCurrency((customPoolAmount * item.participationPercent) / 100)}
+                          {formatCurrency(isFreeChoice ? (effectivePoolAmount * item.participationPercent) / 100 : item.commissionAmount)}
                         </td>
                       </tr>
                     ))

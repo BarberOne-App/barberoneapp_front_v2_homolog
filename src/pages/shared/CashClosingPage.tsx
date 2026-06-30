@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Calendar, CheckCircle, Download, Loader2, Search } from "lucide-react";
+import { BanknoteArrowDown, Calendar, CheckCircle, CreditCard, Download, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import {
   createCashClosing,
@@ -15,7 +24,13 @@ import {
   type CashClosingPayment,
   type CashClosingSummary,
 } from "@/service/cashClosingService";
-import type { PaymentMethod } from "@/service/paymentService";
+import {
+  createCashOut,
+  createManualSubscriptionPayment,
+  type CashOutCategory,
+  type PaymentMethod,
+} from "@/service/paymentService";
+import { listSubscriptions, type Subscription } from "@/service/subscriptionService";
 import { downloadPdfReport, type ReportColumn } from "@/utils/reportExport";
 
 type OpenCashSession = {
@@ -34,6 +49,28 @@ const methodLabels: Record<PaymentMethod, string> = {
   pix: "PIX",
   subscription: "Assinatura",
 };
+
+const manualSubscriptionMethods: Array<Exclude<PaymentMethod, "subscription">> = [
+  "dinheiro",
+  "pix",
+  "debito",
+  "credito",
+  "local",
+];
+
+const cashOutCategoryLabels: Record<CashOutCategory, string> = {
+  employees: "Funcionarios",
+  other: "Outros",
+  products: "Produtos",
+  refunds: "Estornos",
+};
+
+const cashOutCategories: CashOutCategory[] = ["products", "employees", "refunds", "other"];
+
+function toDateTimeLocalValue(date: Date) {
+  const offsetMs = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -109,6 +146,10 @@ function getStoredOpenCashSession() {
 }
 
 function getCashPaymentDescription(payment: CashClosingPayment) {
+  if (payment.type === "cash_out") {
+    const label = cashOutCategoryLabels[payment.cashOutCategory as CashOutCategory] || "Saida de caixa";
+    return payment.description ? `Saida: ${label} - ${payment.description}` : `Saida: ${label}`;
+  }
   if (payment.type === "subscription") return payment.subscriptionPlanName || "Assinatura";
   if (payment.type === "extra") return "Pagamento extra";
   return "Agendamento";
@@ -276,6 +317,24 @@ export function CashClosingPage() {
   const [dateFilter, setDateFilter] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [manualPaymentOpen, setManualPaymentOpen] = useState(false);
+  const [subscriptionSearch, setSubscriptionSearch] = useState("");
+  const [subscriptionOptions, setSubscriptionOptions] = useState<Subscription[]>([]);
+  const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState("");
+  const [selectedSubscriptionLabel, setSelectedSubscriptionLabel] = useState("");
+  const [manualPaymentAmount, setManualPaymentAmount] = useState("");
+  const [manualPaymentMethod, setManualPaymentMethod] =
+    useState<Exclude<PaymentMethod, "subscription">>("dinheiro");
+  const [manualPaidAt, setManualPaidAt] = useState(() => toDateTimeLocalValue(new Date()));
+  const [savingManualPayment, setSavingManualPayment] = useState(false);
+  const [cashOutOpen, setCashOutOpen] = useState(false);
+  const [cashOutCategory, setCashOutCategory] = useState<CashOutCategory>("products");
+  const [cashOutAmount, setCashOutAmount] = useState("");
+  const [cashOutMethod, setCashOutMethod] = useState<Exclude<PaymentMethod, "subscription">>("dinheiro");
+  const [cashOutPaidAt, setCashOutPaidAt] = useState(() => toDateTimeLocalValue(new Date()));
+  const [cashOutDescription, setCashOutDescription] = useState("");
+  const [savingCashOut, setSavingCashOut] = useState(false);
   const limit = 10;
 
   const loadCashClosings = useCallback(async () => {
@@ -300,6 +359,34 @@ export function CashClosingPage() {
   useEffect(() => {
     void loadCashClosings();
   }, [loadCashClosings]);
+
+  const loadSubscriptionOptions = useCallback(async () => {
+    setLoadingSubscriptions(true);
+    try {
+      const result = await listSubscriptions({
+        search: subscriptionSearch.trim() || undefined,
+        searchType: "name",
+        page: 1,
+        limit: 50,
+      });
+      setSubscriptionOptions(result.items);
+    } catch (err) {
+      setSubscriptionOptions([]);
+      toast.error(getApiMessage(err));
+    } finally {
+      setLoadingSubscriptions(false);
+    }
+  }, [subscriptionSearch]);
+
+  useEffect(() => {
+    if (!manualPaymentOpen) return;
+
+    const timeout = window.setTimeout(() => {
+      void loadSubscriptionOptions();
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [manualPaymentOpen, subscriptionSearch, loadSubscriptionOptions]);
 
   useEffect(() => {
     setPage(1);
@@ -407,6 +494,103 @@ export function CashClosingPage() {
     }
   }
 
+  function handleSelectSubscription(subscriptionId: string) {
+    setSelectedSubscriptionId(subscriptionId);
+    const selected = subscriptionOptions.find((subscription) => subscription.id === subscriptionId);
+    if (selected) {
+      if (selected.hasPagarmeSubscription) {
+        toast.error("Esta assinatura possui recorrencia no Pagar.me. Cancele ou altere a recorrencia antes de registrar pagamento presencial.");
+        setSelectedSubscriptionId("");
+        setSelectedSubscriptionLabel("");
+        setManualPaymentAmount("");
+        return;
+      }
+
+      setSelectedSubscriptionLabel(
+        `${selected.user?.name || "Cliente"} - ${selected.plan?.name || "Plano"}`
+      );
+      setSubscriptionSearch(selected.user?.name || "");
+      setManualPaymentAmount(String(selected.amount || selected.plan?.price || ""));
+    }
+  }
+
+  async function handleRegisterManualSubscriptionPayment() {
+    if (!cashIsOpen) {
+      toast.error("Abra o caixa antes de registrar pagamentos.");
+      return;
+    }
+
+    if (!selectedSubscriptionId) {
+      toast.error("Selecione uma assinatura.");
+      return;
+    }
+
+    const amount = Number(String(manualPaymentAmount).replace(",", "."));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Informe um valor valido.");
+      return;
+    }
+
+    setSavingManualPayment(true);
+    try {
+      await createManualSubscriptionPayment({
+        subscriptionId: selectedSubscriptionId,
+        amount,
+        method: manualPaymentMethod,
+        paidAt: manualPaidAt ? new Date(manualPaidAt).toISOString() : undefined,
+      });
+      toast.success("Pagamento de assinatura registrado.");
+      setManualPaymentOpen(false);
+      setSelectedSubscriptionId("");
+      setSelectedSubscriptionLabel("");
+      setManualPaymentAmount("");
+      setSubscriptionSearch("");
+      setManualPaymentMethod("dinheiro");
+      setManualPaidAt(toDateTimeLocalValue(new Date()));
+      await loadCashClosings();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSavingManualPayment(false);
+    }
+  }
+
+  async function handleRegisterCashOut() {
+    if (!cashIsOpen) {
+      toast.error("Abra o caixa antes de registrar saidas.");
+      return;
+    }
+
+    const amount = Number(String(cashOutAmount).replace(",", "."));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Informe um valor valido.");
+      return;
+    }
+
+    setSavingCashOut(true);
+    try {
+      await createCashOut({
+        category: cashOutCategory,
+        amount,
+        method: cashOutMethod,
+        description: cashOutDescription.trim() || undefined,
+        paidAt: cashOutPaidAt ? new Date(cashOutPaidAt).toISOString() : undefined,
+      });
+      toast.success("Saida de caixa registrada.");
+      setCashOutOpen(false);
+      setCashOutCategory("products");
+      setCashOutAmount("");
+      setCashOutMethod("dinheiro");
+      setCashOutDescription("");
+      setCashOutPaidAt(toDateTimeLocalValue(new Date()));
+      await loadCashClosings();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSavingCashOut(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
@@ -457,6 +641,24 @@ export function CashClosingPage() {
             ) : null}
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => setManualPaymentOpen(true)}
+              disabled={!cashIsOpen || loading}
+              className="gap-2"
+            >
+              <CreditCard size={14} />
+              Registrar assinatura
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setCashOutOpen(true)}
+              disabled={!cashIsOpen || loading}
+              className="gap-2"
+            >
+              <BanknoteArrowDown size={14} />
+              Registrar saida
+            </Button>
             <Button
               variant="outline"
               onClick={handleExportCashClosingsPdf}
@@ -644,6 +846,254 @@ export function CashClosingPage() {
           </div>
         </div>
       </div>
+
+      <Dialog open={manualPaymentOpen} onOpenChange={setManualPaymentOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Registrar pagamento de assinatura</DialogTitle>
+            <DialogDescription>
+              Use quando o cliente pagar presencialmente em dinheiro, PIX ou cartao.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="subscription-search">Cliente</Label>
+              <div className="space-y-2">
+                <Input
+                  id="subscription-search"
+                  value={subscriptionSearch}
+                  onChange={(event) => {
+                    setSubscriptionSearch(event.target.value);
+                    setSelectedSubscriptionId("");
+                    setSelectedSubscriptionLabel("");
+                  }}
+                  placeholder="Digite para pesquisar por nome"
+                />
+                <div className="max-h-52 overflow-y-auto rounded-md border border-border bg-background">
+                  {loadingSubscriptions ? (
+                    <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Carregando clientes...
+                    </div>
+                  ) : subscriptionOptions.length === 0 ? (
+                    <p className="px-3 py-3 text-sm text-muted-foreground">
+                      Nenhuma assinatura encontrada.
+                    </p>
+                  ) : (
+                    subscriptionOptions.map((subscription) => {
+                      const label = `${subscription.user?.name || "Cliente"} - ${subscription.plan?.name || "Plano"}`;
+                      const selected = selectedSubscriptionId === subscription.id;
+                      const blockedByPagarme = Boolean(subscription.hasPagarmeSubscription);
+
+                      return (
+                        <button
+                          key={subscription.id}
+                          type="button"
+                          disabled={blockedByPagarme}
+                          onClick={() => handleSelectSubscription(subscription.id)}
+                          className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-55 ${
+                            selected ? "bg-primary/10 text-primary" : "text-foreground"
+                          }`}
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium">
+                              {subscription.user?.name || "Cliente"}
+                            </span>
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {subscription.plan?.name || "Plano"} - {formatCurrency(subscription.amount || subscription.plan?.price || 0)}
+                              {blockedByPagarme ? " - recorrente no Pagar.me" : ""}
+                            </span>
+                          </span>
+                          <div className="flex shrink-0 items-center gap-1">
+                            {blockedByPagarme && (
+                              <Badge variant="outline" className="rounded-full border-amber-500/40 px-2 py-0.5 text-[11px] text-amber-500">
+                                Pagar.me
+                              </Badge>
+                            )}
+                            <Badge variant="outline" className="rounded-full px-2 py-0.5 text-[11px]">
+                              {subscription.status}
+                            </Badge>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                {selectedSubscriptionLabel ? (
+                  <p className="text-xs text-muted-foreground">
+                    Selecionado: <span className="font-medium text-foreground">{selectedSubscriptionLabel}</span>
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="manual-payment-amount">Valor</Label>
+                <Input
+                  id="manual-payment-amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={manualPaymentAmount}
+                  onChange={(event) => setManualPaymentAmount(event.target.value)}
+                  placeholder="0,00"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="manual-payment-method">Forma</Label>
+                <select
+                  id="manual-payment-method"
+                  value={manualPaymentMethod}
+                  onChange={(event) => setManualPaymentMethod(event.target.value as Exclude<PaymentMethod, "subscription">)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {manualSubscriptionMethods.map((method) => (
+                    <option key={method} value={method}>
+                      {methodLabels[method]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="manual-paid-at">Pago em</Label>
+                <Input
+                  id="manual-paid-at"
+                  type="datetime-local"
+                  value={manualPaidAt}
+                  onChange={(event) => setManualPaidAt(event.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setManualPaymentOpen(false)}
+              disabled={savingManualPayment}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleRegisterManualSubscriptionPayment}
+              disabled={savingManualPayment || loadingSubscriptions}
+              className="gap-2"
+            >
+              {savingManualPayment && <Loader2 className="h-4 w-4 animate-spin" />}
+              Registrar pagamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={cashOutOpen} onOpenChange={setCashOutOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Registrar saida de caixa</DialogTitle>
+            <DialogDescription>
+              Lance pagamentos de produtos, funcionarios, estornos e outras saidas do caixa aberto.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="cash-out-category">Categoria</Label>
+                <select
+                  id="cash-out-category"
+                  value={cashOutCategory}
+                  onChange={(event) => setCashOutCategory(event.target.value as CashOutCategory)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {cashOutCategories.map((category) => (
+                    <option key={category} value={category}>
+                      {cashOutCategoryLabels[category]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="cash-out-method">Forma</Label>
+                <select
+                  id="cash-out-method"
+                  value={cashOutMethod}
+                  onChange={(event) => setCashOutMethod(event.target.value as Exclude<PaymentMethod, "subscription">)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {manualSubscriptionMethods.map((method) => (
+                    <option key={method} value={method}>
+                      {methodLabels[method]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="cash-out-amount">Valor</Label>
+                <Input
+                  id="cash-out-amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={cashOutAmount}
+                  onChange={(event) => setCashOutAmount(event.target.value)}
+                  placeholder="0,00"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="cash-out-paid-at">Data da saida</Label>
+                <Input
+                  id="cash-out-paid-at"
+                  type="datetime-local"
+                  value={cashOutPaidAt}
+                  onChange={(event) => setCashOutPaidAt(event.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cash-out-description">Descricao</Label>
+              <Input
+                id="cash-out-description"
+                value={cashOutDescription}
+                onChange={(event) => setCashOutDescription(event.target.value)}
+                placeholder="Ex.: compra de produtos, vale funcionario, estorno do cliente"
+                maxLength={255}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCashOutOpen(false)}
+              disabled={savingCashOut}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleRegisterCashOut}
+              disabled={savingCashOut}
+              className="gap-2"
+            >
+              {savingCashOut && <Loader2 className="h-4 w-4 animate-spin" />}
+              Registrar saida
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
