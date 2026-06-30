@@ -103,6 +103,35 @@ export async function createAppointmentPayment(data: CreateAppointmentPaymentPay
   return response.data;
 }
 
+export interface CreateManualSubscriptionPaymentPayload {
+  subscriptionId: string;
+  amount: number;
+  method: Exclude<PaymentMethod, "subscription">;
+  paidAt?: string;
+}
+
+export async function createManualSubscriptionPayment(data: CreateManualSubscriptionPaymentPayload) {
+  const response = await api.post<PaymentRecord>("/payments/subscriptions/manual", data);
+
+  return response.data;
+}
+
+export type CashOutCategory = "products" | "employees" | "refunds" | "other";
+
+export interface CreateCashOutPayload {
+  category: CashOutCategory;
+  amount: number;
+  method: Exclude<PaymentMethod, "subscription">;
+  description?: string | null;
+  paidAt?: string;
+}
+
+export async function createCashOut(data: CreateCashOutPayload) {
+  const response = await api.post<PaymentRecord>("/payments/cash-out", data);
+
+  return response.data;
+}
+
 export async function listAllPayments(params: ListPaymentsParams = {}): Promise<PaymentListResult> {
   const response = await api.get<PaymentListResult>("/payments/all", { params });
 

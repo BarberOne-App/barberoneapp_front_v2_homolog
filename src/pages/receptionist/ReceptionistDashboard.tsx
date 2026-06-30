@@ -19,8 +19,8 @@ const shortcuts = [
     icon: Calendar,
   },
   {
-    label: "Encaixe",
-    description: "Agendamento fora da grade normal.",
+    label: "Agenda",
+    description: "Gerencie horarios livres e agendamentos.",
     href: "/encaixe",
     icon: Zap,
   },

@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Calendar,
+  Boxes,
   CircleDollarSign,
   CreditCard,
   BanknoteArrowDown,
@@ -16,13 +17,11 @@ import {
   UserX,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
 
 import { ProfileSidebar } from "../shared/ProfileSidebar";
 import type { SidebarSection } from "../shared/ProfileSidebar";
-import { getSettings } from "@/service/settingsService";
 
-function buildSections(showSubscriptionCommissions: boolean): SidebarSection[] {
+function buildSections(): SidebarSection[] {
   return [
     {
       items: [
@@ -36,7 +35,7 @@ function buildSections(showSubscriptionCommissions: boolean): SidebarSection[] {
           label: "Operacao",
           children: [
             { icon: Calendar, label: "Agendamentos", href: "/bookings" },
-            { icon: Zap, label: "Encaixe", href: "/encaixe" },
+            { icon: Zap, label: "Agenda", href: "/encaixe" },
             { icon: Calendar, label: "Calendario", href: "/schedules" },
           ],
         },
@@ -51,9 +50,7 @@ function buildSections(showSubscriptionCommissions: boolean): SidebarSection[] {
             { icon: CreditCard, label: "Pagamentos", href: "/payments" },
             { icon: CircleDollarSign, label: "Fechamento de caixa", href: "/cash-closing" },
             { icon: HandCoins, label: "Pagamento Funcionario", href: "/employee-payroll" },
-            ...(showSubscriptionCommissions
-              ? [{ icon: CircleDollarSign, label: "Comissoes Plano", href: "/subscription-commissions" }]
-              : []),
+            { icon: CircleDollarSign, label: "Comissoes Plano", href: "/subscription-commissions" },
             { icon: PlusCircle, label: "Pagamentos Extras", href: "/extra-payments" },
           ],
         },
@@ -67,6 +64,7 @@ function buildSections(showSubscriptionCommissions: boolean): SidebarSection[] {
           children: [
             { icon: Scissors, label: "Servicos", href: "/services" },
             { icon: Package, label: "Produtos", href: "/products" },
+            { icon: Boxes, label: "Estoque", href: "/stock" },
             { icon: Image, label: "Galeria", href: "/gallery" },
           ],
         },
@@ -104,34 +102,5 @@ function buildSections(showSubscriptionCommissions: boolean): SidebarSection[] {
 }
 
 export function AdminSidebar() {
-  const [showSubscriptionCommissions, setShowSubscriptionCommissions] = useState(false);
-  const sections = useMemo(
-    () => buildSections(showSubscriptionCommissions),
-    [showSubscriptionCommissions],
-  );
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadSettings() {
-      try {
-        const settings = await getSettings();
-        if (isMounted) {
-          setShowSubscriptionCommissions(settings.subscriptionBarberRule === "free_choice");
-        }
-      } catch {
-        if (isMounted) setShowSubscriptionCommissions(false);
-      }
-    }
-
-    void loadSettings();
-    window.addEventListener("barbershop:updated", loadSettings);
-
-    return () => {
-      isMounted = false;
-      window.removeEventListener("barbershop:updated", loadSettings);
-    };
-  }, []);
-
-  return <ProfileSidebar title="Painel da Barbearia" homeHref="/home" sections={sections} />;
+  return <ProfileSidebar title="Painel da Barbearia" homeHref="/home" sections={buildSections()} />;
 }
