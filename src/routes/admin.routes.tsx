@@ -21,6 +21,7 @@ import { PaymentsPage } from "../pages/shared/PaymentsPage";
 import { ReviewsPage } from "../pages/shared/ReviewsPage";
 import { SchedulesPage } from "../pages/shared/SchedulesPage";
 import { ServicesPage } from "../pages/shared/ServicesPage";
+import { StockPage } from "../pages/admin/StockPage";
 import { UsersPage } from "../pages/shared/UsersPage";
 import type { AppRoute } from "./types";
 
@@ -130,6 +131,13 @@ export const adminRoutes: AppRoute[] = [
     title: "Produtos",
     breadcrumbs: ["Gerenciar", "Produtos"],
     Component: ProductsPage,
+  },
+  {
+    path: "/stock",
+    title: "Estoque",
+    breadcrumbs: ["Gerenciar", "Estoque"],
+    Component: StockPage,
+    requiredPermission: "manageProducts",
   },
   {
     path: "/plans",

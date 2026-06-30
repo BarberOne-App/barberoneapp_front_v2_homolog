@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Calendar,
+  Boxes,
   CircleDollarSign,
   CreditCard,
   BanknoteArrowDown,
@@ -63,6 +64,7 @@ function buildSections(): SidebarSection[] {
           children: [
             { icon: Scissors, label: "Servicos", href: "/services" },
             { icon: Package, label: "Produtos", href: "/products" },
+            { icon: Boxes, label: "Estoque", href: "/stock" },
             { icon: Image, label: "Galeria", href: "/gallery" },
           ],
         },
