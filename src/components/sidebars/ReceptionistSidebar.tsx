@@ -14,7 +14,7 @@ const sections: SidebarSection[] = [
         label: "Operacao",
         children: [
           { icon: Calendar, label: "Agendamentos", href: "/bookings" },
-          { icon: Zap, label: "Encaixe", href: "/encaixe" },
+          { icon: Zap, label: "Agenda", href: "/encaixe" },
           { icon: Calendar, label: "Agenda", href: "/schedules", requiredPermission: "manageBlockedDates" },
         ],
       },

@@ -39,6 +39,7 @@ import {
   buildCalendarAppointmentsByBarber,
   buildCalendarFreeSlotsByBarber,
   buildCalendarTimeSlots,
+  APPOINTMENT_CLIENT_STATUS_CONFIG,
   CALENDAR_END_MINUTES,
   CALENDAR_FIT_SLOT_MAX_MINUTES,
   CALENDAR_MINUTES_PER_SLOT,
@@ -244,7 +245,7 @@ function FitBookingDialog({ slotInfo, onClose, onSuccess }: FitBookingDialogProp
         })),
         products: [],
       });
-      toast.success("Encaixe criado com sucesso.");
+      toast.success("Agenda criada com sucesso.");
       onSuccess();
     } catch (err) {
       toast.error(getApiMessage(err));
@@ -259,7 +260,7 @@ function FitBookingDialog({ slotInfo, onClose, onSuccess }: FitBookingDialogProp
       <DialogContent className="sm:max-w-lg">
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Criar Encaixe</DialogTitle>
+            <DialogTitle>Criar Agenda</DialogTitle>
             <DialogDescription>
               {slotInfo.barberName}
               {" · "}
@@ -364,7 +365,7 @@ function FitBookingDialog({ slotInfo, onClose, onSuccess }: FitBookingDialogProp
               {saving ? (
                 <><Loader2 className="h-4 w-4 animate-spin" />Salvando</>
               ) : (
-                "Criar Encaixe"
+                "Criar Agenda"
               )}
             </Button>
           </DialogFooter>
@@ -586,7 +587,7 @@ export function FitAppointmentPage() {
             <Zap size={18} className="text-emerald-500" />
           </div>
           <div>
-            <p className="text-sm text-muted-foreground mb-1">Encaixes livres</p>
+            <p className="text-sm text-muted-foreground mb-1">Horarios livres</p>
             <h3 className="text-2xl font-semibold text-foreground">
               {loadingAppointments ? <Loader2 size={18} className="animate-spin" /> : totalFreeSlots}
             </h3>
@@ -633,7 +634,7 @@ export function FitAppointmentPage() {
         {/* Header */}
         <div className="flex flex-col gap-3 p-4 border-b border-border lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <h3 className="text-base font-medium text-foreground">Encaixe de Agendamento</h3>
+            <h3 className="text-base font-medium text-foreground">Agenda</h3>
             {loadingAppointments && (
               <Loader2 size={14} className="animate-spin text-muted-foreground" />
             )}
@@ -650,19 +651,40 @@ export function FitAppointmentPage() {
                     background: 'rgba(16,185,129,0.07)',
                   }}
                 />
-                <span className="text-emerald-500">Encaixe livre</span>
+                <span className="text-emerald-500">Horario livre</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <div
-                  className="h-3 w-5 shrink-0 rounded"
-                  style={{
-                    border: '1px solid rgba(56,189,248,0.28)',
-                    borderLeft: '3px solid #38bdf8',
-                    background: 'rgba(8,47,73,0.90)',
-                  }}
-                />
-                <span>Agendamento</span>
-              </div>
+              <details className="relative">
+                <summary className="cursor-pointer select-none rounded-md border border-border px-2 py-1 text-foreground hover:bg-muted">
+                  Cores
+                </summary>
+                <div className="absolute right-0 z-30 mt-2 w-72 rounded-lg border border-border bg-card p-3 shadow-xl">
+                  {[
+                    APPOINTMENT_CLIENT_STATUS_CONFIG.no_show,
+                    APPOINTMENT_CLIENT_STATUS_CONFIG.no_plan,
+                    APPOINTMENT_CLIENT_STATUS_CONFIG.with_plan,
+                    APPOINTMENT_CLIENT_STATUS_CONFIG.overdue,
+                    APPOINTMENT_CLIENT_STATUS_CONFIG.in_progress,
+                    APPOINTMENT_CLIENT_STATUS_CONFIG.completed,
+                  ].map((item) => (
+                    <div key={item.key} className="mb-2 last:mb-0">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-3 w-5 shrink-0 rounded border border-l-4"
+                          style={{
+                            background: item.color.cardBg,
+                            borderColor: item.color.border,
+                            borderLeftColor: item.color.accent,
+                          }}
+                        />
+                        <span className="font-medium text-foreground">{item.label}</span>
+                      </div>
+                      <p className="ml-7 mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                        {item.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
 
             {/* Seletor de data */}

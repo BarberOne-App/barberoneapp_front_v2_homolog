@@ -26,8 +26,8 @@ export const receptionistRoutes: AppRoute[] = [
   },
   {
     path: "/encaixe",
-    title: "Encaixe",
-    breadcrumbs: ["Operacao", "Encaixe"],
+    title: "Agenda",
+    breadcrumbs: ["Operacao", "Agenda"],
     Component: FitAppointmentPage,
   },
   {

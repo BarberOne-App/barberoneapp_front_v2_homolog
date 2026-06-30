@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getStableCalendarColor, CALENDAR_END_MINUTES } from '@/utils/adminCalendar';
+import { APPOINTMENT_CLIENT_STATUS_CONFIG, getStableCalendarColor, CALENDAR_END_MINUTES } from '@/utils/adminCalendar';
 import type { CalendarAppointment, CalendarColor, FreeSlot } from '@/utils/adminCalendar';
 import type { Barber } from '@/service/barberService';
 import type { Appointment } from '@/service/appointmentService';
@@ -60,6 +60,14 @@ export default function AdminAppointmentsCalendar({
   getAppointmentStartDate,
 }: Props) {
   const [aptModal, setAptModal] = useState<AptModalState | null>(null);
+  const statusLegend = [
+    APPOINTMENT_CLIENT_STATUS_CONFIG.no_show,
+    APPOINTMENT_CLIENT_STATUS_CONFIG.no_plan,
+    APPOINTMENT_CLIENT_STATUS_CONFIG.with_plan,
+    APPOINTMENT_CLIENT_STATUS_CONFIG.overdue,
+    APPOINTMENT_CLIENT_STATUS_CONFIG.in_progress,
+    APPOINTMENT_CLIENT_STATUS_CONFIG.completed,
+  ];
 
   const getAppointmentRangeMinutes = (appointment: CalendarAppointment) => {
     const [aptH, aptM] = String(appointment.startTime || '00:00').split(':').map(Number);
@@ -290,7 +298,7 @@ export default function AdminAppointmentsCalendar({
                                 onFreeFitBooking(barber.id, calDate, freeSlot.startMinutes, freeSlot.durationMinutes);
                               }}
                             >
-                              Encaixe livre &bull; {freeSlot.durationMinutes} min
+                              Agenda livre &bull; {freeSlot.durationMinutes} min
                             </div>
                           );
                         })}
@@ -435,17 +443,28 @@ export default function AdminAppointmentsCalendar({
             >
               <div className="apt-detail-header">
                 <div className="apt-detail-header-left">
-                  {appointment.isFitAppointment && <span className="apt-detail-fit-badge">✂ Encaixe</span>}
+                  {appointment.isFitAppointment && <span className="apt-detail-fit-badge">Agenda</span>}
                   <h3 className="apt-detail-title">Detalhes do Agendamento</h3>
                 </div>
                 <button className="apt-detail-close" onClick={() => setAptModal(null)} aria-label="Fechar">×</button>
               </div>
 
               {appointment.isFitAppointment && (
-                <div className="apt-detail-fit-notice">✂ Agendamento realizado por encaixe</div>
+                <div className="apt-detail-fit-notice">Agendamento criado pela agenda</div>
               )}
 
               <div className="apt-detail-body">
+                <div className="apt-detail-status-card">
+                  <span
+                    className="apt-detail-status-dot"
+                    style={{ background: appointment.clientStatus.color.accent }}
+                  />
+                  <div>
+                    <span className="apt-detail-status-label">Status do cliente</span>
+                    <strong>{appointment.clientStatus.label}</strong>
+                    <span>{appointment.clientStatus.description}</span>
+                  </div>
+                </div>
                 <div className="apt-detail-row">
                   <span className="apt-detail-label">Cliente</span>
                   <span className="apt-detail-value">{clientName}</span>
@@ -479,6 +498,24 @@ export default function AdminAppointmentsCalendar({
               </div>
 
               <div className="apt-detail-footer">
+                <details className="apt-detail-legend">
+                  <summary>Legenda de cores</summary>
+                  <div className="apt-detail-legend-list">
+                    {statusLegend.map((item) => (
+                      <div key={item.key} className="apt-detail-legend-item">
+                        <span
+                          className="apt-detail-legend-swatch"
+                          style={{
+                            background: item.color.cardBg,
+                            borderColor: item.color.border,
+                            borderLeftColor: item.color.accent,
+                          }}
+                        />
+                        <span>{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
                 <button className="apt-detail-btn-close" onClick={() => setAptModal(null)}>Fechar</button>
               </div>
             </div>
