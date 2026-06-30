@@ -32,6 +32,8 @@ export interface Subscription {
   endedAt?: string | null;
   startedAt: string | null;
   paymentMethod?: string | null;
+  hasPagarmeSubscription?: boolean;
+  pagarmeSubscriptionId?: string | null;
   isRecurring?: boolean;
   autoRenewal?: boolean;
   daysOverdue?: number;

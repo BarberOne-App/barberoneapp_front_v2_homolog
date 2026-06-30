@@ -14,7 +14,9 @@ export interface CashClosingPayment {
   createdAt: string;
   appointmentStartAt?: string | null;
   subscriptionPlanName?: string | null;
-  type: "appointment" | "subscription" | "extra";
+  description?: string | null;
+  cashOutCategory?: "products" | "employees" | "refunds" | "other" | string | null;
+  type: "appointment" | "subscription" | "extra" | "cash_out";
 }
 
 export interface CashClosingSummary {
