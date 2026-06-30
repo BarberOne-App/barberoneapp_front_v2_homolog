@@ -3,6 +3,7 @@ import {
   Calendar,
   Cake,
   CreditCard,
+  Download,
   Edit,
   Filter,
   Loader2,
@@ -75,6 +76,7 @@ import {
   type Subscription,
 } from "@/service/subscriptionService";
 import { listPlans, type Plan } from "@/service/planService";
+import { downloadCsvReport, downloadPdfReport, type ReportColumn } from "@/utils/reportExport";
 
 type CustomerStatus = "active" | "inactive" | "new";
 type CustomerFilter = "all" | CustomerStatus | "missing-phone";
@@ -444,6 +446,72 @@ export function CustomersPage() {
     return { active, newCustomers, withPhone, birthdayToday };
   }, [customers]);
 
+  const reportColumns: ReportColumn<UserProfile>[] = useMemo(() => [
+    { header: "Cliente", getValue: (customer) => customer.name },
+    { header: "CPF", getValue: (customer) => formatCpf(customer.cpf) || "-" },
+    { header: "Email", getValue: (customer) => customer.email || "-" },
+    { header: "Telefone", getValue: (customer) => formatPhone(customer.phone) },
+    { header: "Visitas", getValue: (customer) => customer.visits ?? 0, align: "center" },
+    { header: "Ultima visita", getValue: (customer) => formatDate(customer.lastVisit) },
+    { header: "Status", getValue: (customer) => statusLabel(getCustomerStatus(customer)) },
+    {
+      header: "Plano",
+      getValue: (customer) => {
+        const sub = subscriptionMap.get(customer.id);
+        if (!sub) return "Sem plano";
+        const labelMap: Record<string, string> = {
+          active: "Ativo",
+          paused: "Pausado",
+          cancelled: "Cancelado",
+          expired: "Expirado",
+        };
+        return `${sub.plan?.name ?? "Plano"} - ${labelMap[sub.status] ?? sub.status}`;
+      },
+    },
+    {
+      header: "Aniversario",
+      getValue: (customer) => formatBirthday(customer.birthDate ?? customer.birth_date) ?? "-",
+      align: "center",
+    },
+  ], [subscriptionMap]);
+
+  function ensureReportRows() {
+    if (filteredCustomers.length === 0) {
+      toast.error("Nao ha clientes para gerar o relatorio.");
+      return false;
+    }
+
+    return true;
+  }
+
+  function handleExportPdf() {
+    if (!ensureReportRows()) return;
+    downloadPdfReport(
+      `clientes-${new Date().toISOString().slice(0, 10)}.pdf`,
+      {
+        title: "Relatorio de Clientes",
+        subtitle: `Filtro: ${filter === "all" ? "Todos" : filter} - Busca: ${search.trim() || "sem busca"}`,
+        columns: reportColumns,
+        rows: filteredCustomers,
+        summary: [
+          ["Clientes na pagina", filteredCustomers.length],
+          ["Clientes ativos", stats.active],
+          ["Novos clientes", stats.newCustomers],
+          ["Com telefone", stats.withPhone],
+        ],
+      },
+    );
+  }
+
+  function handleExportCsv() {
+    if (!ensureReportRows()) return;
+    downloadCsvReport(
+      `clientes-${new Date().toISOString().slice(0, 10)}.csv`,
+      reportColumns,
+      filteredCustomers,
+    );
+  }
+
 
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -637,6 +705,14 @@ export function CustomersPage() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleExportPdf}>
+              <Download size={14} />
+              PDF
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleExportCsv}>
+              <Download size={14} />
+              CSV
+            </Button>
             {canEdit && (
               <Button size="sm" className="gap-2" onClick={openCreateDialog}>
                 <Plus size={14} />

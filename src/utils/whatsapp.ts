@@ -107,6 +107,19 @@ export function openWhatsApp(phone: string | null | undefined, message: string):
   }
 }
 
+export function openWhatsAppShare(message: string): void {
+  const encoded = encodeURIComponent(message);
+  const isMobile =
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  if (isMobile) {
+    window.location.href = `whatsapp://send?text=${encoded}`;
+    return;
+  }
+
+  window.open(`https://wa.me/?text=${encoded}`, "_blank");
+}
+
 function buildConfirmationMessage(appointment: Appointment): string {
   const clientName =
     appointment.dependent?.name ??

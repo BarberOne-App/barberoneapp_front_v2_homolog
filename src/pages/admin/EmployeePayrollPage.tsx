@@ -4,6 +4,7 @@ import {
   Banknote,
   Calendar,
   CheckCircle,
+  Download,
   Eye,
   Filter,
   HandCoins,
@@ -49,6 +50,7 @@ import {
   type PaymentFrequency,
   type PaymentFrequencySettings,
 } from "@/service/settingsService";
+import { downloadCsvReport, downloadPdfReport, type ReportColumn } from "@/utils/reportExport";
 
 type StatusFilter = "all" | EmployeePaymentStatus;
 type RoleFilter = "all" | "admin" | "barber" | "receptionist";
@@ -277,6 +279,59 @@ export function EmployeePayrollPage() {
     );
   }, [rows, search]);
 
+  const reportColumns: ReportColumn<EmployeePayrollRow>[] = useMemo(() => [
+    { header: "Funcionario", getValue: (row) => row.employeeName },
+    { header: "Funcao", getValue: (row) => `${row.roleLabel} - ${row.functionType}` },
+    {
+      header: "Periodo",
+      getValue: (row) => `${formatDate(row.periodStart)} - ${formatDate(row.periodEnd)}`,
+    },
+    { header: "Salario Fixo", getValue: (row) => formatCurrency(row.baseSalary), align: "center" },
+    { header: "Comissao Total", getValue: (row) => formatCurrency(row.commission), align: "center" },
+    { header: "Comissao Paga", getValue: (row) => formatCurrency(row.folhaPago), align: "center" },
+    { header: "Vales", getValue: (row) => formatCurrency(row.totalVales), align: "center" },
+    { header: "Liquido", getValue: (row) => formatCurrency(row.netAmount), align: "center" },
+    { header: "Pendente", getValue: (row) => formatCurrency(row.amountDue), align: "center" },
+    { header: "Status", getValue: (row) => statusLabels[row.status] },
+  ], []);
+
+  function ensureReportRows() {
+    if (filteredRows.length === 0) {
+      toast.error("Nao ha registros para gerar o relatorio.");
+      return false;
+    }
+
+    return true;
+  }
+
+  function handleExportCsv() {
+    if (!ensureReportRows()) return;
+    downloadCsvReport(
+      `pagamentos-funcionarios-${periodStart}-${periodEnd}.csv`,
+      reportColumns,
+      filteredRows,
+    );
+  }
+
+  function handleExportPdf() {
+    if (!ensureReportRows()) return;
+    downloadPdfReport(
+      `pagamentos-funcionarios-${periodStart}-${periodEnd}.pdf`,
+      {
+        title: "Relatorio de Pagamento de Funcionarios",
+        subtitle: `Periodo: ${formatDate(periodStart)} - ${formatDate(periodEnd)}`,
+        columns: reportColumns,
+        rows: filteredRows,
+        summary: [
+          ["Comissoes", formatCurrency(totals.commission)],
+          ["Vales/descontos", formatCurrency(totals.totalVales)],
+          ["Valor liquido", formatCurrency(totals.netAmount)],
+          ["Saldo pendente", formatCurrency(totals.amountDue)],
+        ],
+      },
+    );
+  }
+
   function openVale(row: EmployeePayrollRow) {
     setSelectedRow(row);
     setValeForm({
@@ -481,6 +536,14 @@ export function EmployeePayrollPage() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleExportPdf}>
+              <Download size={14} />
+              PDF
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" onClick={handleExportCsv}>
+              <Download size={14} />
+              CSV
+            </Button>
           </div>
         </div>
 
