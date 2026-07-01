@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BanknoteArrowDown, Calendar, CheckCircle, CreditCard, Download, Loader2, Search } from "lucide-react";
+import { BanknoteArrowDown, CheckCircle, CreditCard, Download, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +70,41 @@ const cashOutCategories: CashOutCategory[] = ["products", "employees", "refunds"
 function toDateTimeLocalValue(date: Date) {
   const offsetMs = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+}
+
+function endOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+}
+
+function toDateInputValue(date: Date) {
+  return toDateTimeLocalValue(date).slice(0, 10);
+}
+
+function currentMonthRange() {
+  const now = new Date();
+  return {
+    start: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)),
+    end: toDateInputValue(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  };
+}
+
+function dateInputToLocalDate(value: string) {
+  return new Date(`${value}T00:00:00`);
+}
+
+function isCurrentMonthRange(start: string, end: string) {
+  const current = currentMonthRange();
+  return start === current.start && end === current.end;
+}
+
+function formatReportRangeLabel(startDate: string, endDate: string) {
+  const start = startDate ? formatReportDateTime(startOfLocalDay(dateInputToLocalDate(startDate)).toISOString()) : "-";
+  const end = endDate ? formatReportDateTime(endOfLocalDay(dateInputToLocalDate(endDate)).toISOString()) : "-";
+  return `${start} ate ${end}`;
 }
 
 function formatCurrency(value: number) {
@@ -148,31 +183,137 @@ function getStoredOpenCashSession() {
 function getCashPaymentDescription(payment: CashClosingPayment) {
   if (payment.type === "cash_out") {
     const label = cashOutCategoryLabels[payment.cashOutCategory as CashOutCategory] || "Saida de caixa";
-    return payment.description ? `Saida: ${label} - ${payment.description}` : `Saida: ${label}`;
+    const description = getValidCashOutDescription(payment);
+    return description ? `Saida: ${label} - ${description}` : `Saida: ${label}`;
   }
   if (payment.type === "subscription") return payment.subscriptionPlanName || "Assinatura";
   if (payment.type === "extra") return "Pagamento extra";
   return "Agendamento";
 }
 
+function getValidCashOutDescription(payment: CashClosingPayment) {
+  if (payment.type !== "cash_out") return payment.description || "";
+
+  const description = String(payment.description || "").trim();
+  if (!description) return getDefaultCashOutDescription(payment);
+
+  const normalized = normalizeText(description);
+  if (normalized === "agua" || normalized === "aguas") return getDefaultCashOutDescription(payment);
+
+  return description;
+}
+
+function getDefaultCashOutDescription(payment: CashClosingPayment) {
+  if (payment.cashOutCategory === "products") return "compra de produtos";
+  if (payment.cashOutCategory === "employees") return "pagamento de funcionarios";
+  if (payment.cashOutCategory === "refunds") return "estorno";
+  return "";
+}
+
+function reportTimestamp() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+function closingMatchesSearch(closing: CashClosing, search: string) {
+  const term = normalizeText(search.trim());
+  if (!term) return true;
+
+  const haystack = normalizeText(
+    [
+      closing.id,
+      closing.closedByName,
+      closing.closedBy,
+      formatCurrency(closing.totalAmount),
+      formatDateTime(closing.closedAt),
+      formatDateTime(closing.periodStart),
+      formatDateTime(closing.periodEnd),
+      String(closing.paymentCount),
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+
+  return haystack.includes(term);
+}
+
+function getCashPaymentClientLabel(payment: CashClosingPayment) {
+  if (payment.type === "cash_out") return "Saida de caixa";
+  return payment.clientName || "Cliente nao informado";
+}
+
+function getCashPaymentTypeLabel(payment: CashClosingPayment) {
+  if (payment.type === "cash_out") return "Saida";
+  if (payment.type === "subscription") return "Assinatura";
+  if (payment.type === "extra") return "Extra";
+  return "Agendamento";
+}
+
+function getCashPaymentCategoryLabel(payment: CashClosingPayment) {
+  if (payment.type !== "cash_out") return "-";
+  return cashOutCategoryLabels[payment.cashOutCategory as CashOutCategory] || "Saida de caixa";
+}
+
+function getCashPaymentDetailLabel(payment: CashClosingPayment) {
+  if (payment.type === "cash_out") return getValidCashOutDescription(payment) || "-";
+  if (payment.type === "subscription") return payment.subscriptionPlanName || "Assinatura";
+  if (payment.type === "extra") return payment.description || "Pagamento extra";
+  return payment.appointmentStartAt ? `Agendamento em ${formatReportDateTime(payment.appointmentStartAt)}` : "Agendamento";
+}
+
+function getCashPaymentReportDescription(payment: CashClosingPayment) {
+  if (payment.type === "cash_out") return getCashPaymentDescription(payment);
+  return getCashPaymentDetailLabel(payment);
+}
+
+function getSortedCashPayments(payments: CashClosingPayment[] = []) {
+  return [...payments].sort(
+    (a, b) =>
+      new Date(b.paidAt || b.createdAt).getTime() -
+      new Date(a.paidAt || a.createdAt).getTime(),
+  );
+}
+
+type CashClosingReportRow = {
+  closing: CashClosing;
+  closingIndex: number;
+  payment: CashClosingPayment | null;
+};
+
+function buildCashClosingReportRows(closings: CashClosing[]): CashClosingReportRow[] {
+  return closings.flatMap<CashClosingReportRow>((closing, closingIndex) => {
+    const payments = [...(closing.payments ?? [])].sort(
+      (a, b) =>
+        new Date(a.paidAt || a.createdAt).getTime() -
+        new Date(b.paidAt || b.createdAt).getTime(),
+    );
+
+    if (payments.length === 0) {
+      return [{ closing, closingIndex, payment: null }];
+    }
+
+    return payments.map((payment) => ({ closing, closingIndex, payment }));
+  });
+}
+
+function getClosingMethodsLabel(closing: CashClosing) {
+  const methods = Object.keys(closing.totalsByMethod ?? {});
+  return methods.length
+    ? methods.map((method) => methodLabels[method as PaymentMethod] || method).join(", ")
+    : "-";
+}
+
 function collectCashClosingReportData(closings: CashClosing[]) {
   const orderedClosings = [...closings]
-    .filter((closing) => closing.paymentCount > 0 && closing.totalAmount > 0)
     .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime());
-  const movements = orderedClosings.flatMap((closing, closingIndex) =>
-    [...closing.payments]
-      .sort(
-        (a, b) =>
-          new Date(a.paidAt || a.createdAt).getTime() -
-          new Date(b.paidAt || b.createdAt).getTime(),
-      )
-      .map((payment) => ({ closing, closingIndex, payment })),
-  );
-  const totalAmount = movements.reduce((sum, item) => sum + item.payment.amount, 0);
-  const totalAppointments = movements.filter((item) => item.payment.type === "appointment").length;
-  const totalsByMethod = movements.reduce<Record<string, number>>((acc, item) => {
-    const method = item.payment.method;
-    acc[method] = (acc[method] ?? 0) + item.payment.amount;
+  const movements = buildCashClosingReportRows(orderedClosings);
+  const paymentRows = movements.filter((item) => item.payment);
+  const totalAmount = orderedClosings.reduce((sum, closing) => sum + closing.totalAmount, 0);
+  const totalAppointments = paymentRows.filter((item) => item.payment?.type === "appointment").length;
+  const totalCashOut = paymentRows.filter((item) => item.payment?.type === "cash_out").length;
+  const totalsByMethod = orderedClosings.reduce<Record<string, number>>((acc, closing) => {
+    Object.entries(closing.totalsByMethod ?? {}).forEach(([method, amount]) => {
+      acc[method] = (acc[method] ?? 0) + Number(amount || 0);
+    });
     return acc;
   }, {});
   const periodLabel = orderedClosings.length
@@ -184,13 +325,14 @@ function collectCashClosingReportData(closings: CashClosing[]) {
     movements,
     totalAmount,
     totalAppointments,
+    totalCashOut,
     totalsByMethod,
     periodLabel,
   };
 }
 
-async function downloadCashClosingsPdf(closings: CashClosing[]) {
-  const validClosings = closings.filter((closing) => closing.paymentCount > 0 && closing.totalAmount > 0);
+async function downloadCashClosingsPdf(closings: CashClosing[], selectedPeriodLabel: string) {
+  const validClosings = closings;
   if (validClosings.length === 0) {
     toast.error("Nao ha fechamentos com movimentacoes para exportar.");
     return;
@@ -198,26 +340,28 @@ async function downloadCashClosingsPdf(closings: CashClosing[]) {
 
   const data = collectCashClosingReportData(validClosings);
   const columns: ReportColumn<(typeof data.movements)[number]>[] = [
-    { header: "#", getValue: ({ closingIndex }) => String(closingIndex + 1), align: "center" },
-    { header: "Pago em", getValue: ({ payment }) => formatReportDateTime(payment.paidAt || payment.createdAt) },
-    { header: "Cliente", getValue: ({ payment }) => payment.clientName || "Cliente nao informado" },
-    { header: "Tipo", getValue: ({ payment }) => getCashPaymentDescription(payment) },
-    { header: "Forma", getValue: ({ payment }) => methodLabels[payment.method] || payment.method, align: "center" },
-    { header: "Fechado por", getValue: ({ closing }) => closing.closedByName || "Usuario nao identificado" },
-    { header: "Valor", getValue: ({ payment }) => formatCurrency(payment.amount), align: "center" },
+    { header: "Fech.", getValue: ({ closingIndex }) => String(closingIndex + 1), align: "center" },
+    { header: "Data", getValue: ({ closing, payment }) => formatReportDateTime(payment?.paidAt || payment?.createdAt || closing.closedAt) },
+    { header: "Origem", getValue: ({ closing, payment }) => payment ? getCashPaymentClientLabel(payment) : closing.closedByName || "Fechamento" },
+    { header: "Tipo", getValue: ({ payment }) => payment ? getCashPaymentTypeLabel(payment) : "Fechamento", align: "center" },
+    { header: "Categoria", getValue: ({ payment }) => payment ? getCashPaymentCategoryLabel(payment) : "-", align: "center" },
+    { header: "Descricao", getValue: ({ closing, payment }) => payment ? getCashPaymentReportDescription(payment) : `Fechamento #${closing.id.slice(0, 8)}` },
+    { header: "Forma", getValue: ({ closing, payment }) => payment ? methodLabels[payment.method] || payment.method : getClosingMethodsLabel(closing), align: "center" },
+    { header: "Status", getValue: ({ payment }) => payment?.status || "fechado", align: "center" },
+    { header: "Valor", getValue: ({ closing, payment }) => formatCurrency(payment?.amount ?? closing.totalAmount), align: "right" },
   ];
 
   downloadPdfReport(
-    `fechamentos-caixa-${new Date().toISOString().slice(0, 10)}.pdf`,
+    `fechamentos-caixa-${reportTimestamp()}.pdf`,
     {
       title: "Relatorio de Fechamento de Caixa",
-      subtitle: `Periodo consolidado: ${data.periodLabel}`,
+      subtitle: `Periodo selecionado: ${selectedPeriodLabel}`,
       columns,
       rows: data.movements,
       summary: [
         ["Fechamentos", data.orderedClosings.length],
         ["Atendimentos", data.totalAppointments],
-        ["Movimentacoes", data.movements.length],
+        ["Saidas", data.totalCashOut],
         ["Total geral", formatCurrency(data.totalAmount)],
       ],
     },
@@ -226,7 +370,6 @@ async function downloadCashClosingsPdf(closings: CashClosing[]) {
 
 function downloadCashClosingsCsv(closings: CashClosing[]) {
   const orderedClosings = [...closings]
-    .filter((closing) => closing.paymentCount > 0 && closing.totalAmount > 0)
     .sort((a, b) => new Date(a.periodStart).getTime() - new Date(b.periodStart).getTime());
 
   if (orderedClosings.length === 0) {
@@ -234,61 +377,63 @@ function downloadCashClosingsCsv(closings: CashClosing[]) {
     return;
   }
 
-  const movements = orderedClosings.flatMap((closing, closingIndex) =>
-    [...closing.payments]
-      .sort(
-        (a, b) =>
-          new Date(a.paidAt || a.createdAt).getTime() -
-          new Date(b.paidAt || b.createdAt).getTime(),
-      )
-      .map((payment) => ({ closing, closingIndex, payment })),
-  );
-  const totalsByMethod = movements.reduce<Record<string, number>>((acc, item) => {
-    const method = item.payment.method;
-    acc[method] = (acc[method] ?? 0) + item.payment.amount;
-    return acc;
-  }, {});
-  const totalAmount = movements.reduce((sum, item) => sum + item.payment.amount, 0);
-  const totalAppointments = movements.filter((item) => item.payment.type === "appointment").length;
+  const data = collectCashClosingReportData(orderedClosings);
   const header = [
-    "Fechamento",
+    "Numero do fechamento",
+    "ID do fechamento",
+    "ID da movimentacao",
     "Fechado por",
     "Fechado em",
-    "Periodo",
-    "Cliente",
+    "Periodo inicial",
+    "Periodo final",
+    "Origem",
     "Tipo",
+    "Categoria",
+    "Descricao",
     "Valor",
     "Metodo",
     "Status",
     "Pago em",
+    "Criado em",
+    "ID do agendamento",
+    "ID da assinatura",
   ];
-  const movementRows = movements.map(({ closing, closingIndex, payment }) => {
-    const period = `${formatReportDateTime(closing.periodStart)} - ${formatReportDateTime(closing.periodEnd)}`;
+  const movementRows = data.movements.map(({ closing, closingIndex, payment }) => {
     return [
       String(closingIndex + 1),
+      closing.id,
+      payment?.id || "",
       closing.closedByName || "Usuario nao identificado",
       formatReportDateTime(closing.closedAt),
-      period,
-      payment.clientName || "",
-      getCashPaymentDescription(payment),
-      String(payment.amount).replace(".", ","),
-      methodLabels[payment.method] || payment.method,
-      payment.status,
-      formatReportDateTime(payment.paidAt || payment.createdAt),
+      formatReportDateTime(closing.periodStart),
+      formatReportDateTime(closing.periodEnd),
+      payment ? getCashPaymentClientLabel(payment) : closing.closedByName || "Fechamento",
+      payment ? getCashPaymentTypeLabel(payment) : "Fechamento",
+      payment ? getCashPaymentCategoryLabel(payment) : "-",
+      payment ? getCashPaymentReportDescription(payment) : `Fechamento #${closing.id.slice(0, 8)}`,
+      String(payment?.amount ?? closing.totalAmount).replace(".", ","),
+      payment ? methodLabels[payment.method] || payment.method : getClosingMethodsLabel(closing),
+      payment?.status || "fechado",
+      formatReportDateTime(payment?.paidAt || payment?.createdAt || closing.closedAt),
+      payment ? formatReportDateTime(payment.createdAt) : "",
+      payment?.appointmentId || "",
+      payment?.subscriptionId || "",
     ];
   });
   const summaryRows = [
     [],
     ["Resumo financeiro consolidado"],
-    ["Quantidade de atendimentos", String(totalAppointments)],
-    ["Quantidade de movimentacoes", String(movements.length)],
-    ...Object.entries(totalsByMethod)
+    ["Quantidade de fechamentos", String(data.orderedClosings.length)],
+    ["Quantidade de atendimentos", String(data.totalAppointments)],
+    ["Quantidade de saidas", String(data.totalCashOut)],
+    ["Quantidade de linhas", String(data.movements.length)],
+    ...Object.entries(data.totalsByMethod)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([method, amount]) => [
         methodLabels[method as PaymentMethod] || method,
         String(amount).replace(".", ","),
       ]),
-    ["Total Geral do Fechamento", String(totalAmount).replace(".", ",")],
+    ["Total Geral do Fechamento", String(data.totalAmount).replace(".", ",")],
   ];
   const csv = [header, ...movementRows, ...summaryRows]
     .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(";"))
@@ -298,7 +443,7 @@ function downloadCashClosingsCsv(closings: CashClosing[]) {
   const link = document.createElement("a");
 
   link.href = url;
-  link.download = `fechamentos-caixa-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = `fechamentos-caixa-${reportTimestamp()}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -314,9 +459,12 @@ export function CashClosingPage() {
     getStoredOpenCashSession(),
   );
   const [loading, setLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState("");
+  const initialReportRange = currentMonthRange();
+  const [reportStartDate, setReportStartDate] = useState(initialReportRange.start);
+  const [reportEndDate, setReportEndDate] = useState(initialReportRange.end);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [openCashPage, setOpenCashPage] = useState(1);
   const [manualPaymentOpen, setManualPaymentOpen] = useState(false);
   const [subscriptionSearch, setSubscriptionSearch] = useState("");
   const [subscriptionOptions, setSubscriptionOptions] = useState<Subscription[]>([]);
@@ -336,25 +484,32 @@ export function CashClosingPage() {
   const [cashOutDescription, setCashOutDescription] = useState("");
   const [savingCashOut, setSavingCashOut] = useState(false);
   const limit = 10;
+  const openCashLimit = 10;
 
   const loadCashClosings = useCallback(async () => {
     setLoading(true);
 
     try {
-      const [preview, closings] = await Promise.all([
-        getCashClosingPreview(),
-        listCashClosings(dateFilter ? { date: dateFilter } : {}),
-      ]);
+      const preview = await getCashClosingPreview();
       setCashPreview(preview);
-      setCashClosings(closings);
     } catch (err) {
       setCashPreview(null);
+      toast.error(getApiMessage(err));
+    }
+
+    try {
+      const closings = await listCashClosings({
+          periodStart: reportStartDate ? startOfLocalDay(dateInputToLocalDate(reportStartDate)).toISOString() : undefined,
+          periodEnd: reportEndDate ? endOfLocalDay(dateInputToLocalDate(reportEndDate)).toISOString() : undefined,
+      });
+      setCashClosings(closings);
+    } catch (err) {
       setCashClosings([]);
       toast.error(getApiMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [dateFilter]);
+  }, [reportStartDate, reportEndDate]);
 
   useEffect(() => {
     void loadCashClosings();
@@ -390,39 +545,31 @@ export function CashClosingPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [dateFilter, search]);
+  }, [reportStartDate, reportEndDate, search]);
 
   const filteredClosings = useMemo(() => {
-    const term = normalizeText(search.trim());
-
-    return cashClosings.filter((closing) => {
-      if (!term) return true;
-
-      const haystack = normalizeText(
-        [
-          closing.id,
-          closing.closedByName,
-          closing.closedBy,
-          formatCurrency(closing.totalAmount),
-          formatDateTime(closing.closedAt),
-          formatDateTime(closing.periodStart),
-          formatDateTime(closing.periodEnd),
-          String(closing.paymentCount),
-        ]
-          .filter(Boolean)
-          .join(" "),
-      );
-
-      return haystack.includes(term);
-    });
+    return cashClosings.filter((closing) => closingMatchesSearch(closing, search));
   }, [cashClosings, search]);
 
   const totalPages = Math.max(1, Math.ceil(filteredClosings.length / limit));
   const paginatedClosings = filteredClosings.slice((page - 1) * limit, page * limit);
+  const openCashPayments = useMemo(
+    () => getSortedCashPayments(cashPreview?.payments ?? []),
+    [cashPreview?.payments],
+  );
+  const openCashTotalPages = Math.max(1, Math.ceil(openCashPayments.length / openCashLimit));
+  const paginatedOpenCashPayments = openCashPayments.slice(
+    (openCashPage - 1) * openCashLimit,
+    openCashPage * openCashLimit,
+  );
 
   useEffect(() => {
     setPage((current) => Math.min(current, totalPages));
   }, [totalPages]);
+
+  useEffect(() => {
+    setOpenCashPage((current) => Math.min(current, openCashTotalPages));
+  }, [openCashTotalPages]);
 
   const cashIsOpen = Boolean(openCashSession);
 
@@ -463,16 +610,22 @@ export function CashClosingPage() {
   }
 
   async function loadCashClosingReports() {
-    return Promise.all(filteredClosings.map((closing) => getCashClosingReport(closing.id)));
+    if (cashClosings.length === 0) {
+      return [];
+    }
+
+    return Promise.all(cashClosings.map((closing) => getCashClosingReport(closing.id)));
   }
 
   async function handleExportCashClosingsPdf() {
-    if (filteredClosings.length === 0) return;
-
     setExportingPdf(true);
     try {
       const reports = await loadCashClosingReports();
-      await downloadCashClosingsPdf(reports);
+      if (reports.length === 0) {
+        toast.error("Nao ha fechamentos com movimentacoes para exportar.");
+        return;
+      }
+      await downloadCashClosingsPdf(reports, formatReportRangeLabel(reportStartDate, reportEndDate));
     } catch (err) {
       toast.error(getApiMessage(err));
     } finally {
@@ -481,11 +634,13 @@ export function CashClosingPage() {
   }
 
   async function handleExportCashClosingsCsv() {
-    if (filteredClosings.length === 0) return;
-
     setExportingCsv(true);
     try {
       const reports = await loadCashClosingReports();
+      if (reports.length === 0) {
+        toast.error("Nao ha fechamentos com movimentacoes para exportar.");
+        return;
+      }
       downloadCashClosingsCsv(reports);
     } catch (err) {
       toast.error(getApiMessage(err));
@@ -640,7 +795,7 @@ export function CashClosingPage() {
               </p>
             ) : null}
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
             <Button
               variant="outline"
               onClick={() => setManualPaymentOpen(true)}
@@ -650,6 +805,32 @@ export function CashClosingPage() {
               <CreditCard size={14} />
               Registrar assinatura
             </Button>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="report-start-date" className="text-xs text-muted-foreground">
+                  Data inicial
+                </Label>
+                <Input
+                  id="report-start-date"
+                  type="date"
+                  value={reportStartDate}
+                  onChange={(event) => setReportStartDate(event.target.value)}
+                  className="h-10 text-sm sm:w-40"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="report-end-date" className="text-xs text-muted-foreground">
+                  Data final
+                </Label>
+                <Input
+                  id="report-end-date"
+                  type="date"
+                  value={reportEndDate}
+                  onChange={(event) => setReportEndDate(event.target.value)}
+                  className="h-10 text-sm sm:w-40"
+                />
+              </div>
+            </div>
             <Button
               variant="outline"
               onClick={() => setCashOutOpen(true)}
@@ -662,7 +843,7 @@ export function CashClosingPage() {
             <Button
               variant="outline"
               onClick={handleExportCashClosingsPdf}
-              disabled={exportingPdf || filteredClosings.length === 0}
+              disabled={exportingPdf || cashClosings.length === 0}
               className="gap-2"
             >
               {exportingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download size={14} />}
@@ -671,7 +852,7 @@ export function CashClosingPage() {
             <Button
               variant="outline"
               onClick={handleExportCashClosingsCsv}
-              disabled={exportingCsv || filteredClosings.length === 0}
+              disabled={exportingCsv || cashClosings.length === 0}
               className="gap-2"
             >
               {exportingCsv ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download size={14} />}
@@ -703,6 +884,133 @@ export function CashClosingPage() {
             </div>
           </div>
         </div>
+
+        <div className="mt-4 overflow-hidden rounded-lg border border-border">
+          <div className="flex flex-col gap-1 border-b border-border bg-secondary/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Movimentacoes do caixa aberto</p>
+              <p className="text-xs text-muted-foreground">
+                Entradas e saidas que serao consideradas no fechamento.
+              </p>
+            </div>
+            {cashIsOpen ? (
+              <Badge variant="outline" className="w-fit rounded-full px-2 py-0.5 text-xs">
+                {openCashPayments.length} mov.
+              </Badge>
+            ) : null}
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Data
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Tipo
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Descricao
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Forma
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Valor
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {!cashIsOpen ? (
+                  <tr>
+                    <td colSpan={5} className="p-6 text-center text-sm text-muted-foreground">
+                      Abra o caixa para acompanhar as movimentacoes.
+                    </td>
+                  </tr>
+                ) : loading ? (
+                  <tr>
+                    <td colSpan={5} className="p-6 text-center text-sm text-muted-foreground">
+                      <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+                      Carregando movimentacoes...
+                    </td>
+                  </tr>
+                ) : openCashPayments.length > 0 ? (
+                  paginatedOpenCashPayments.map((payment) => {
+                    const isCashOut = payment.type === "cash_out";
+
+                    return (
+                      <tr
+                        key={payment.id}
+                        className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
+                      >
+                        <td className="whitespace-nowrap px-4 py-3 text-sm text-muted-foreground">
+                          {formatDateTime(payment.paidAt || payment.createdAt)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant={isCashOut ? "destructive" : "outline"}
+                            className="rounded-full px-2 py-0.5 text-xs"
+                          >
+                            {getCashPaymentTypeLabel(payment)}
+                          </Badge>
+                        </td>
+                        <td className="min-w-64 px-4 py-3">
+                          <p className="text-sm font-medium text-foreground">
+                            {getCashPaymentDescription(payment)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {getCashPaymentClientLabel(payment)}
+                          </p>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-sm text-muted-foreground">
+                          {methodLabels[payment.method] || payment.method}
+                        </td>
+                        <td
+                          className={`whitespace-nowrap px-4 py-3 text-right text-sm font-semibold ${
+                            payment.amount < 0 ? "text-destructive" : "text-foreground"
+                          }`}
+                        >
+                          {formatCurrency(payment.amount)}
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="p-6 text-center text-sm text-muted-foreground">
+                      Nenhuma movimentacao no caixa aberto.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Pagina {openCashPage} de {openCashTotalPages} - {openCashPayments.length} movimentacao(oes)
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={openCashPage <= 1 || loading || openCashPayments.length === 0}
+                onClick={() => setOpenCashPage((current) => Math.max(1, current - 1))}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={openCashPage >= openCashTotalPages || loading || openCashPayments.length === 0}
+                onClick={() => setOpenCashPage((current) => Math.min(openCashTotalPages, current + 1))}
+              >
+                Proxima
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -726,26 +1034,16 @@ export function CashClosingPage() {
                 className="h-9 w-full bg-secondary pl-9 text-sm sm:w-56"
               />
             </div>
-            <div className="relative">
-              <Calendar
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                size={14}
-              />
-              <Input
-                type="date"
-                value={dateFilter}
-                onChange={(event) => setDateFilter(event.target.value)}
-                className="h-9 w-full bg-secondary pl-9 text-sm sm:w-44"
-              />
-            </div>
             <Button
               variant="outline"
               size="sm"
               onClick={() => {
-                setDateFilter("");
+                const current = currentMonthRange();
+                setReportStartDate(current.start);
+                setReportEndDate(current.end);
                 setSearch("");
               }}
-              disabled={!dateFilter && !search}
+              disabled={!search && isCurrentMonthRange(reportStartDate, reportEndDate)}
             >
               Limpar
             </Button>
@@ -882,7 +1180,6 @@ export function CashClosingPage() {
                     </p>
                   ) : (
                     subscriptionOptions.map((subscription) => {
-                      const label = `${subscription.user?.name || "Cliente"} - ${subscription.plan?.name || "Plano"}`;
                       const selected = selectedSubscriptionId === subscription.id;
                       const blockedByPagarme = Boolean(subscription.hasPagarmeSubscription);
 

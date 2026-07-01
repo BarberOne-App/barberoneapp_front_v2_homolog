@@ -457,5 +457,5 @@ export function downloadPdfReport<TRow>(
     summary?: Array<[string, string | number]>;
   },
 ) {
-  createPdfReportBlob(params).then((blob) => downloadBlob(blob, filename));
+  return createPdfReportBlob(params).then((blob) => downloadBlob(blob, filename));
 }
