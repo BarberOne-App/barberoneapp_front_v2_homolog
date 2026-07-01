@@ -882,7 +882,7 @@ export function CashClosingPage() {
                     </p>
                   ) : (
                     subscriptionOptions.map((subscription) => {
-                      const label = `${subscription.user?.name || "Cliente"} - ${subscription.plan?.name || "Plano"}`;
+                      // const label = `${subscription.user?.name || "Cliente"} - ${subscription.plan?.name || "Plano"}`;
                       const selected = selectedSubscriptionId === subscription.id;
                       const blockedByPagarme = Boolean(subscription.hasPagarmeSubscription);
 

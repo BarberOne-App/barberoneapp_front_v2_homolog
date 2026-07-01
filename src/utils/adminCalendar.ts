@@ -259,7 +259,7 @@ export const buildCalendarAppointmentsByBarber = ({
   appointments,
   barbers,
   activeDateKey,
-  barberColors,
+  // barberColors,
   getAppointmentStartDate,
 }: {
   appointments: Appointment[];
