@@ -259,13 +259,11 @@ export const buildCalendarAppointmentsByBarber = ({
   appointments,
   barbers,
   activeDateKey,
-  // barberColors,
   getAppointmentStartDate,
 }: {
   appointments: Appointment[];
   barbers: Barber[];
   activeDateKey: string;
-  barberColors: Map<string, CalendarColor>;
   getAppointmentStartDate: (a: Appointment) => Date | null;
 }): Map<string, CalendarAppointment[]> => {
   const map = new Map<string, CalendarAppointment[]>();

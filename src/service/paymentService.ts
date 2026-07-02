@@ -73,7 +73,7 @@ export interface PaymentSummary {
 }
 
 export interface PaymentListResult extends ListPaymentsResponse {
-  items: Array<PaymentRecord & { paymentType: PaymentType }>;
+  items: Array<PaymentRecord & { paymentType: PaymentType | "extra" }>;
   summary?: PaymentSummary;
 }
 

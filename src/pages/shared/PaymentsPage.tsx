@@ -46,6 +46,7 @@ import {
 } from "@/service/paymentService";
 
 type PaymentWithType = PaymentRecord & { paymentType: PaymentType };
+type ApiPaymentWithType = PaymentRecord & { paymentType: PaymentType | "extra" };
 type StatusFilter = "all" | PaymentStatus;
 type TypeFilter = "all" | PaymentType;
 
@@ -138,6 +139,13 @@ function getPaymentDescription(payment: PaymentWithType) {
   return serviceNames || "Agendamento";
 }
 
+function shouldShowInPaymentsPage(payment: ApiPaymentWithType): payment is PaymentWithType {
+  if (!payment.user?.id) return false;
+  if (payment.paymentType === "appointment") return Boolean(payment.appointmentId);
+  if (payment.paymentType === "subscription") return Boolean(payment.subscriptionId);
+  return false;
+}
+
 function downloadCsv(payments: PaymentWithType[]) {
   const header = ["ID", "Cliente", "Tipo", "Descricao", "Valor", "Metodo", "Status", "Data"];
   const rows = payments.map((payment) => [
@@ -191,8 +199,10 @@ export function PaymentsPage() {
         limit,
       });
 
-      setPayments(result.items);
-      setTotal(result.total);
+      const visibleItems = result.items.filter(shouldShowInPaymentsPage);
+
+      setPayments(visibleItems);
+      setTotal(visibleItems.length);
       if (result.summary) setSummary(result.summary);
     } catch (err) {
       setError(getApiMessage(err));
@@ -466,7 +476,7 @@ export function PaymentsPage() {
                       <td className="px-4 py-3">
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            {payment.user?.name || "Cliente nao informado"}
+                            {payment.user?.name || "Cliente"}
                           </p>
                           <p className="text-xs text-muted-foreground">#{payment.id.slice(0, 8)}</p>
                         </div>

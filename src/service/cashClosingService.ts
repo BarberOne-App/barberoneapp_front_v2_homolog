@@ -42,7 +42,7 @@ export async function getCashClosingPreview() {
   return response.data;
 }
 
-export async function listCashClosings(params: { date?: string } = {}) {
+export async function listCashClosings(params: { date?: string; periodStart?: string; periodEnd?: string } = {}) {
   const response = await api.get<CashClosing[]>("/cashClosings", { params });
   return response.data;
 }
