@@ -159,6 +159,35 @@ function formatDate(value?: string | null) {
   }).format(date);
 }
 
+function getDaysSinceLastVisit(customer: UserProfile) {
+  if (!customer.lastVisit) return null;
+
+  const lastVisit = new Date(customer.lastVisit);
+  if (Number.isNaN(lastVisit.getTime())) return null;
+
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const lastVisitStart = new Date(
+    lastVisit.getFullYear(),
+    lastVisit.getMonth(),
+    lastVisit.getDate(),
+  ).getTime();
+
+  return Math.max(0, Math.floor((todayStart - lastVisitStart) / 86400000));
+}
+
+function formatDaysSinceLastVisit(customer: UserProfile) {
+  const days = getDaysSinceLastVisit(customer);
+  if (days == null) return "Sem visitas";
+  if (days === 0) return "Hoje";
+  if (days === 1) return "1 dia";
+  return `${days} dias`;
+}
+
+function reportTimestamp() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
 function formatPhone(value?: string | null) {
   const digits = onlyDigits(value ?? "");
 
@@ -442,8 +471,12 @@ export function CustomersPage() {
     const birthdayToday = customers.filter((customer) =>
       isBirthdayToday(customer.birthDate ?? customer.birth_date),
     ).length;
+    const maxDaysWithoutVisit = customers.reduce((max, customer) => {
+      const days = getDaysSinceLastVisit(customer);
+      return days == null ? max : Math.max(max, days);
+    }, 0);
 
-    return { active, newCustomers, withPhone, birthdayToday };
+    return { active, newCustomers, withPhone, birthdayToday, maxDaysWithoutVisit };
   }, [customers]);
 
   const reportColumns: ReportColumn<UserProfile>[] = useMemo(() => [
@@ -453,6 +486,7 @@ export function CustomersPage() {
     { header: "Telefone", getValue: (customer) => formatPhone(customer.phone) },
     { header: "Visitas", getValue: (customer) => customer.visits ?? 0, align: "center" },
     { header: "Ultima visita", getValue: (customer) => formatDate(customer.lastVisit) },
+    { header: "Dias ausente", getValue: (customer) => formatDaysSinceLastVisit(customer), align: "center" },
     { header: "Status", getValue: (customer) => statusLabel(getCustomerStatus(customer)) },
     {
       header: "Plano",
@@ -487,7 +521,7 @@ export function CustomersPage() {
   function handleExportPdf() {
     if (!ensureReportRows()) return;
     downloadPdfReport(
-      `clientes-${new Date().toISOString().slice(0, 10)}.pdf`,
+      `clientes-${reportTimestamp()}.pdf`,
       {
         title: "Relatorio de Clientes",
         subtitle: `Filtro: ${filter === "all" ? "Todos" : filter} - Busca: ${search.trim() || "sem busca"}`,
@@ -497,7 +531,7 @@ export function CustomersPage() {
           ["Clientes na pagina", filteredCustomers.length],
           ["Clientes ativos", stats.active],
           ["Novos clientes", stats.newCustomers],
-          ["Com telefone", stats.withPhone],
+          ["Maior ausencia", `${stats.maxDaysWithoutVisit} dias`],
         ],
       },
     );
@@ -506,7 +540,7 @@ export function CustomersPage() {
   function handleExportCsv() {
     if (!ensureReportRows()) return;
     downloadCsvReport(
-      `clientes-${new Date().toISOString().slice(0, 10)}.csv`,
+      `clientes-${reportTimestamp()}.csv`,
       reportColumns,
       filteredCustomers,
     );
@@ -743,6 +777,9 @@ export function CustomersPage() {
                     Ultima Visita
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Dias sem comparecer
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Status
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -757,14 +794,14 @@ export function CustomersPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={canEdit ? 8 : 7} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={canEdit ? 9 : 8} className="p-8 text-center text-sm text-muted-foreground">
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                       Carregando clientes...
                     </td>
                   </tr>
                 ) : filteredCustomers.length === 0 ? (
                   <tr>
-                    <td colSpan={canEdit ? 8 : 7} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={canEdit ? 9 : 8} className="p-8 text-center text-sm text-muted-foreground">
                       Nenhum cliente encontrado.
                     </td>
                   </tr>
@@ -821,6 +858,9 @@ export function CustomersPage() {
                             <Calendar size={14} />
                             {formatDate(customer.lastVisit)}
                           </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-foreground">
+                          {formatDaysSinceLastVisit(customer)}
                         </td>
                         <td className="px-4 py-3">
                           <Badge
