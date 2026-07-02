@@ -4,6 +4,7 @@ import { SuperAdminUsersPage } from "../pages/super_admin/SuperAdminUsersPage";
 import { SuperAdminSubscriptionsPage } from "../pages/super_admin/SuperAdminSubscriptionsPage";
 import { SuperAdminPlansPage } from "../pages/super_admin/SuperAdminPlansPage";
 import { SuperAdminReportsPage } from "../pages/super_admin/SuperAdminReportsPage";
+import { SuperAdminAresChatPage } from "../pages/super_admin/SuperAdminAresChatPage";
 import type { AppRoute } from "./types";
 
 export const superAdminRoutes: AppRoute[] = [
@@ -36,6 +37,12 @@ export const superAdminRoutes: AppRoute[] = [
     title: "Planos Landing",
     breadcrumbs: ["Super Admin", "Planos Landing"],
     Component: SuperAdminPlansPage,
+  },
+  {
+    path: "/areschat",
+    title: "AresChat",
+    breadcrumbs: ["Super Admin", "AresChat"],
+    Component: SuperAdminAresChatPage,
   },
   {
     path: "/reports",
