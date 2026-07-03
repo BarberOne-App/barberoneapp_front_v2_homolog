@@ -13,7 +13,26 @@ export interface SuperAdminDashboard {
 }
 
 export type BarbershopStatus = "active" | "inactive" | "blocked" | "pending";
-export type SubscriptionStatus = "active" | "paused" | "cancelled" | "expired" | "none";
+export type SubscriptionStatus = "active" | "paused" | "cancelled" | "expired" | "pending" | "none";
+
+export interface SuperAdminPlatformSubscription {
+  id: string;
+  status: string;
+  selected_plan: string;
+  payment_method?: string | null;
+  amount?: number | null;
+  start_date?: string | null;
+  next_billing_date?: string | null;
+  canceled_at?: string | null;
+  created_at: string;
+  platform_plans?: {
+    id: string;
+    name: string;
+    price: number;
+    interval: string;
+    interval_count: number;
+  } | null;
+}
 
 export interface SuperAdminBarbershop {
   id: string;
@@ -46,6 +65,7 @@ export interface SuperAdminBarbershop {
       price: number;
     } | null;
   } | null;
+  platformSubscription?: SuperAdminPlatformSubscription | null;
   metrics: {
     appointmentsCount: number;
     servicesCount: number;
@@ -174,6 +194,22 @@ export async function updateSuperAdminBarbershopStatus(
     status,
     reason: reason || undefined,
   });
+  return response.data;
+}
+
+export async function activatePixPlatformSubscription(
+  barbershopId: string,
+  payload: {
+    platformPlanId: string;
+    paidAt?: string;
+    nextBillingDate?: string;
+    amount?: number;
+  }
+): Promise<SuperAdminPlatformSubscription> {
+  const response = await api.post<SuperAdminPlatformSubscription>(
+    `/super-admin/barbershops/${barbershopId}/platform-subscription/pix/activate`,
+    payload
+  );
   return response.data;
 }
 

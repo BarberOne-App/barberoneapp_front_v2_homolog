@@ -465,9 +465,9 @@ export function FitAppointmentPage() {
 
   const appointmentsByBarber = useMemo(
     () => buildCalendarAppointmentsByBarber({
-      appointments, barbers, activeDateKey, barberColors, getAppointmentStartDate,
+      appointments, barbers, activeDateKey, getAppointmentStartDate,
     }),
-    [appointments, barbers, activeDateKey, barberColors, getAppointmentStartDate],
+    [appointments, barbers, activeDateKey, getAppointmentStartDate],
   );
 
   const freeSlotsByBarber = useMemo(

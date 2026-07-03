@@ -60,6 +60,7 @@ const STATUS_OPTIONS = [
 const SUBSCRIPTION_OPTIONS = [
   { value: "", label: "Todas as assinaturas" },
   { value: "active", label: "Ativa" },
+  { value: "pending", label: "Pendente" },
   { value: "paused", label: "Pausada" },
   { value: "cancelled", label: "Cancelada" },
   { value: "expired", label: "Expirada" },
@@ -97,7 +98,7 @@ export function SuperAdminBarbershopsPage() {
       q: filters.q || undefined,
       status: (filters.status || undefined) as BarbershopStatus | undefined,
       plan: filters.plan || undefined,
-      subscriptionStatus: (filters.subscriptionStatus || undefined) as "active" | "paused" | "cancelled" | "expired" | "none" | undefined,
+      subscriptionStatus: (filters.subscriptionStatus || undefined) as "active" | "paused" | "cancelled" | "expired" | "pending" | "none" | undefined,
       createdFrom: filters.createdFrom || undefined,
       createdTo: filters.createdTo || undefined,
       sortBy: "createdAt",
@@ -189,9 +190,14 @@ export function SuperAdminBarbershopsPage() {
 
   const subscriptionsByShop: Record<string, { planName: string | null; price: number | null }> = {};
   for (const shop of barbershops) {
+    const platformSub = shop.platformSubscription;
+    const platformPlan = platformSub?.platform_plans ?? null;
     const sub = shop.subscription;
-    const plan = sub?.subscription_plans ?? null;
-    subscriptionsByShop[shop.id] = { planName: plan?.name ?? null, price: plan?.price ?? null };
+    const clientPlan = sub?.subscription_plans ?? null;
+    subscriptionsByShop[shop.id] = {
+      planName: platformPlan?.name ?? platformSub?.selected_plan ?? clientPlan?.name ?? null,
+      price: platformSub?.amount ?? platformPlan?.price ?? clientPlan?.price ?? null,
+    };
   }
 
   return (
