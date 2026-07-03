@@ -10,6 +10,7 @@ import {
   Play,
   RefreshCw,
   Search,
+  Scissors,
   TimerReset,
   Users,
   X,
@@ -29,6 +30,24 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { listBarbers, type Barber } from "@/service/barberService";
+
 import {
   cancelSubscription,
   checkOverdueSubscriptions,
@@ -100,6 +119,12 @@ export function AdminSubscriptionsPage() {
   const [searchValue, setSearchValue] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [checkingOverdue, setCheckingOverdue] = useState(false);
+  const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [barbersLoading, setBarbersLoading] = useState(false);
+  const [barberDialogSubscription, setBarberDialogSubscription] = useState<Subscription | null>(null);
+  const [selectedBarberId, setSelectedBarberId] = useState("");
+  const [savingBarber, setSavingBarber] = useState(false);
+
 
   const stats = useMemo(() => {
     return subscriptions.reduce(
@@ -141,6 +166,16 @@ export function AdminSubscriptionsPage() {
     return () => window.clearTimeout(timeout);
   }, [loadSubscriptions, searchValue]);
 
+  useEffect(() => {
+    setBarbersLoading(true);
+    listBarbers({ page: 1, limit: 200 })
+      .then((result) => setBarbers(result.items))
+      .catch(() => setBarbers([]))
+      .finally(() => setBarbersLoading(false));
+  }, []);
+
+
+
   async function runAction(subscription: Subscription, action: "activate" | "pause" | "cancel" | "renew" | "recurring") {
     setBusyId(subscription.id);
     try {
@@ -169,6 +204,29 @@ export function AdminSubscriptionsPage() {
       toast.error(getApiMessage(err));
     } finally {
       setBusyId(null);
+    }
+  }
+
+  function openBarberDialog(subscription: Subscription) {
+    setBarberDialogSubscription(subscription);
+    setSelectedBarberId(subscription.monthlyBarberId ?? "");
+  }
+
+  async function handleSaveMonthlyBarber() {
+    if (!barberDialogSubscription) return;
+    setSavingBarber(true);
+    try {
+      await updateSubscription(barberDialogSubscription.id, {
+        monthlyBarberId: selectedBarberId || null,
+      });
+      toast.success(selectedBarberId ? "Barbeiro do cliente atualizado." : "Barbeiro fixo removido.");
+      setBarberDialogSubscription(null);
+      setSelectedBarberId("");
+      await loadSubscriptions();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSavingBarber(false);
     }
   }
 
@@ -324,6 +382,9 @@ export function AdminSubscriptionsPage() {
                     Ciclo
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Barbeiro
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Valor
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -338,14 +399,14 @@ export function AdminSubscriptionsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="p-10 text-center text-sm text-muted-foreground">
+                    <td colSpan={8} className="p-10 text-center text-sm text-muted-foreground">
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                       Carregando assinaturas...
                     </td>
                   </tr>
                 ) : subscriptions.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-10 text-center text-sm text-muted-foreground">
+                    <td colSpan={8} className="p-10 text-center text-sm text-muted-foreground">
                       <Users className="mx-auto mb-2 h-5 w-5" />
                       Nenhuma assinatura encontrada.
                     </td>
@@ -393,6 +454,14 @@ export function AdminSubscriptionsPage() {
                               ? `${subscription.currentCycle.cutsRemaining}/${subscription.currentCycle.cutsIncluded} cortes restantes`
                               : "Sem ciclo aberto"}
                           </p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2 text-sm text-foreground">
+                          <Scissors size={14} className="text-muted-foreground" />
+                          <span className="max-w-40 truncate">
+                            {subscription.monthlyBarber?.displayName ?? "Sem barbeiro fixo"}
+                          </span>
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -460,6 +529,12 @@ export function AdminSubscriptionsPage() {
                               <TimerReset size={14} />
                               Alternar recorrencia
                             </DropdownMenuItem>
+                            {subscription.status === "active" && (
+                              <DropdownMenuItem onClick={() => openBarberDialog(subscription)}>
+                                <Scissors size={14} />
+                                Trocar barbeiro
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
@@ -486,6 +561,70 @@ export function AdminSubscriptionsPage() {
           </div>
         ) : null}
       </div>
+
+      <Dialog
+        open={Boolean(barberDialogSubscription)}
+        onOpenChange={(open) => {
+          if (!open && !savingBarber) {
+            setBarberDialogSubscription(null);
+            setSelectedBarberId("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Trocar barbeiro do cliente</DialogTitle>
+            <DialogDescription>
+              Altere o barbeiro fixo da assinatura de {barberDialogSubscription?.user?.name ?? "este cliente"}.
+              Esta acao pode ser feita pelo admin a qualquer momento.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="rounded-md border border-border bg-secondary/30 p-3 text-sm">
+              <p className="font-medium text-foreground">{barberDialogSubscription?.plan?.name ?? "Plano"}</p>
+              <p className="text-xs text-muted-foreground">
+                Atual: {barberDialogSubscription?.monthlyBarber?.displayName ?? "Sem barbeiro fixo"}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Novo barbeiro fixo</Label>
+              <Select value={selectedBarberId || "none"} onValueChange={(value) => setSelectedBarberId(value === "none" ? "" : value)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={barbersLoading ? "Carregando barbeiros..." : "Selecionar barbeiro"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem barbeiro fixo</SelectItem>
+                  {barbers.map((barber) => (
+                    <SelectItem key={barber.id} value={barber.id}>
+                      {barber.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={savingBarber}
+              onClick={() => {
+                setBarberDialogSubscription(null);
+                setSelectedBarberId("");
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" disabled={savingBarber || barbersLoading} onClick={() => void handleSaveMonthlyBarber()}>
+              {savingBarber && <Loader2 size={14} className="animate-spin" />}
+              Salvar barbeiro
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
