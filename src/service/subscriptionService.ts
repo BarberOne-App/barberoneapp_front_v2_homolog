@@ -82,6 +82,11 @@ export async function updateSubscription(
   return response.data;
 }
 
+export async function changeSubscriptionMonthlyBarber(id: string, monthlyBarberId: string) {
+  const response = await api.patch<Subscription>(`/subscriptions/${id}`, { monthlyBarberId });
+  return response.data;
+}
+
 export async function cancelSubscription(id: string) {
   const response = await api.patch<Subscription>(`/subscriptions/${id}/cancel`);
   return response.data;
