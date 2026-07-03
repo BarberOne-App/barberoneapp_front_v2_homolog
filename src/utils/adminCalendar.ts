@@ -270,6 +270,8 @@ export const buildCalendarAppointmentsByBarber = ({
   barbers.forEach((b) => map.set(b.id, []));
 
   appointments.forEach((appointment, index) => {
+    if (appointment.status === 'cancelled') return;
+
     const startDate = getAppointmentStartDate(appointment);
     if (!startDate || getLocalDateKey(startDate) !== activeDateKey) return;
 
