@@ -421,6 +421,10 @@ export function ClientPlansPage() {
 
   useEffect(() => { void load(); }, []);
 
+  const isActive = mySubscription?.status === "active" || mySubscription?.status === "paused";
+  const isCancelledOrExpired =
+    mySubscription?.status === "cancelled" || mySubscription?.status === "expired";
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -437,19 +441,6 @@ export function ClientPlansPage() {
       </div>
     );
   }
-
-  if (plans.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 py-20 text-muted-foreground">
-        <LayoutList size={36} className="opacity-20" />
-        <p className="text-sm">Nenhum plano disponivel no momento.</p>
-      </div>
-    );
-  }
-
-  const isActive = mySubscription?.status === "active" || mySubscription?.status === "paused";
-  const isCancelledOrExpired =
-    mySubscription?.status === "cancelled" || mySubscription?.status === "expired";
 
   return (
     <div className="space-y-6">
@@ -488,8 +479,14 @@ export function ClientPlansPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {plans.map((plan) => (
+      {plans.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-3 py-20 text-muted-foreground">
+          <LayoutList size={36} className="opacity-20" />
+          <p className="text-sm">Nenhum plano disponivel no momento.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {plans.map((plan) => (
           <PlanCard
             key={plan.id}
             plan={plan}
@@ -497,8 +494,9 @@ export function ClientPlansPage() {
             isChangingPlan={isActive && mySubscription?.planId !== plan.id}
             onSubscribe={setSelectedPlan}
           />
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {(selectedPlan?.paymentMethod === "credito" || selectedPlan?.paymentMethod === "debito") && (
         <SubscribeModal

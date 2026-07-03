@@ -8,7 +8,6 @@ import {
   Loader2,
   MoreHorizontal,
   Plus,
-  RefreshCw,
   Search,
   Scissors,
   XCircle,
@@ -64,7 +63,6 @@ import {
 } from "@/service/appointmentService";
 import { listBarbers, type Barber } from "@/service/barberService";
 import {
-  changeSubscriptionMonthlyBarber,
   getMyActiveSubscription,
   type Subscription,
 } from "@/service/subscriptionService";
@@ -185,22 +183,6 @@ function getStoredBarbershopId(): string {
   }
 }
 
-function parseDate(value?: string | null) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function getBarberChangeAvailableAt(subscription?: Subscription | null) {
-  if (!subscription) return null;
-
-  return parseDate(subscription.currentCycle?.periodEnd) ?? parseDate(subscription.nextBillingAt);
-}
-
-function getMonthlyBarberChangeStorageKey(subscriptionId?: string | null) {
-  return subscriptionId ? `subscription:${subscriptionId}:monthlyBarberChangeHiddenUntil` : "";
-}
-
 export function ClientBookingsPage() {
   const { user } = useAuth();
 
@@ -245,10 +227,6 @@ export function ClientBookingsPage() {
 
   // Regra de barbeiro por assinatura
   const [subscriptionBarberRule, setSubscriptionBarberRule] = useState<SubscriptionBarberRule>("fixed");
-  const [changingMonthlyBarber, setChangingMonthlyBarber] = useState(false);
-  const [savingMonthlyBarber, setSavingMonthlyBarber] = useState(false);
-  const [monthlyBarberChangeHiddenUntil, setMonthlyBarberChangeHiddenUntil] = useState<Date | null>(null);
-  const [eligibilityNow, setEligibilityNow] = useState(() => Date.now());
 
   // Perfil da barbearia (para WhatsApp)
   const [barbershopProfile, setBarbershopProfile] = useState<BarbershopProfile | null>(null);
@@ -289,35 +267,6 @@ export function ClientBookingsPage() {
       .then((sub) => setMySubscription(sub))
       .catch(() => setMySubscription(null));
   }, []);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => setEligibilityNow(Date.now()), 60_000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (!bookingOpen) {
-      setChangingMonthlyBarber(false);
-      setSavingMonthlyBarber(false);
-    }
-  }, [bookingOpen]);
-
-  useEffect(() => {
-    const key = getMonthlyBarberChangeStorageKey(mySubscription?.id);
-    if (!key) {
-      setMonthlyBarberChangeHiddenUntil(null);
-      return;
-    }
-
-    const storedDate = parseDate(localStorage.getItem(key));
-    if (storedDate && storedDate.getTime() > Date.now()) {
-      setMonthlyBarberChangeHiddenUntil(storedDate);
-      return;
-    }
-
-    localStorage.removeItem(key);
-    setMonthlyBarberChangeHiddenUntil(null);
-  }, [mySubscription?.id]);
 
   useEffect(() => {
     if (!bookingOpen) return;
@@ -362,16 +311,17 @@ export function ClientBookingsPage() {
     mySubscription?.status === "active" || mySubscription?.status === "paused";
   const lockedBarberId =
     isFixedRule && hasActiveSubscription ? (mySubscription?.monthlyBarberId ?? null) : null;
-  const hasLockedBarber = Boolean(lockedBarberId);
-  const monthlyBarberChangeAvailableAt = getBarberChangeAvailableAt(mySubscription);
-  const isMonthlyBarberChangeHidden =
-    Boolean(monthlyBarberChangeHiddenUntil && monthlyBarberChangeHiddenUntil.getTime() > eligibilityNow);
-  const canChangeMonthlyBarber =
-    isFixedRule &&
-    hasActiveSubscription &&
-    (!lockedBarberId ||
-      Boolean(monthlyBarberChangeAvailableAt && monthlyBarberChangeAvailableAt.getTime() <= eligibilityNow)) &&
-    !isMonthlyBarberChangeHidden;
+  const activeLockedBarberId = (lockedBarberId && barbers.some((b) => b.id === lockedBarberId)) ? lockedBarberId : null;
+  const hasLockedBarber = Boolean(activeLockedBarberId);
+  useEffect(() => {
+    if (!bookingOpen || !activeLockedBarberId) return;
+
+    setForm((prev) => (
+      prev.barberId === activeLockedBarberId
+        ? prev
+        : { ...prev, barberId: activeLockedBarberId, time: "" }
+    ));
+  }, [activeLockedBarberId, bookingOpen]);
 
   const isServiceCoveredByPlan = useCallback(
     (s: Service) => {
@@ -425,36 +375,6 @@ export function ClientBookingsPage() {
 
   function setField<K extends keyof BookingFormState>(key: K, value: BookingFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
-  }
-
-  async function handleSaveMonthlyBarberChange() {
-    if (!mySubscription?.id) return;
-    if (!form.barberId) {
-      toast.error("Selecione o novo barbeiro.");
-      return;
-    }
-    if (form.barberId === lockedBarberId) {
-      toast.error("Selecione um barbeiro diferente do atual.");
-      return;
-    }
-
-    setSavingMonthlyBarber(true);
-    try {
-      const updated = await changeSubscriptionMonthlyBarber(mySubscription.id, form.barberId);
-      const nextChangeAt = getBarberChangeAvailableAt(updated);
-      const storageKey = getMonthlyBarberChangeStorageKey(updated.id);
-      if (storageKey && nextChangeAt) localStorage.setItem(storageKey, nextChangeAt.toISOString());
-      setMonthlyBarberChangeHiddenUntil(nextChangeAt);
-      setMySubscription(updated);
-      setChangingMonthlyBarber(false);
-      setBookingOpen(false);
-      setField("time", "");
-      toast.success("Barbeiro do plano alterado com sucesso.");
-    } catch (err) {
-      toast.error(getApiMessage(err));
-    } finally {
-      setSavingMonthlyBarber(false);
-    }
   }
 
   function toggleService(id: string, checked: boolean) {
@@ -752,23 +672,7 @@ export function ClientBookingsPage() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-            {canChangeMonthlyBarber && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="gap-2"
-                onClick={() => {
-                  setForm({ ...emptyForm, date: dateToDateString(new Date()), barberId: lockedBarberId ?? "" });
-                  setChangingMonthlyBarber(true);
-                  setBookingOpen(true);
-                }}
-              >
-                <RefreshCw size={14} />
-                Trocar barbeiro
-              </Button>
-            )}
-            <Button size="sm" className="gap-2" onClick={() => { setForm({ ...emptyForm, date: dateToDateString(new Date()), barberId: lockedBarberId ?? "" }); setBookingOpen(true); }}>
+            <Button size="sm" className="gap-2" onClick={() => { setForm({ ...emptyForm, date: dateToDateString(new Date()), barberId: activeLockedBarberId ?? "" }); setBookingOpen(true); }}>
               <Plus size={14} /> Marcar Horario
             </Button>
           </div>
@@ -871,21 +775,19 @@ export function ClientBookingsPage() {
       </div>
 
       {/* Passo 1 — Formulário */}
-      <Dialog open={bookingOpen} onOpenChange={(open) => { if (!open && !savingLocal && !savingMonthlyBarber) { setBookingOpen(false); setBookingForDependent(null); } }}>
+      <Dialog open={bookingOpen} onOpenChange={(open) => { if (!open && !savingLocal) { setBookingOpen(false); setBookingForDependent(null); } }}>
         <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-2xl">
           <form onSubmit={handleBookingSubmit} className="flex min-h-0 flex-1 flex-col gap-5">
             <DialogHeader className="flex-shrink-0">
-              <DialogTitle>{changingMonthlyBarber ? "Trocar barbeiro" : "Marcar Horario"}</DialogTitle>
+              <DialogTitle>Marcar Horario</DialogTitle>
               <DialogDescription>
-                {changingMonthlyBarber
-                  ? "Escolha o novo barbeiro fixo do seu plano."
-                  : "Escolha o barbeiro, servico e um horario disponivel."}
+                Escolha o barbeiro, servico e um horario disponivel.
               </DialogDescription>
             </DialogHeader>
 
             <div className="grid flex-1 gap-4 overflow-y-auto md:grid-cols-2">
               {/* Para quem é o agendamento? */}
-              {!changingMonthlyBarber && userDependents.length > 0 && (
+              {userDependents.length > 0 && (
                 <div className="space-y-2 md:col-span-2">
                   <Label>Para quem é o agendamento?</Label>
                   <div className="flex flex-wrap gap-2">
@@ -925,53 +827,20 @@ export function ClientBookingsPage() {
                 <Select
                   value={form.barberId}
                   onValueChange={(v) => { setField("barberId", v); setField("time", ""); }}
-                  disabled={hasLockedBarber && !changingMonthlyBarber}
+                  disabled={hasLockedBarber}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecionar barbeiro" />
                   </SelectTrigger>
                   <SelectContent>
                     {barbers.map((b) => (
-                      <SelectItem key={b.id} value={b.id} disabled={changingMonthlyBarber && b.id === lockedBarberId}>
+                      <SelectItem key={b.id} value={b.id}>
                         {b.displayName}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {hasLockedBarber && changingMonthlyBarber && (
-                  <div className="space-y-2">
-                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <RefreshCw size={11} />
-                      Escolha o novo barbeiro fixo para os proximos agendamentos do plano.
-                    </p>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="gap-2"
-                        disabled={savingMonthlyBarber || !form.barberId || form.barberId === lockedBarberId}
-                        onClick={handleSaveMonthlyBarberChange}
-                      >
-                        {savingMonthlyBarber && <Loader2 size={14} className="animate-spin" />}
-                        Salvar troca
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={savingMonthlyBarber}
-                        onClick={() => {
-                          setChangingMonthlyBarber(false);
-                          setField("barberId", lockedBarberId ?? "");
-                          setField("time", "");
-                        }}
-                      >
-                        Cancelar
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                {hasLockedBarber && !changingMonthlyBarber ? (
+                {hasLockedBarber ? (
                   <p className="flex items-center gap-1.5 text-xs text-amber-600">
                     <Lock size={11} />
                     Barbeiro fixo do seu plano.
@@ -984,7 +853,6 @@ export function ClientBookingsPage() {
                 ) : null}
               </div>
 
-              {!changingMonthlyBarber && (
               <>
               <div className="space-y-2">
                 <Label>Data</Label>
@@ -1033,20 +901,16 @@ export function ClientBookingsPage() {
                 <Textarea id="booking-notes" value={form.notes} onChange={(e) => setField("notes", e.target.value)} placeholder="Opcional — Ex: preferencia de estilo, etc." />
               </div>
               </>
-              )}
             </div>
 
-            {!changingMonthlyBarber && (
-              <DialogFooter className="flex-shrink-0">
-                <Button type="button" variant="outline" onClick={() => setBookingOpen(false)}>Cancelar</Button>
-                <Button type="submit">Confirmar agendamento</Button>
-              </DialogFooter>
-            )}
+            <DialogFooter className="flex-shrink-0">
+              <Button type="button" variant="outline" onClick={() => setBookingOpen(false)}>Cancelar</Button>
+              <Button type="submit">Confirmar agendamento</Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Passo 2 — Escolha do método */}
       <PaymentChoiceModal
         isOpen={choiceOpen}
         onClose={() => setChoiceOpen(false)}
