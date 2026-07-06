@@ -1,4 +1,4 @@
-import { Calendar, Home, LayoutList, Scissors, Settings } from "lucide-react";
+import { Calendar, Home, LayoutList, Scissors, Settings, Star } from "lucide-react";
 
 import { ProfileSidebar } from "../shared/ProfileSidebar";
 import type { SidebarSection } from "../shared/ProfileSidebar";
@@ -12,6 +12,7 @@ const sections: SidebarSection[] = [
         label: "Operacao",
         children: [
           { icon: Calendar, label: "Agendamentos", href: "/bookings" },
+          { icon: Star, label: "Avaliacoes", href: "/reviews" },
         ],
       },
     ],
