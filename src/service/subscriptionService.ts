@@ -75,6 +75,7 @@ export async function listSubscriptions(params: ListSubscriptionsParams = {}) {
 export async function updateSubscription(
   id: string,
   data: {
+    planId?: string;
     status?: Subscription["status"];
     autoRenewal?: boolean;
     isRecurring?: boolean;
