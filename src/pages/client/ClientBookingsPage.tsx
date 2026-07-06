@@ -162,7 +162,22 @@ function isConflictError(error: unknown) {
 }
 
 function normalizeText(v: string) {
-  return v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  return v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function normalizePlanFeatureText(raw: unknown) {
+  if (typeof raw !== "string") return null;
+  const text = raw.trim();
+  if (!text) return null;
+  if (text.includes("::")) {
+    const parts = text.split("::");
+    const label = parts[parts.length - 1]?.trim();
+    return label ? normalizeText(label) : null;
+  }
+  if (UUID_RE.test(text)) return null;
+  return normalizeText(text);
 }
 
 function getServiceDuration(s: Service) {
@@ -309,8 +324,11 @@ export function ClientBookingsPage() {
   const isFixedRule = subscriptionBarberRule === "fixed";
   const hasActiveSubscription =
     mySubscription?.status === "active" || mySubscription?.status === "paused";
+  const isBookingForDependentWithoutPlan = Boolean(bookingForDependent);
+  const hasActiveSubscriptionForBooking =
+    hasActiveSubscription && !isBookingForDependentWithoutPlan;
   const lockedBarberId =
-    isFixedRule && hasActiveSubscription ? (mySubscription?.monthlyBarberId ?? null) : null;
+    isFixedRule && hasActiveSubscriptionForBooking ? (mySubscription?.monthlyBarberId ?? null) : null;
   const activeLockedBarberId = (lockedBarberId && barbers.some((b) => b.id === lockedBarberId)) ? lockedBarberId : null;
   const hasLockedBarber = Boolean(activeLockedBarberId);
   useEffect(() => {
@@ -325,21 +343,23 @@ export function ClientBookingsPage() {
 
   const isServiceCoveredByPlan = useCallback(
     (s: Service) => {
-      if (!hasActiveSubscription || !mySubscription?.plan?.features) {
-        return s.covered_by_plan === true;
-      }
+      if (!hasActiveSubscriptionForBooking || !mySubscription?.plan?.features) return false;
+
       const normServiceName = normalizeText(s.name || "");
-      const isFeatured = mySubscription.plan.features.some((feature: string) => {
-        const normFeature = normalizeText(feature);
-        return (
-          normFeature === normServiceName ||
-          normFeature.includes(normServiceName) ||
-          normServiceName.includes(normFeature)
-        );
+      return mySubscription.plan.features.some((feature: string) => {
+        const normFeature = normalizePlanFeatureText(feature);
+        return normFeature === normServiceName;
       });
-      return isFeatured || s.covered_by_plan === true;
     },
-    [hasActiveSubscription, mySubscription],
+    [hasActiveSubscriptionForBooking, mySubscription],
+  );
+
+  const allSelectedServicesCoveredByPlan = useMemo(
+    () =>
+      selectedServices.length > 0 &&
+      hasActiveSubscriptionForBooking &&
+      selectedServices.every((s) => isServiceCoveredByPlan(s)),
+    [hasActiveSubscriptionForBooking, isServiceCoveredByPlan, selectedServices],
   );
 
   useEffect(() => {
@@ -378,6 +398,12 @@ export function ClientBookingsPage() {
   }
 
   function toggleService(id: string, checked: boolean) {
+    const service = services.find((s) => s.id === id);
+    if (checked && hasActiveSubscriptionForBooking && service && !isServiceCoveredByPlan(service)) {
+      toast.error("Este servico nao esta coberto pelo seu plano.");
+      return;
+    }
+
     setForm((prev) => ({
       ...prev,
       serviceIds: checked ? [...prev.serviceIds, id] : prev.serviceIds.filter((s) => s !== id),
@@ -394,10 +420,14 @@ export function ClientBookingsPage() {
   }
 
   // Clique em "Confirmar agendamento" → abre escolha de pagamento
-  function handleBookingSubmit(e: FormEvent) {
+  async function handleBookingSubmit(e: FormEvent) {
     e.preventDefault();
     const err = validateForm();
     if (err) { toast.error(err); return; }
+    if (allSelectedServicesCoveredByPlan) {
+      await handleSubscriptionPayment();
+      return;
+    }
     setChoiceOpen(true);
   }
 
@@ -793,7 +823,10 @@ export function ClientBookingsPage() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => setBookingForDependent(null)}
+                      onClick={() => {
+                        setBookingForDependent(null);
+                        setField("time", "");
+                      }}
                       className={cn(
                         "flex-1 min-w-[140px] px-4 py-2 text-sm font-medium rounded-lg border transition-all text-center",
                         !bookingForDependent
@@ -807,7 +840,10 @@ export function ClientBookingsPage() {
                       <button
                         key={dep.id}
                         type="button"
-                        onClick={() => setBookingForDependent(dep)}
+                        onClick={() => {
+                          setBookingForDependent(dep);
+                          setField("time", "");
+                        }}
                         className={cn(
                           "flex-1 min-w-[140px] px-4 py-2 text-sm font-medium rounded-lg border transition-all text-center truncate",
                           bookingForDependent?.id === dep.id
@@ -845,7 +881,7 @@ export function ClientBookingsPage() {
                     <Lock size={11} />
                     Barbeiro fixo do seu plano.
                   </p>
-                ) : isFixedRule && hasActiveSubscription ? (
+                ) : isFixedRule && hasActiveSubscriptionForBooking ? (
                   <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Info size={11} />
                     O barbeiro escolhido será vinculado ao seu plano após o agendamento.
@@ -865,15 +901,44 @@ export function ClientBookingsPage() {
                   {services.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Nenhum servico disponivel.</p>
                   ) : (
-                    services.map((s) => (
-                      <label key={s.id} className="flex cursor-pointer items-start gap-3 rounded-md p-2 text-sm hover:bg-secondary/60">
-                        <Checkbox checked={form.serviceIds.includes(s.id)} onCheckedChange={(c) => toggleService(s.id, c === true)} />
-                        <span className="min-w-0">
-                          <span className="block font-medium text-foreground">{s.name}</span>
-                          <span className="block text-xs text-muted-foreground">{getServiceDuration(s)} min — {formatCurrency(getServicePrice(s))}</span>
-                        </span>
-                      </label>
-                    ))
+                    services.map((s) => {
+                      const isCovered = isServiceCoveredByPlan(s);
+                      const isOutOfPlanForSubscriber = hasActiveSubscriptionForBooking && !isCovered;
+
+                      return (
+                        <label
+                          key={s.id}
+                          className={cn(
+                            "flex items-start gap-3 rounded-md p-2 text-sm",
+                            isOutOfPlanForSubscriber
+                              ? "cursor-not-allowed opacity-50"
+                              : "cursor-pointer hover:bg-secondary/60",
+                          )}
+                        >
+                          <Checkbox
+                            checked={form.serviceIds.includes(s.id)}
+                            disabled={isOutOfPlanForSubscriber}
+                            onCheckedChange={(c) => toggleService(s.id, c === true)}
+                          />
+                          <span className="min-w-0">
+                            <span className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+                              {s.name}
+                              {isCovered && (
+                                <Badge className="border-emerald-500/20 bg-emerald-500/10 px-2 py-0 text-[11px] text-emerald-600 hover:bg-emerald-500/10">
+                                  Coberto pelo seu plano
+                                </Badge>
+                              )}
+                              {isOutOfPlanForSubscriber && (
+                                <Badge variant="outline" className="px-2 py-0 text-[11px]">
+                                  Fora do seu plano
+                                </Badge>
+                              )}
+                            </span>
+                            <span className="block text-xs text-muted-foreground">{getServiceDuration(s)} min — {formatCurrency(getServicePrice(s))}</span>
+                          </span>
+                        </label>
+                      );
+                    })
                   )}
                 </div>
                 {selectedServices.length > 0 && (
@@ -916,10 +981,10 @@ export function ClientBookingsPage() {
         onClose={() => setChoiceOpen(false)}
         onChoose={handlePaymentChoice}
         summary={choiceSummary}
-        canPayCard={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscription)}
-        canPayPix={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscription)}
-        canPayLocal={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscription)}
-        canPaySubscription={hasActiveSubscription && selectedServices.every((s) => isServiceCoveredByPlan(s))}
+        canPayCard={!allSelectedServicesCoveredByPlan}
+        canPayPix={!allSelectedServicesCoveredByPlan}
+        canPayLocal={!allSelectedServicesCoveredByPlan}
+        canPaySubscription={allSelectedServicesCoveredByPlan}
       />
 
       {/* Loading — processando agendamento */}
