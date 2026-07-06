@@ -18,6 +18,7 @@ interface AppHeaderProps {
 
 type StoredBarbershop = {
   name?: string;
+  slug?: string;
   logoUrl?: string;
 };
 
@@ -118,7 +119,7 @@ export function AppHeader({
           <Link to={actionHref}>{actionLabel}</Link>
         </Button>
 
-        {user?.role === "admin" && <AresChatButton />}
+        {user?.role === "admin" && <AresChatButton barbershopSlug={barbershop?.slug} />}
 
         <div className="flex items-center gap-3 border-l border-border pl-3">
           <Avatar className="h-9 w-9">
