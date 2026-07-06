@@ -309,8 +309,11 @@ export function ClientBookingsPage() {
   const isFixedRule = subscriptionBarberRule === "fixed";
   const hasActiveSubscription =
     mySubscription?.status === "active" || mySubscription?.status === "paused";
+  const isBookingForDependentWithoutPlan = Boolean(bookingForDependent);
+  const hasActiveSubscriptionForBooking =
+    hasActiveSubscription && !isBookingForDependentWithoutPlan;
   const lockedBarberId =
-    isFixedRule && hasActiveSubscription ? (mySubscription?.monthlyBarberId ?? null) : null;
+    isFixedRule && hasActiveSubscriptionForBooking ? (mySubscription?.monthlyBarberId ?? null) : null;
   const activeLockedBarberId = (lockedBarberId && barbers.some((b) => b.id === lockedBarberId)) ? lockedBarberId : null;
   const hasLockedBarber = Boolean(activeLockedBarberId);
   useEffect(() => {
@@ -325,7 +328,7 @@ export function ClientBookingsPage() {
 
   const isServiceCoveredByPlan = useCallback(
     (s: Service) => {
-      if (!hasActiveSubscription || !mySubscription?.plan?.features) {
+      if (!hasActiveSubscriptionForBooking || !mySubscription?.plan?.features) {
         return s.covered_by_plan === true;
       }
       const normServiceName = normalizeText(s.name || "");
@@ -339,7 +342,7 @@ export function ClientBookingsPage() {
       });
       return isFeatured || s.covered_by_plan === true;
     },
-    [hasActiveSubscription, mySubscription],
+    [hasActiveSubscriptionForBooking, mySubscription],
   );
 
   useEffect(() => {
@@ -793,7 +796,10 @@ export function ClientBookingsPage() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => setBookingForDependent(null)}
+                      onClick={() => {
+                        setBookingForDependent(null);
+                        setField("time", "");
+                      }}
                       className={cn(
                         "flex-1 min-w-[140px] px-4 py-2 text-sm font-medium rounded-lg border transition-all text-center",
                         !bookingForDependent
@@ -807,7 +813,10 @@ export function ClientBookingsPage() {
                       <button
                         key={dep.id}
                         type="button"
-                        onClick={() => setBookingForDependent(dep)}
+                        onClick={() => {
+                          setBookingForDependent(dep);
+                          setField("time", "");
+                        }}
                         className={cn(
                           "flex-1 min-w-[140px] px-4 py-2 text-sm font-medium rounded-lg border transition-all text-center truncate",
                           bookingForDependent?.id === dep.id
@@ -845,7 +854,7 @@ export function ClientBookingsPage() {
                     <Lock size={11} />
                     Barbeiro fixo do seu plano.
                   </p>
-                ) : isFixedRule && hasActiveSubscription ? (
+                ) : isFixedRule && hasActiveSubscriptionForBooking ? (
                   <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Info size={11} />
                     O barbeiro escolhido será vinculado ao seu plano após o agendamento.
@@ -916,10 +925,10 @@ export function ClientBookingsPage() {
         onClose={() => setChoiceOpen(false)}
         onChoose={handlePaymentChoice}
         summary={choiceSummary}
-        canPayCard={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscription)}
-        canPayPix={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscription)}
-        canPayLocal={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscription)}
-        canPaySubscription={hasActiveSubscription && selectedServices.every((s) => isServiceCoveredByPlan(s))}
+        canPayCard={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscriptionForBooking)}
+        canPayPix={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscriptionForBooking)}
+        canPayLocal={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscriptionForBooking)}
+        canPaySubscription={hasActiveSubscriptionForBooking && selectedServices.every((s) => isServiceCoveredByPlan(s))}
       />
 
       {/* Loading — processando agendamento */}
