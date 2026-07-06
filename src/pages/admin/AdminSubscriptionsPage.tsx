@@ -177,6 +177,8 @@ export function AdminSubscriptionsPage() {
 
 
   async function runAction(subscription: Subscription, action: "activate" | "pause" | "cancel" | "renew" | "recurring") {
+    if (busyId) return;
+
     setBusyId(subscription.id);
     try {
       if (action === "activate") {
@@ -510,22 +512,22 @@ export function AdminSubscriptionsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {subscription.status !== "active" ? (
-                              <DropdownMenuItem onClick={() => runAction(subscription, "activate")}>
+                              <DropdownMenuItem disabled={busyId === subscription.id} onClick={() => runAction(subscription, "activate")}>
                                 <Play size={14} />
                                 Ativar
                               </DropdownMenuItem>
                             ) : null}
                             {subscription.status === "active" ? (
-                              <DropdownMenuItem onClick={() => runAction(subscription, "pause")}>
+                              <DropdownMenuItem disabled={busyId === subscription.id} onClick={() => runAction(subscription, "pause")}>
                                 <PauseCircle size={14} />
                                 Pausar
                               </DropdownMenuItem>
                             ) : null}
-                            <DropdownMenuItem onClick={() => runAction(subscription, "renew")}>
+                            <DropdownMenuItem disabled={busyId === subscription.id} onClick={() => runAction(subscription, "renew")}>
                               <RefreshCw size={14} />
                               Renovar ciclo
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => runAction(subscription, "recurring")}>
+                            <DropdownMenuItem disabled={busyId === subscription.id} onClick={() => runAction(subscription, "recurring")}>
                               <TimerReset size={14} />
                               Alternar recorrencia
                             </DropdownMenuItem>
