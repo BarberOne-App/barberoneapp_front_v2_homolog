@@ -8,6 +8,7 @@ export interface BarbershopProfile {
   cnpj: string;
   logoUrl: string;
   slug: string;
+  googleMapsUrl?: string | null;
   pagarmeRecipientId?: string | null;
   pagarmeRecipientStatus?: string | null;
   createdAt?: string | null;
@@ -20,6 +21,7 @@ export interface UpdateBarbershopProfilePayload {
   phone: string;
   cnpj: string;
   logoUrl?: string;
+  googleMapsUrl?: string;
 }
 
 export async function getBarbershopProfile(barbershopId?: string) {
@@ -38,6 +40,7 @@ export async function updateBarbershopProfile(
     phone: data.phone,
     cnpj: data.cnpj,
     ...(data.logoUrl !== undefined ? { logoUrl: data.logoUrl } : {}),
+    ...(data.googleMapsUrl !== undefined ? { googleMapsUrl: data.googleMapsUrl } : {}),
   };
 
   const response = await api.put<BarbershopProfile>("/barbershop/profile", payload);
