@@ -23,6 +23,7 @@ import {
   getMyActiveSubscription,
   type Subscription,
 } from "@/service/subscriptionService";
+import { getSettings, type BookingPaymentMethod } from "@/service/settingsService";
 
 /* ── helpers ── */
 
@@ -305,12 +306,19 @@ interface PlanCardProps {
   plan: Plan;
   isCurrentPlan: boolean;
   isChangingPlan: boolean;
+  hiddenPaymentMethods: BookingPaymentMethod[];
   onSubscribe: (plan: Plan) => void;
 }
 
-function PlanCard({ plan, isCurrentPlan, isChangingPlan, onSubscribe }: PlanCardProps) {
+function getPlanPaymentChannel(plan: Plan): BookingPaymentMethod {
+  return plan.paymentMethod === "pix" ? "pix" : "cartao";
+}
+
+function PlanCard({ plan, isCurrentPlan, isChangingPlan, hiddenPaymentMethods, onSubscribe }: PlanCardProps) {
   const accentColor = plan.color ?? "#d4af37";
   const canSubscribeOnline = ["credito", "debito", "pix"].includes(plan.paymentMethod);
+  const paymentMethodEnabled = !hiddenPaymentMethods.includes(getPlanPaymentChannel(plan));
+  const canSubscribe = canSubscribeOnline && paymentMethodEnabled;
 
   return (
     <div
@@ -362,7 +370,7 @@ function PlanCard({ plan, isCurrentPlan, isChangingPlan, onSubscribe }: PlanCard
 
       <div className="px-6 pb-6 pt-4 border-t border-border">
         {isCurrentPlan && plan.paymentMethod === "pix" ? (
-          <Button className="w-full" onClick={() => onSubscribe(plan)}>
+          <Button className="w-full" onClick={() => onSubscribe(plan)} disabled={!paymentMethodEnabled}>
             Renovar com PIX
           </Button>
         ) : isCurrentPlan ? (
@@ -375,9 +383,11 @@ function PlanCard({ plan, isCurrentPlan, isChangingPlan, onSubscribe }: PlanCard
             className="w-full"
             variant={isChangingPlan ? "outline" : "default"}
             onClick={() => onSubscribe(plan)}
-            disabled={!canSubscribeOnline}
+            disabled={!canSubscribe}
           >
-            {!canSubscribeOnline
+            {!paymentMethodEnabled
+              ? "Forma de pagamento indisponivel"
+              : !canSubscribeOnline
               ? `Pagamento: ${paymentMethodLabels[plan.paymentMethod]}`
               : plan.paymentMethod === "pix"
                 ? "Assinar com PIX"
@@ -402,16 +412,19 @@ export function ClientPlansPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [hiddenPaymentMethods, setHiddenPaymentMethods] = useState<BookingPaymentMethod[]>([]);
 
   async function load() {
     setError(false);
     try {
-      const [plansData, sub] = await Promise.all([
+      const [plansData, sub, settings] = await Promise.all([
         listPlans({ active: true }),
         getMyActiveSubscription(),
+        getSettings(),
       ]);
       setPlans(plansData);
       setMySubscription(sub);
+      setHiddenPaymentMethods(settings.hiddenBookingPaymentMethods ?? []);
     } catch {
       setError(true);
     } finally {
@@ -492,6 +505,7 @@ export function ClientPlansPage() {
             plan={plan}
             isCurrentPlan={isActive && mySubscription?.planId === plan.id}
             isChangingPlan={isActive && mySubscription?.planId !== plan.id}
+            hiddenPaymentMethods={hiddenPaymentMethods}
             onSubscribe={setSelectedPlan}
           />
           ))}

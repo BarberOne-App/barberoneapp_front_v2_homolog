@@ -67,7 +67,7 @@ import {
   type Subscription,
 } from "@/service/subscriptionService";
 import { getBarbershopProfile, type BarbershopProfile } from "@/service/barbershopProfileService";
-import { getSettings, type SubscriptionBarberRule } from "@/service/settingsService";
+import { getSettings, type BookingPaymentMethod, type SubscriptionBarberRule } from "@/service/settingsService";
 import { createAppointmentPayment } from "@/service/paymentService";
 import { listServices, type Service } from "@/service/serviceService";
 import { isFitAppointment } from "@/utils/fitAppointment";
@@ -242,6 +242,7 @@ export function ClientBookingsPage() {
 
   // Regra de barbeiro por assinatura
   const [subscriptionBarberRule, setSubscriptionBarberRule] = useState<SubscriptionBarberRule>("fixed");
+  const [hiddenPaymentMethods, setHiddenPaymentMethods] = useState<BookingPaymentMethod[]>([]);
 
   // Perfil da barbearia (para WhatsApp)
   const [barbershopProfile, setBarbershopProfile] = useState<BarbershopProfile | null>(null);
@@ -301,6 +302,7 @@ export function ClientBookingsPage() {
       try {
         const settings = await getSettings();
         setSubscriptionBarberRule(settings.subscriptionBarberRule ?? "fixed");
+        setHiddenPaymentMethods(settings.hiddenBookingPaymentMethods ?? []);
       } catch {
         // fallback para "fixed" se o endpoint não estiver acessível para o usuário
       }
@@ -981,9 +983,9 @@ export function ClientBookingsPage() {
         onClose={() => setChoiceOpen(false)}
         onChoose={handlePaymentChoice}
         summary={choiceSummary}
-        canPayCard={!allSelectedServicesCoveredByPlan}
-        canPayPix={!allSelectedServicesCoveredByPlan}
-        canPayLocal={!allSelectedServicesCoveredByPlan}
+        canPayCard={!allSelectedServicesCoveredByPlan && !hiddenPaymentMethods.includes("cartao")}
+        canPayPix={!allSelectedServicesCoveredByPlan && !hiddenPaymentMethods.includes("pix")}
+        canPayLocal={!allSelectedServicesCoveredByPlan && !hiddenPaymentMethods.includes("local")}
         canPaySubscription={allSelectedServicesCoveredByPlan}
       />
 
