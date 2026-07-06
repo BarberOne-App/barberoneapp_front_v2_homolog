@@ -47,6 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { listBarbers, type Barber } from "@/service/barberService";
+import { listPlans, type Plan } from "@/service/planService";
 
 import {
   cancelSubscription,
@@ -124,6 +125,11 @@ export function AdminSubscriptionsPage() {
   const [barberDialogSubscription, setBarberDialogSubscription] = useState<Subscription | null>(null);
   const [selectedBarberId, setSelectedBarberId] = useState("");
   const [savingBarber, setSavingBarber] = useState(false);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [planDialogSubscription, setPlanDialogSubscription] = useState<Subscription | null>(null);
+  const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [savingPlan, setSavingPlan] = useState(false);
 
 
   const stats = useMemo(() => {
@@ -174,9 +180,19 @@ export function AdminSubscriptionsPage() {
       .finally(() => setBarbersLoading(false));
   }, []);
 
+  useEffect(() => {
+    setPlansLoading(true);
+    listPlans({ active: true })
+      .then((result) => setPlans(result))
+      .catch(() => setPlans([]))
+      .finally(() => setPlansLoading(false));
+  }, []);
+
 
 
   async function runAction(subscription: Subscription, action: "activate" | "pause" | "cancel" | "renew" | "recurring") {
+    if (busyId) return;
+
     setBusyId(subscription.id);
     try {
       if (action === "activate") {
@@ -210,6 +226,35 @@ export function AdminSubscriptionsPage() {
   function openBarberDialog(subscription: Subscription) {
     setBarberDialogSubscription(subscription);
     setSelectedBarberId(subscription.monthlyBarberId ?? "");
+  }
+
+  function openPlanDialog(subscription: Subscription) {
+    setPlanDialogSubscription(subscription);
+    setSelectedPlanId(subscription.planId ?? "");
+  }
+
+  async function handleSavePlan() {
+    if (!planDialogSubscription || !selectedPlanId) return;
+    if (selectedPlanId === planDialogSubscription.planId) {
+      setPlanDialogSubscription(null);
+      setSelectedPlanId("");
+      return;
+    }
+
+    setSavingPlan(true);
+    try {
+      await updateSubscription(planDialogSubscription.id, {
+        planId: selectedPlanId,
+      });
+      toast.success("Plano do cliente atualizado.");
+      setPlanDialogSubscription(null);
+      setSelectedPlanId("");
+      await loadSubscriptions();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSavingPlan(false);
+    }
   }
 
   async function handleSaveMonthlyBarber() {
@@ -510,22 +555,22 @@ export function AdminSubscriptionsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {subscription.status !== "active" ? (
-                              <DropdownMenuItem onClick={() => runAction(subscription, "activate")}>
+                              <DropdownMenuItem disabled={busyId === subscription.id} onClick={() => runAction(subscription, "activate")}>
                                 <Play size={14} />
                                 Ativar
                               </DropdownMenuItem>
                             ) : null}
                             {subscription.status === "active" ? (
-                              <DropdownMenuItem onClick={() => runAction(subscription, "pause")}>
+                              <DropdownMenuItem disabled={busyId === subscription.id} onClick={() => runAction(subscription, "pause")}>
                                 <PauseCircle size={14} />
                                 Pausar
                               </DropdownMenuItem>
                             ) : null}
-                            <DropdownMenuItem onClick={() => runAction(subscription, "renew")}>
+                            <DropdownMenuItem disabled={busyId === subscription.id} onClick={() => runAction(subscription, "renew")}>
                               <RefreshCw size={14} />
                               Renovar ciclo
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => runAction(subscription, "recurring")}>
+                            <DropdownMenuItem disabled={busyId === subscription.id} onClick={() => runAction(subscription, "recurring")}>
                               <TimerReset size={14} />
                               Alternar recorrencia
                             </DropdownMenuItem>
@@ -535,6 +580,12 @@ export function AdminSubscriptionsPage() {
                                 Trocar barbeiro
                               </DropdownMenuItem>
                             )}
+                            <DropdownMenuItem
+                              onClick={() => openPlanDialog(subscription)}
+                            >
+                              <CreditCard size={14} />
+                              Trocar plano
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
@@ -621,6 +672,85 @@ export function AdminSubscriptionsPage() {
             <Button type="button" disabled={savingBarber || barbersLoading} onClick={() => void handleSaveMonthlyBarber()}>
               {savingBarber && <Loader2 size={14} className="animate-spin" />}
               Salvar barbeiro
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(planDialogSubscription)}
+        onOpenChange={(open) => {
+          if (!open && !savingPlan) {
+            setPlanDialogSubscription(null);
+            setSelectedPlanId("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Trocar plano do cliente</DialogTitle>
+            <DialogDescription>
+              Altere o plano da assinatura de {planDialogSubscription?.user?.name ?? "este cliente"}.
+              O valor mensal e os cortes do ciclo atual serao ajustados pelo novo plano.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="rounded-md border border-border bg-secondary/30 p-3 text-sm">
+              <p className="font-medium text-foreground">{planDialogSubscription?.plan?.name ?? "Plano atual"}</p>
+              <p className="text-xs text-muted-foreground">
+                Atual: {formatCurrency(planDialogSubscription?.amount)} - {planDialogSubscription?.plan?.cutsPerMonth ?? 0} cortes/mes
+              </p>
+            </div>
+
+            {planDialogSubscription?.hasPagarmeSubscription ? (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700">
+                Esta assinatura possui recorrencia no Pagar.me. Cancele ou altere a cobranca externa antes de trocar o plano manualmente.
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <Label>Novo plano</Label>
+              <Select value={selectedPlanId} onValueChange={setSelectedPlanId} disabled={plansLoading}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={plansLoading ? "Carregando planos..." : "Selecionar plano"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {plans.map((plan) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.name} - {formatCurrency(plan.price)} - {plan.cutsPerMonth} cortes/mes
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={savingPlan}
+              onClick={() => {
+                setPlanDialogSubscription(null);
+                setSelectedPlanId("");
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                savingPlan ||
+                plansLoading ||
+                !selectedPlanId ||
+                selectedPlanId === planDialogSubscription?.planId ||
+                Boolean(planDialogSubscription?.hasPagarmeSubscription)
+              }
+              onClick={() => void handleSavePlan()}
+            >
+              {savingPlan && <Loader2 size={14} className="animate-spin" />}
+              Salvar plano
             </Button>
           </DialogFooter>
         </DialogContent>

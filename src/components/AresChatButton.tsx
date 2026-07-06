@@ -1,9 +1,16 @@
 import areschatIcon from '../assets/iconeAresChat.png';
+import { buildAresChatRedirectUrl } from '@/utils/areschat';
 
-export function AresChatButton() {
+interface AresChatButtonProps {
+  barbershopSlug?: string | null;
+}
+
+export function AresChatButton({ barbershopSlug }: AresChatButtonProps) {
+  const areschatUrl = buildAresChatRedirectUrl(barbershopSlug);
+
   return (
     <a
-      href="https://adtech.areschat.com.br/"
+      href={areschatUrl}
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Suporte via AresChat"

@@ -1,180 +1,160 @@
-import { Search, Filter, Star, MoreHorizontal, Calendar } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useTableSelection } from '@/hooks/useTableSelection';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Loader2, MessageSquareText, Star } from "lucide-react";
 
-interface Review {
-  id: number;
-  customerName: string;
-  service: string;
-  staffName: string;
-  rating: number;
-  comment: string;
-  date: string;
-  likes: number;
-  status: 'published' | 'pending' | 'flagged';
-  avatar: string;
+import { Badge } from "@/components/ui/badge";
+import { listReviews, type CustomerReview } from "@/service/reviewService";
+
+function formatDate(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("pt-BR");
 }
 
-const reviews: Review[] = [
-  { id: 1, customerName: 'Liam Thompson', service: 'Fade Masterpiece', staffName: 'Sophia Martinez', rating: 5, comment: 'Amazing service! Sophia really knows her craft. Best fade I\'ve ever had.', date: 'May 15, 2025', likes: 12, status: 'published', avatar: 'https://i.pravatar.cc/150?u=liam' },
-  { id: 2, customerName: 'Noah Johnson', service: 'Buzz Cut Bliss', staffName: 'Olivia Brown', rating: 4, comment: 'Great experience, very professional. Would recommend.', date: 'May 22, 2025', likes: 8, status: 'published', avatar: 'https://i.pravatar.cc/150?u=noah' },
-  { id: 3, customerName: 'Ethan Davis', service: 'Beard Trim', staffName: 'Daniel Wilson', rating: 5, comment: 'Perfect beard trim. Daniel took his time and did an excellent job.', date: 'May 18, 2025', likes: 15, status: 'published', avatar: 'https://i.pravatar.cc/150?u=ethan' },
-  { id: 4, customerName: 'Lucas Miller', service: 'Classic Cut', staffName: 'James Anderson', rating: 3, comment: 'Good cut but took longer than expected.', date: 'May 20, 2025', likes: 3, status: 'pending', avatar: 'https://i.pravatar.cc/150?u=lucas' },
-  { id: 5, customerName: 'Mason Wilson', service: 'Hot Towel Shave', staffName: 'Michael Thompson', rating: 5, comment: 'The hot towel shave was incredibly relaxing. Michael is a true professional.', date: 'May 25, 2025', likes: 20, status: 'published', avatar: 'https://i.pravatar.cc/150?u=mason' },
-  { id: 6, customerName: 'James Anderson', service: 'Hair Coloring', staffName: 'Sophia Martinez', rating: 2, comment: 'Color was not what I expected. Need to fix this.', date: 'May 28, 2025', likes: 1, status: 'flagged', avatar: 'https://i.pravatar.cc/150?u=james2' },
-];
-
-const statusStyles = {
-  published: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  pending: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  flagged: 'bg-red-500/10 text-red-500 border-red-500/20',
-};
+function renderStars(rating: number) {
+  return Array.from({ length: 5 }, (_, index) => (
+    <Star
+      key={index}
+      size={15}
+      className={index < rating ? "fill-amber-500 text-amber-500" : "text-muted-foreground/40"}
+    />
+  ));
+}
 
 export function ReviewsPage() {
-  const { selectedRows, toggleRow, toggleAll } = useTableSelection(
-    reviews.map((review) => review.id)
-  );
+  const [reviews, setReviews] = useState<CustomerReview[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const averageRating = (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1);
+  const loadReviews = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    setError(null);
+
+    try {
+      const result = await listReviews({ limit: 300 });
+      setReviews(result.items);
+    } catch {
+      setReviews([]);
+      setError("Nao foi possivel carregar as avaliacoes.");
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    loadReviews().finally(() => {
+      if (!mounted) return;
+    });
+
+    const timer = window.setInterval(() => {
+      void loadReviews(true);
+    }, 10000);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, [loadReviews]);
+
+  const stats = useMemo(() => {
+    const total = reviews.length;
+    const average = total
+      ? reviews.reduce((sum, item) => sum + Number(item.rating || 0), 0) / total
+      : 0;
+    const now = new Date();
+    const thisMonth = reviews.filter((item) => {
+      const date = new Date(item.createdAt);
+      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+    }).length;
+
+    return {
+      total,
+      average,
+      thisMonth,
+    };
+  }, [reviews]);
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Total Reviews</p>
-          <h3 className="text-2xl font-semibold text-foreground">324</h3>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Avaliacoes recebidas</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.total}</h3>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Average Rating</p>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Media geral</p>
           <div className="flex items-center gap-2">
-            <h3 className="text-2xl font-semibold text-foreground">{averageRating}</h3>
-            <Star size={20} className="text-amber-500 fill-amber-500" />
+            <h3 className="text-2xl font-semibold text-foreground">
+              {stats.average ? stats.average.toFixed(1) : "0.0"}
+            </h3>
+            <div className="flex">{renderStars(Math.round(stats.average))}</div>
           </div>
         </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">This Month</p>
-          <h3 className="text-2xl font-semibold text-foreground">48</h3>
-        </div>
-        <div className="bg-card rounded-xl p-5 border border-border">
-          <p className="text-sm text-muted-foreground mb-1">Pending</p>
-          <h3 className="text-2xl font-semibold text-foreground">5</h3>
+        <div className="rounded-xl border border-border bg-card p-5">
+          <p className="mb-1 text-sm text-muted-foreground">Este mes</p>
+          <h3 className="text-2xl font-semibold text-foreground">{stats.thisMonth}</h3>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="text-base font-medium text-foreground">All Reviews</h3>
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
-              <input 
-                type="text" 
-                placeholder="Search reviews..."
-                className="w-56 bg-secondary text-sm text-foreground placeholder:text-muted-foreground rounded-md pl-9 pr-3 py-1.5 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Filter size={14} />
-              Filter
-            </Button>
-          </div>
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex items-center justify-between border-b border-border p-4">
+          <h3 className="text-base font-medium text-foreground">Avaliacoes dos clientes</h3>
+          <Badge variant="outline">Atualiza a cada 10s</Badge>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="w-10 p-4">
-                  <Checkbox 
-                    checked={selectedRows.length === reviews.length && reviews.length > 0}
-                    onCheckedChange={toggleAll}
-                  />
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Customer</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Service & Staff</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Rating</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Review</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Date</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-                <th className="w-10 px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {reviews.map((review) => (
-                <tr 
-                  key={review.id} 
-                  className="border-b border-border last:border-b-0 hover:bg-secondary/30 transition-colors"
-                >
-                  <td className="p-4">
-                    <Checkbox 
-                      checked={selectedRows.includes(review.id)}
-                      onCheckedChange={() => toggleRow(review.id)}
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10">
-                        <AvatarImage src={review.avatar} alt={review.customerName} />
-                        <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                          {review.customerName.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm font-medium text-foreground">{review.customerName}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="space-y-1">
-                      <p className="text-sm text-foreground">{review.service}</p>
-                      <p className="text-xs text-muted-foreground">by {review.staffName}</p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      {[...Array(5)].map((_, i) => (
-                        <Star 
-                          key={i} 
-                          size={14} 
-                          className={i < review.rating ? 'text-amber-500 fill-amber-500' : 'text-muted-foreground'}
-                        />
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="max-w-xs">
-                      <p className="text-sm text-foreground truncate">{review.comment}</p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar size={14} />
-                      {review.date}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge 
-                      variant="outline" 
-                      className={`text-xs capitalize px-2 py-0.5 rounded-full ${statusStyles[review.status]}`}
+        {loading ? (
+          <div className="p-10 text-center text-sm text-muted-foreground">
+            <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+            Carregando avaliacoes...
+          </div>
+        ) : error ? (
+          <div className="p-6 text-sm text-destructive">{error}</div>
+        ) : reviews.length === 0 ? (
+          <div className="p-10 text-center text-sm text-muted-foreground">
+            <MessageSquareText className="mx-auto mb-2 h-5 w-5" />
+            Nenhuma avaliacao registrada.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  {["Data", "Nota", "Cliente", "Barbeiro", "Servico", "Comentario"].map((col) => (
+                    <th
+                      key={col}
+                      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground"
                     >
-                      {review.status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button className="p-1 text-muted-foreground hover:text-foreground transition-colors">
-                      <MoreHorizontal size={16} />
-                    </button>
-                  </td>
+                      {col}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {reviews.map((review) => (
+                  <tr
+                    key={review.id}
+                    className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
+                  >
+                    <td className="px-4 py-3 text-sm text-foreground">{formatDate(review.createdAt)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">{renderStars(review.rating)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-foreground">{review.clientName || "-"}</td>
+                    <td className="px-4 py-3 text-sm text-foreground">{review.barberName || "-"}</td>
+                    <td className="max-w-64 px-4 py-3 text-sm text-muted-foreground">
+                      <span className="block truncate">{review.services?.join(", ") || "-"}</span>
+                    </td>
+                    <td className="max-w-80 px-4 py-3 text-sm text-muted-foreground">
+                      <span className="block whitespace-pre-wrap">{review.comment || "-"}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

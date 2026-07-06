@@ -12,6 +12,7 @@ export interface WhatsAppMessageData {
   services: string[];
   total?: number;
   notes?: string;
+  googleMapsUrl?: string | null;
 }
 
 function formatPhone(raw: string): string {
@@ -42,31 +43,34 @@ function formatDateTimeBR(isoString: string): { date: string; time: string } {
 }
 
 export function buildWhatsAppMessage(data: WhatsAppMessageData): string {
-  const serviceList = data.services.map((s) => `  • ${s}`).join("\n");
+  const serviceList = data.services.map((s) => `  - ${s}`).join("\n");
   const totalLine =
     data.total != null && data.total > 0
       ? `\n*Total:* ${formatCurrencyBR(data.total)}`
       : "";
-
-  const notesLine = data.notes?.trim() ? ` Observações: ${data.notes.trim()}` : "";
+  const notesLine = data.notes?.trim() ? ` Observacoes: ${data.notes.trim()}` : "";
+  const mapsLine = data.googleMapsUrl?.trim()
+    ? ["", `*Localizacao:* ${data.googleMapsUrl.trim()}`]
+    : [];
 
   return [
     `*AGENDAMENTO CONFIRMADO*`,
     ``,
-    `Olá, ${data.clientName}!`,
+    `Ola, ${data.clientName}!`,
     ``,
     `Seu agendamento foi confirmado com sucesso.`,
     ``,
     `*Barbearia:* ${data.barbershopName}`,
     `*Barbeiro:* ${data.barberName}`,
     `*Data:* ${data.date}`,
-    `*Horário:* ${data.time}`,
-    `*Serviços:*`,
+    `*Horario:* ${data.time}`,
+    `*Servicos:*`,
     serviceList,
     ...(notesLine ? [notesLine] : []),
     totalLine,
+    ...mapsLine,
     ``,
-    `Aguardamos você. Obrigado pela preferência!`,
+    `Aguardamos voce. Obrigado pela preferencia!`,
   ]
     .join("\n")
     .replace(/\n{3,}/g, "\n\n");
@@ -77,13 +81,13 @@ export function openWhatsApp(phone: string | null | undefined, message: string):
   const cleanPhone = rawPhone.replace(/\D/g, "");
   const formattedPhone = formatPhone(rawPhone);
 
-  console.log("[WhatsApp] Número recebido:", rawPhone);
-  console.log("[WhatsApp] Número limpo:", cleanPhone);
-  console.log("[WhatsApp] Número formatado:", formattedPhone);
+  console.log("[WhatsApp] Numero recebido:", rawPhone);
+  console.log("[WhatsApp] Numero limpo:", cleanPhone);
+  console.log("[WhatsApp] Numero formatado:", formattedPhone);
 
   if (!formattedPhone) {
-    console.warn("[WhatsApp] Nenhum número válido — abertura cancelada.");
-    toast.error("WhatsApp não configurado. Acesse Configurações e cadastre o telefone da barbearia.");
+    console.warn("[WhatsApp] Nenhum numero valido - abertura cancelada.");
+    toast.error("WhatsApp nao configurado. Acesse Configuracoes e cadastre o telefone da barbearia.");
     return;
   }
 
@@ -120,7 +124,10 @@ export function openWhatsAppShare(message: string): void {
   window.open(`https://wa.me/?text=${encoded}`, "_blank");
 }
 
-function buildConfirmationMessage(appointment: Appointment): string {
+function buildConfirmationMessage(
+  appointment: Appointment,
+  barbershop: BarbershopProfile | null,
+): string {
   const clientName =
     appointment.dependent?.name ??
     appointment.client?.name ??
@@ -130,15 +137,18 @@ function buildConfirmationMessage(appointment: Appointment): string {
   const barberName = appointment.barber?.displayName ?? "Barbeiro";
 
   return [
-    `Olá ${clientName}!`,
+    `Ola ${clientName}!`,
     ``,
     `Estamos entrando em contato para CONFIRMAR seu agendamento:`,
     ``,
     ` Data: ${date}`,
-    ` Horário: ${time}`,
-    ` Serviço: ${services}`,
+    ` Horario: ${time}`,
+    ` Servico: ${services}`,
     ` Barbeiro: ${barberName}`,
-    ...(appointment.notes?.trim() ? [``, ` Observação: ${appointment.notes.trim()}`] : []),
+    ...(appointment.notes?.trim() ? [``, ` Observacao: ${appointment.notes.trim()}`] : []),
+    ...(barbershop?.googleMapsUrl?.trim()
+      ? [``, ` Localizacao: ${barbershop.googleMapsUrl.trim()}`]
+      : []),
   ].join("\n");
 }
 
@@ -150,5 +160,5 @@ export function sendAppointmentWhatsApp(
   console.log("[WhatsApp] Dados da barbearia:", barbershop);
   console.log("[WhatsApp] Telefone do cliente:", clientPhone);
 
-  openWhatsApp(clientPhone, buildConfirmationMessage(appointment));
+  openWhatsApp(clientPhone, buildConfirmationMessage(appointment, barbershop));
 }

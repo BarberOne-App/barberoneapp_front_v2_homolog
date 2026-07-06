@@ -10,6 +10,7 @@ import {
   Plus,
   Search,
   Scissors,
+  Star,
   XCircle,
   Zap,
   User as UserIcon,
@@ -67,8 +68,9 @@ import {
   type Subscription,
 } from "@/service/subscriptionService";
 import { getBarbershopProfile, type BarbershopProfile } from "@/service/barbershopProfileService";
-import { getSettings, type SubscriptionBarberRule } from "@/service/settingsService";
+import { getSettings, type BookingPaymentMethod, type SubscriptionBarberRule } from "@/service/settingsService";
 import { createAppointmentPayment } from "@/service/paymentService";
+import { createReview } from "@/service/reviewService";
 import { listServices, type Service } from "@/service/serviceService";
 import { isFitAppointment } from "@/utils/fitAppointment";
 import { buildWhatsAppMessage, openWhatsApp, type WhatsAppMessageData } from "@/utils/whatsapp";
@@ -242,6 +244,7 @@ export function ClientBookingsPage() {
 
   // Regra de barbeiro por assinatura
   const [subscriptionBarberRule, setSubscriptionBarberRule] = useState<SubscriptionBarberRule>("fixed");
+  const [hiddenPaymentMethods, setHiddenPaymentMethods] = useState<BookingPaymentMethod[]>([]);
 
   // Perfil da barbearia (para WhatsApp)
   const [barbershopProfile, setBarbershopProfile] = useState<BarbershopProfile | null>(null);
@@ -251,6 +254,10 @@ export function ClientBookingsPage() {
 
   // Local: salvar direto
   const [savingLocal, setSavingLocal] = useState(false);
+  const [reviewAppointment, setReviewAppointment] = useState<Appointment | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [savingReview, setSavingReview] = useState(false);
 
   const limit = 20;
 
@@ -301,6 +308,7 @@ export function ClientBookingsPage() {
       try {
         const settings = await getSettings();
         setSubscriptionBarberRule(settings.subscriptionBarberRule ?? "fixed");
+        setHiddenPaymentMethods(settings.hiddenBookingPaymentMethods ?? []);
       } catch {
         // fallback para "fixed" se o endpoint não estiver acessível para o usuário
       }
@@ -469,6 +477,7 @@ export function ClientBookingsPage() {
         services: selectedServices.map((s) => s.name),
         total: totalPrice,
         notes: form.notes?.trim(),
+        googleMapsUrl: barbershopProfile?.googleMapsUrl,
       });
       setBookingOpen(false);
       setBookingForDependent(null);
@@ -523,6 +532,7 @@ export function ClientBookingsPage() {
         services: selectedServices.map((s) => s.name),
         total: 0, // 0 custo extra
         notes: form.notes?.trim(),
+        googleMapsUrl: barbershopProfile?.googleMapsUrl,
       });
       setBookingOpen(false);
       setBookingForDependent(null);
@@ -577,6 +587,7 @@ export function ClientBookingsPage() {
           services: selectedServices.map((s) => s.name),
           total: totalPrice,
           notes: form.notes?.trim(),
+          googleMapsUrl: barbershopProfile?.googleMapsUrl,
         });
         setBookingOpen(false);
         setBookingForDependent(null);
@@ -622,6 +633,7 @@ export function ClientBookingsPage() {
       services: selectedServices.map((s) => s.name),
       total: totalPrice,
       notes: form.notes?.trim(),
+      googleMapsUrl: barbershopProfile?.googleMapsUrl,
     });
     setPaymentOpen(false);
     setBookingOpen(false);
@@ -637,6 +649,33 @@ export function ClientBookingsPage() {
       await loadAppointments();
     } catch (err) {
       toast.error(getApiMessage(err));
+    }
+  }
+
+  function openReviewDialog(appointment: Appointment) {
+    setReviewAppointment(appointment);
+    setReviewRating(5);
+    setReviewComment("");
+  }
+
+  async function handleReviewSubmit() {
+    if (!reviewAppointment) return;
+    setSavingReview(true);
+
+    try {
+      await createReview({
+        appointmentId: reviewAppointment.id,
+        rating: reviewRating,
+        comment: reviewComment.trim() || null,
+      });
+      toast.success("Avaliacao registrada.");
+      setReviewAppointment(null);
+      setReviewRating(5);
+      setReviewComment("");
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSavingReview(false);
     }
   }
 
@@ -732,6 +771,7 @@ export function ClientBookingsPage() {
                     const serviceText = appt.services.map((s) => s.serviceName).join(", ") || "Sem servico";
                     const barberName = appt.barber?.displayName || "Sem barbeiro";
                     const canCancel = appt.status === "scheduled" || appt.status === "confirmed";
+                    const canReview = appt.status === "completed";
 
                     return (
                       <tr key={appt.id} className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30">
@@ -773,15 +813,25 @@ export function ClientBookingsPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          {canCancel && (
+                          {(canCancel || canReview) && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button className="p-1 text-muted-foreground transition-colors hover:text-foreground"><MoreHorizontal size={16} /></button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem variant="destructive" onClick={() => handleCancel(appt)}>
-                                  <XCircle size={14} />Cancelar agendamento
-                                </DropdownMenuItem>
+                                {canReview && (
+                                  <DropdownMenuItem onClick={() => openReviewDialog(appt)}>
+                                    <Star size={14} />Avaliar atendimento
+                                  </DropdownMenuItem>
+                                )}
+                                {canCancel && (
+                                  <>
+                                    {canReview && <DropdownMenuSeparator />}
+                                    <DropdownMenuItem variant="destructive" onClick={() => handleCancel(appt)}>
+                                      <XCircle size={14} />Cancelar agendamento
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           )}
@@ -976,14 +1026,68 @@ export function ClientBookingsPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!reviewAppointment} onOpenChange={(open) => { if (!open && !savingReview) setReviewAppointment(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Avaliar atendimento</DialogTitle>
+            <DialogDescription>
+              Sua avaliacao sera enviada para a barbearia.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nota</Label>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map((rating) => (
+                  <button
+                    key={rating}
+                    type="button"
+                    onClick={() => setReviewRating(rating)}
+                    className="rounded-md p-1 text-muted-foreground transition hover:bg-secondary hover:text-amber-500"
+                    aria-label={`Nota ${rating}`}
+                  >
+                    <Star
+                      size={24}
+                      className={rating <= reviewRating ? "fill-amber-500 text-amber-500" : ""}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="review-comment">Comentario</Label>
+              <Textarea
+                id="review-comment"
+                value={reviewComment}
+                onChange={(event) => setReviewComment(event.target.value)}
+                placeholder="Conte como foi sua experiencia."
+                maxLength={1000}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setReviewAppointment(null)} disabled={savingReview}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleReviewSubmit} disabled={savingReview}>
+              {savingReview ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Enviar avaliacao
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <PaymentChoiceModal
         isOpen={choiceOpen}
         onClose={() => setChoiceOpen(false)}
         onChoose={handlePaymentChoice}
         summary={choiceSummary}
-        canPayCard={!allSelectedServicesCoveredByPlan}
-        canPayPix={!allSelectedServicesCoveredByPlan}
-        canPayLocal={!allSelectedServicesCoveredByPlan}
+        canPayCard={!allSelectedServicesCoveredByPlan && !hiddenPaymentMethods.includes("cartao")}
+        canPayPix={!allSelectedServicesCoveredByPlan && !hiddenPaymentMethods.includes("pix")}
+        canPayLocal={!allSelectedServicesCoveredByPlan && !hiddenPaymentMethods.includes("local")}
         canPaySubscription={allSelectedServicesCoveredByPlan}
       />
 

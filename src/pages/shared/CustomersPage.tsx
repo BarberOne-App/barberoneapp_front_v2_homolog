@@ -76,6 +76,7 @@ import {
   type Subscription,
 } from "@/service/subscriptionService";
 import { listPlans, type Plan } from "@/service/planService";
+import { getSettings, type BookingPaymentMethod } from "@/service/settingsService";
 import { downloadCsvReport, downloadPdfReport, type ReportColumn } from "@/utils/reportExport";
 
 type CustomerStatus = "active" | "inactive" | "new";
@@ -332,6 +333,7 @@ export function CustomersPage() {
   const [subDialogCustomer, setSubDialogCustomer] = useState<UserProfile | null>(null);
   const [availablePlans, setAvailablePlans] = useState<Plan[]>([]);
   const [subForm, setSubForm] = useState({ planId: "", paymentMethod: "credito", amount: "" });
+  const [hiddenPaymentMethods, setHiddenPaymentMethods] = useState<BookingPaymentMethod[]>([]);
   const [savingSub, setSavingSub] = useState(false);
 
   const limit = 20;
@@ -413,13 +415,25 @@ export function CustomersPage() {
     listPlans({ activeOnly: true } as any)
       .then(setAvailablePlans)
       .catch(() => setAvailablePlans([]));
+    getSettings()
+      .then((settings) => {
+        const hidden = settings.hiddenBookingPaymentMethods ?? [];
+        setHiddenPaymentMethods(hidden);
+        const firstMethod =
+          !hidden.includes("pix") ? "pix" :
+          !hidden.includes("local") ? "dinheiro" :
+          !hidden.includes("cartao") ? "debito" :
+          "";
+        setSubForm((current) => ({ ...current, paymentMethod: firstMethod }));
+      })
+      .catch(() => setHiddenPaymentMethods([]));
   }
 
   async function handleCreateSubscription(e: FormEvent) {
     e.preventDefault();
     if (!subDialogCustomer || !subForm.planId) return;
-    if (subForm.paymentMethod === "credito") {
-      toast.error("Planos no cartao devem ser assinados pelo cliente no checkout seguro.");
+    if (!subForm.paymentMethod) {
+      toast.error("Nenhuma forma de pagamento habilitada nas configuracoes.");
       return;
     }
     const amount = parseFloat(subForm.amount.replace(",", "."));
@@ -1219,11 +1233,11 @@ export function CustomersPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pix">Pix</SelectItem>
-                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                    <SelectItem value="debito">Débito</SelectItem>
-                    <SelectItem value="credito">Crédito</SelectItem>
-                    <SelectItem value="local">Local</SelectItem>
+                    {!hiddenPaymentMethods.includes("pix") && <SelectItem value="pix">Pix</SelectItem>}
+                    {!hiddenPaymentMethods.includes("local") && <SelectItem value="dinheiro">Dinheiro</SelectItem>}
+                    {!hiddenPaymentMethods.includes("cartao") && <SelectItem value="debito">Debito</SelectItem>}
+                    {!hiddenPaymentMethods.includes("cartao") && <SelectItem value="credito">Credito</SelectItem>}
+                    {!hiddenPaymentMethods.includes("local") && <SelectItem value="local">Local</SelectItem>}
                   </SelectContent>
                 </Select>
               </div>
