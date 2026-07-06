@@ -471,6 +471,7 @@ export function ClientBookingsPage() {
         services: selectedServices.map((s) => s.name),
         total: totalPrice,
         notes: form.notes?.trim(),
+        googleMapsUrl: barbershopProfile?.googleMapsUrl,
       });
       setBookingOpen(false);
       setBookingForDependent(null);
@@ -525,6 +526,7 @@ export function ClientBookingsPage() {
         services: selectedServices.map((s) => s.name),
         total: 0, // 0 custo extra
         notes: form.notes?.trim(),
+        googleMapsUrl: barbershopProfile?.googleMapsUrl,
       });
       setBookingOpen(false);
       setBookingForDependent(null);
@@ -579,6 +581,7 @@ export function ClientBookingsPage() {
           services: selectedServices.map((s) => s.name),
           total: totalPrice,
           notes: form.notes?.trim(),
+          googleMapsUrl: barbershopProfile?.googleMapsUrl,
         });
         setBookingOpen(false);
         setBookingForDependent(null);
@@ -624,6 +627,7 @@ export function ClientBookingsPage() {
       services: selectedServices.map((s) => s.name),
       total: totalPrice,
       notes: form.notes?.trim(),
+      googleMapsUrl: barbershopProfile?.googleMapsUrl,
     });
     setPaymentOpen(false);
     setBookingOpen(false);
