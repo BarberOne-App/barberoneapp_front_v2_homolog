@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { TouchEvent, UIEvent, WheelEvent } from "react";
 import { CalendarIcon, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -26,6 +27,7 @@ interface AppCalendarProps {
   disableFuture?: boolean;
   rangeStart?: Date;
   rangeEnd?: Date;
+  popoverPortal?: boolean;
 }
 
 const months = [
@@ -43,6 +45,12 @@ const months = [
   "Dezembro",
 ];
 
+function stopScrollPropagation(
+  event: TouchEvent<HTMLDivElement> | UIEvent<HTMLDivElement> | WheelEvent<HTMLDivElement>
+) {
+  event.stopPropagation();
+}
+
 export function AppCalendar({
   mode = "single",
   value,
@@ -57,6 +65,7 @@ export function AppCalendar({
   disableFuture = false,
   rangeStart,
   rangeEnd,
+  popoverPortal = true,
 }: AppCalendarProps) {
   const today = new Date();
 
@@ -210,6 +219,7 @@ export function AppCalendar({
         sideOffset={6}
         avoidCollisions={true}
         collisionPadding={12}
+        portal={popoverPortal}
         className="z-[100] w-[min(346px,calc(100vw-1rem))] rounded-2xl border border-border bg-card p-3 shadow-xl"
       >
         <div className="mb-3 flex items-center justify-between gap-1.5 rounded-xl bg-background p-1.5">
@@ -237,7 +247,12 @@ export function AppCalendar({
               </button>
 
               {openMonth && (
-                <div className="absolute left-0 top-11 z-50 max-h-60 w-full overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-xl">
+                <div
+                  className="absolute left-0 top-11 z-50 max-h-[min(15rem,45vh)] w-full touch-pan-y overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-1 shadow-xl [-webkit-overflow-scrolling:touch]"
+                  onScroll={stopScrollPropagation}
+                  onTouchMove={stopScrollPropagation}
+                  onWheel={stopScrollPropagation}
+                >
                   {months.map((item, index) => (
                     <button
                       key={item}
@@ -269,7 +284,12 @@ export function AppCalendar({
               </button>
 
               {openYear && (
-                <div className="absolute right-0 top-11 z-50 max-h-60 w-full overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-xl">
+                <div
+                  className="absolute right-0 top-11 z-50 max-h-[min(15rem,45vh)] w-full touch-pan-y overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-1 shadow-xl [-webkit-overflow-scrolling:touch]"
+                  onScroll={stopScrollPropagation}
+                  onTouchMove={stopScrollPropagation}
+                  onWheel={stopScrollPropagation}
+                >
                   {years.map((year) => (
                     <button
                       key={year}

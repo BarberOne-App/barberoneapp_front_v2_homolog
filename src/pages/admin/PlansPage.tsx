@@ -770,6 +770,8 @@ export function PlansPage() {
                         className={
                           sub.status === "active"
                             ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600"
+                            : sub.status === "pending"
+                            ? "border-amber-500/20 bg-amber-500/10 text-amber-700"
                             : sub.status === "paused"
                             ? "border-amber-500/20 bg-amber-500/10 text-amber-600"
                             : "border-muted-foreground/20 bg-muted text-muted-foreground"
@@ -777,6 +779,8 @@ export function PlansPage() {
                       >
                         {sub.status === "active"
                           ? "Ativo"
+                          : sub.status === "pending"
+                          ? "Pendente"
                           : sub.status === "paused"
                           ? "Pausado"
                           : sub.status === "cancelled"
@@ -808,7 +812,7 @@ export function PlansPage() {
                               ) : (
                                 <>
                                   <Play size={14} />
-                                  Ativar
+                                  {sub.status === "pending" ? "Confirmar pagamento" : "Ativar"}
                                 </>
                               )}
                             </DropdownMenuItem>
@@ -906,10 +910,12 @@ export function PlansPage() {
                     <SelectItem value="credito">Cartao de credito</SelectItem>
                     <SelectItem value="debito">Cartao de debito</SelectItem>
                     <SelectItem value="pix">Pix</SelectItem>
+                    <SelectItem value="local">Pagar no local</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   No cartao de credito, o cliente so consegue assinar pelo checkout seguro e a renovacao e automatica.
+                  Em "Pagar no local", a cobranca deve ser conferida pela barbearia.
                 </p>
               </div>
 
