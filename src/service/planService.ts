@@ -1,6 +1,6 @@
 import api from "./api";
 
-export type PlanPaymentMethod = "pix" | "debito" | "credito";
+export type PlanPaymentMethod = "pix" | "debito" | "credito" | "local";
 
 export interface Plan {
   id: string;
