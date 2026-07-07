@@ -1123,6 +1123,7 @@ export function CustomersPage() {
                       onChange={(date) => setField("birthDate", dateToDateString(date))}
                       placeholder="Selecionar data"
                       disableFuture
+                      popoverPortal={false}
                       className="h-9 rounded-md"
                     />
                   </div>
