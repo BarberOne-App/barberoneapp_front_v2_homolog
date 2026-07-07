@@ -18,8 +18,13 @@ export interface WhatsAppMessageData {
 function formatPhone(raw: string): string {
   const digits = raw.replace(/\D/g, "");
   if (!digits) return "";
-  if (digits.startsWith("55") && digits.length >= 12) return digits;
-  return `55${digits}`;
+  if (digits.startsWith("55") && digits.length >= 10) return digits;
+  if (digits.length >= 8) return `55${digits}`;
+  return "";
+}
+
+export function hasWhatsAppPhone(phone: string | null | undefined): boolean {
+  return Boolean(formatPhone(phone ?? ""));
 }
 
 function formatCurrencyBR(value: number): string {
@@ -87,7 +92,7 @@ export function openWhatsApp(phone: string | null | undefined, message: string):
 
   if (!formattedPhone) {
     console.warn("[WhatsApp] Nenhum numero valido - abertura cancelada.");
-    toast.error("WhatsApp nao configurado. Acesse Configuracoes e cadastre o telefone da barbearia.");
+    toast.error("Nao foi possivel enviar: o cliente nao possui telefone valido cadastrado.");
     return;
   }
 

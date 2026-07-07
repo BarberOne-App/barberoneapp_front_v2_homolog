@@ -53,6 +53,7 @@ import { useTableSelection } from "@/hooks/useTableSelection";
 import {
   cancelAppointment,
   createAppointment,
+  getAppointmentById,
   getAvailableSlots,
   listAppointments,
   updateAppointment,
@@ -66,7 +67,7 @@ import { listServices, type Service } from "@/service/serviceService";
 import { isFitAppointment } from "@/utils/fitAppointment";
 import { ClientPickerModal } from "@/components/ClientPickerModal";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
-import { sendAppointmentWhatsApp } from "@/utils/whatsapp";
+import { hasWhatsAppPhone, sendAppointmentWhatsApp } from "@/utils/whatsapp";
 
 type StatusFilter = "all" | "active" | AppointmentStatus;
 
@@ -215,6 +216,7 @@ export function BookingsPage() {
   const [blockedDateWarning, setBlockedDateWarning] = useState<BlockedDate | null>(null);
   const [barbershopProfile, setBarbershopProfile] = useState<BarbershopProfile | null>(null);
   const [todayCount, setTodayCount] = useState<number | null>(null);
+  const [sendingWhatsAppId, setSendingWhatsAppId] = useState<string | null>(null);
 
   const limit = 20;
 
@@ -461,11 +463,39 @@ export function BookingsPage() {
     }
   }
 
+  async function handleSendAppointmentWhatsApp(appointment: Appointment) {
+    setSendingWhatsAppId(appointment.id);
+
+    try {
+      const targetAppointment = hasWhatsAppPhone(appointment.client?.phone)
+        ? appointment
+        : await getAppointmentById(appointment.id);
+
+      if (!hasWhatsAppPhone(targetAppointment.client?.phone)) {
+        const clientName =
+          targetAppointment.dependent?.name ??
+          targetAppointment.client?.name ??
+          "cliente";
+
+        toast.error(
+          `Nao foi possivel enviar WhatsApp: ${clientName} nao possui telefone valido cadastrado.`,
+        );
+        return;
+      }
+
+      sendAppointmentWhatsApp(targetAppointment, barbershopProfile);
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSendingWhatsAppId(null);
+    }
+  }
+
   async function changeStatus(appointment: Appointment, status: AppointmentStatus) {
     try {
       await updateAppointment(appointment.id, { status });
       await loadAppointments();
-      if (status === "confirmed" && barbershopProfile?.phone) {
+      if (status === "confirmed") {
         toast.success("Agendamento confirmado.", {
           action: {
             label: (
@@ -474,7 +504,7 @@ export function BookingsPage() {
                 Enviar WhatsApp
               </span>
             ),
-            onClick: () => sendAppointmentWhatsApp(appointment, barbershopProfile),
+            onClick: () => void handleSendAppointmentWhatsApp(appointment),
           },
         });
       } else {
@@ -794,10 +824,11 @@ export function BookingsPage() {
                               )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onClick={() => sendAppointmentWhatsApp(appointment, barbershopProfile)}
+                                disabled={sendingWhatsAppId === appointment.id}
+                                onClick={() => void handleSendAppointmentWhatsApp(appointment)}
                               >
                                 <WhatsAppIcon size={14} />
-                                Enviar WhatsApp
+                                {sendingWhatsAppId === appointment.id ? "Carregando telefone" : "Enviar WhatsApp"}
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem

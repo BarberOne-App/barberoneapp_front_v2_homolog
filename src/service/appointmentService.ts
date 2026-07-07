@@ -121,6 +121,11 @@ export async function listAppointments(params: ListAppointmentsParams = {}) {
   return response.data;
 }
 
+export async function getAppointmentById(appointmentId: string) {
+  const response = await api.get<Appointment>(`/appointments/${appointmentId}`);
+  return response.data;
+}
+
 export async function createAppointment(data: CreateAppointmentPayload) {
   const response = await api.post<Appointment>("/appointments", data);
 
