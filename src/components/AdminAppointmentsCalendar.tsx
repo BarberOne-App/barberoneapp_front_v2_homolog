@@ -16,11 +16,32 @@ const formatDateBR = (date: Date | null): string => {
   return date.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
+const getAppointmentClientInfo = (appointment: CalendarAppointment) => {
+  const clientName = typeof (appointment as any).client === 'string'
+    ? (appointment as any).client
+    : appointment.client?.name || (appointment as any).clientName || 'Cliente';
+
+  const dependentName = typeof (appointment as any).dependent === 'string'
+    ? (appointment as any).dependent
+    : appointment.dependent?.name || (appointment as any).dependentName || '';
+
+  const isDependentAppointment = Boolean(
+    appointment.dependentId ||
+    dependentName ||
+    (appointment as any).dependent?.id ||
+    (appointment as any).dependent_id,
+  );
+
+  return { clientName, dependentName, isDependentAppointment };
+};
+
 interface AptModalState {
   appointment: CalendarAppointment;
   barber: Barber;
   calDate: Date | null;
   clientName: string;
+  dependentName: string;
+  isDependentAppointment: boolean;
   servicesNames: string;
 }
 
@@ -318,16 +339,15 @@ export default function AdminAppointmentsCalendar({
                           const servicesNames = Array.isArray(appointment.services)
                             ? appointment.services.map((s) => (s as any).serviceName || (s as any).name).join(', ')
                             : '-';
-                          const clientName = typeof (appointment as any).client === 'string'
-                            ? (appointment as any).client
-                            : appointment.client?.name || (appointment as any).clientName || 'Cliente';
+                          const { clientName, dependentName, isDependentAppointment } = getAppointmentClientInfo(appointment);
+                          const displayClientName = isDependentAppointment && dependentName ? dependentName : clientName;
 
                           const hasOverlap = aptOverlapsRegular(appointment);
 
                           return (
                             <div
                               key={appointment.id}
-                              className={`calendar-appointment-card fit-appointment${hasOverlap ? ' fit-overlapping' : ''}${isAptPast ? ' past-appointment' : ''}`}
+                              className={`calendar-appointment-card fit-appointment${hasOverlap ? ' fit-overlapping' : ''}${isAptPast ? ' past-appointment' : ''}${isDependentAppointment ? ' dependent-appointment' : ''}`}
                               style={{
                                 top: `${eventTop}px`,
                                 height: `${eventHeight}px`,
@@ -342,18 +362,25 @@ export default function AdminAppointmentsCalendar({
                               }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (!isAptPast) setAptModal({ appointment, barber, calDate, clientName, servicesNames });
+                                if (!isAptPast) setAptModal({ appointment, barber, calDate, clientName, dependentName, isDependentAppointment, servicesNames });
                               }}
                             >
                               {eventHeight <= 28 ? (
                                 <div className="apt-inline-summary">
                                   <span className="apt-time">{appointment.startTime}</span>
-                                  <span className="apt-client">{clientName}</span>
+                                  {isDependentAppointment && <span className="apt-dependent-dot" title="Agendamento de dependente">Dep.</span>}
+                                  <span className="apt-client">{displayClientName}</span>
                                 </div>
                               ) : (
                                 <>
                                   <div className="apt-time">{appointment.startTime} • {appointment.duration} min</div>
-                                  <div className="apt-client">{clientName}</div>
+                                  <div className="apt-client-line">
+                                    <span className="apt-client">{displayClientName}</span>
+                                    {isDependentAppointment && <span className="apt-dependent-badge">Dependente</span>}
+                                  </div>
+                                  {isDependentAppointment && dependentName && eventHeight >= 56 && (
+                                    <div className="apt-holder">Titular: {clientName}</div>
+                                  )}
                                 </>
                               )}
                               {eventHeight >= 42 && <div className="apt-service">{servicesNames}</div>}
@@ -377,14 +404,13 @@ export default function AdminAppointmentsCalendar({
                           const servicesNames = Array.isArray(appointment.services)
                             ? appointment.services.map((s) => (s as any).serviceName || (s as any).name).join(', ')
                             : '-';
-                          const clientName = typeof (appointment as any).client === 'string'
-                            ? (appointment as any).client
-                            : appointment.client?.name || (appointment as any).clientName || 'Cliente';
+                          const { clientName, dependentName, isDependentAppointment } = getAppointmentClientInfo(appointment);
+                          const displayClientName = isDependentAppointment && dependentName ? dependentName : clientName;
 
                           return (
                             <div
                               key={appointment.id}
-                              className={`calendar-appointment-card${isAptPast ? ' past-appointment' : ''}`}
+                              className={`calendar-appointment-card${isAptPast ? ' past-appointment' : ''}${isDependentAppointment ? ' dependent-appointment' : ''}`}
                               style={{
                                 top: `${eventTop}px`,
                                 height: `${eventHeight}px`,
@@ -397,18 +423,25 @@ export default function AdminAppointmentsCalendar({
                               }}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (!isAptPast) setAptModal({ appointment, barber, calDate, clientName, servicesNames });
+                                if (!isAptPast) setAptModal({ appointment, barber, calDate, clientName, dependentName, isDependentAppointment, servicesNames });
                               }}
                             >
                               {eventHeight <= 28 ? (
                                 <div className="apt-inline-summary">
                                   <span className="apt-time">{appointment.startTime}</span>
-                                  <span className="apt-client">{clientName}</span>
+                                  {isDependentAppointment && <span className="apt-dependent-dot" title="Agendamento de dependente">Dep.</span>}
+                                  <span className="apt-client">{displayClientName}</span>
                                 </div>
                               ) : (
                                 <>
                                   <div className="apt-time">{appointment.startTime} • {appointment.duration} min</div>
-                                  <div className="apt-client">{clientName}</div>
+                                  <div className="apt-client-line">
+                                    <span className="apt-client">{displayClientName}</span>
+                                    {isDependentAppointment && <span className="apt-dependent-badge">Dependente</span>}
+                                  </div>
+                                  {isDependentAppointment && dependentName && eventHeight >= 56 && (
+                                    <div className="apt-holder">Titular: {clientName}</div>
+                                  )}
                                 </>
                               )}
                               {eventHeight >= 42 && <div className="apt-service">{servicesNames}</div>}
@@ -428,7 +461,7 @@ export default function AdminAppointmentsCalendar({
 
       {/* Detail modal */}
       {aptModal && (() => {
-        const { appointment, barber, calDate, clientName, servicesNames } = aptModal;
+        const { appointment, barber, calDate, clientName, dependentName, isDependentAppointment, servicesNames } = aptModal;
         const aptEndMinutes = (() => {
           const [h, m] = String(appointment.startTime || '00:00').split(':').map(Number);
           return (h ?? 0) * 60 + (m ?? 0) + Number(appointment.duration || 0);
@@ -437,13 +470,14 @@ export default function AdminAppointmentsCalendar({
         return (
           <div className="apt-detail-overlay" onClick={() => setAptModal(null)}>
             <div
-              className={`apt-detail-modal${appointment.isFitAppointment ? ' apt-detail-fit' : ''}`}
+              className={`apt-detail-modal${appointment.isFitAppointment ? ' apt-detail-fit' : ''}${isDependentAppointment ? ' apt-detail-dependent' : ''}`}
               style={{ '--apt-accent': appointment.color?.accent || '#d4af37' } as React.CSSProperties}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="apt-detail-header">
                 <div className="apt-detail-header-left">
                   {appointment.isFitAppointment && <span className="apt-detail-fit-badge">Agenda</span>}
+                  {isDependentAppointment && <span className="apt-detail-dependent-badge">Dependente</span>}
                   <h3 className="apt-detail-title">Detalhes do Agendamento</h3>
                 </div>
                 <button className="apt-detail-close" onClick={() => setAptModal(null)} aria-label="Fechar">×</button>
@@ -467,8 +501,14 @@ export default function AdminAppointmentsCalendar({
                 </div>
                 <div className="apt-detail-row">
                   <span className="apt-detail-label">Cliente</span>
-                  <span className="apt-detail-value">{clientName}</span>
+                  <span className="apt-detail-value">{isDependentAppointment && dependentName ? dependentName : clientName}</span>
                 </div>
+                {isDependentAppointment && (
+                  <div className="apt-detail-row">
+                    <span className="apt-detail-label">Titular</span>
+                    <span className="apt-detail-value">{clientName}</span>
+                  </div>
+                )}
                 <div className="apt-detail-row">
                   <span className="apt-detail-label">Barbeiro</span>
                   <span className="apt-detail-value">{barber.displayName}</span>
