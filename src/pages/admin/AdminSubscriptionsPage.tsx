@@ -64,6 +64,7 @@ type SearchTab = "name" | "cpf";
 
 const statusLabels: Record<Subscription["status"], string> = {
   active: "Ativo",
+  pending: "Pendente",
   paused: "Pausado",
   cancelled: "Cancelado",
   expired: "Expirado",
@@ -105,6 +106,7 @@ function getApiMessage(error: unknown) {
 
 function statusClass(status: Subscription["status"]) {
   if (status === "active") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-600";
+  if (status === "pending") return "border-amber-500/20 bg-amber-500/10 text-amber-700";
   if (status === "paused") return "border-amber-500/20 bg-amber-500/10 text-amber-600";
   if (status === "cancelled") return "border-rose-500/20 bg-rose-500/10 text-rose-600";
   return "border-muted-foreground/20 bg-muted text-muted-foreground";
@@ -140,7 +142,7 @@ export function AdminSubscriptionsPage() {
         acc[sub.status] += 1;
         return acc;
       },
-      { total: 0, active: 0, paused: 0, cancelled: 0, expired: 0, revenue: 0 },
+      { total: 0, active: 0, pending: 0, paused: 0, cancelled: 0, expired: 0, revenue: 0 },
     );
   }, [subscriptions]);
 
@@ -383,6 +385,7 @@ export function AdminSubscriptionsPage() {
                 >
                   <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="active">Ativos</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="pending">Pendentes</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="paused">Pausados</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="cancelled">Cancelados</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="expired">Expirados</DropdownMenuRadioItem>
@@ -557,7 +560,7 @@ export function AdminSubscriptionsPage() {
                             {subscription.status !== "active" ? (
                               <DropdownMenuItem disabled={busyId === subscription.id} onClick={() => runAction(subscription, "activate")}>
                                 <Play size={14} />
-                                Ativar
+                                {subscription.status === "pending" ? "Confirmar pagamento" : "Ativar"}
                               </DropdownMenuItem>
                             ) : null}
                             {subscription.status === "active" ? (
@@ -566,7 +569,10 @@ export function AdminSubscriptionsPage() {
                                 Pausar
                               </DropdownMenuItem>
                             ) : null}
-                            <DropdownMenuItem disabled={busyId === subscription.id} onClick={() => runAction(subscription, "renew")}>
+                            <DropdownMenuItem
+                              disabled={busyId === subscription.id || subscription.status === "pending"}
+                              onClick={() => runAction(subscription, "renew")}
+                            >
                               <RefreshCw size={14} />
                               Renovar ciclo
                             </DropdownMenuItem>

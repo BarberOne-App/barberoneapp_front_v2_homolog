@@ -26,6 +26,7 @@ import {
 
 const statusLabels: Record<Subscription["status"], string> = {
   active: "Ativo",
+  pending: "Pendente",
   paused: "Pausado",
   cancelled: "Cancelado",
   expired: "Expirado",
@@ -57,6 +58,7 @@ function getApiMessage(error: unknown) {
 }
 
 function statusClass(status: Subscription["status"]) {
+  if (status === "pending") return "border-amber-500/20 bg-amber-500/10 text-amber-700";
   if (status === "paused") return "border-amber-500/20 bg-amber-500/10 text-amber-600";
   if (status === "cancelled") return "border-rose-500/20 bg-rose-500/10 text-rose-600";
   if (status === "expired") return "border-muted-foreground/20 bg-muted text-muted-foreground";
