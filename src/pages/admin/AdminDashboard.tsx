@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -32,6 +32,7 @@ import { fetchDashboardStats, type DashboardStats } from "@/service/dashboardSer
 import { getCashClosingPreview, type CashClosingSummary } from "@/service/cashClosingService";
 import { listUsers, type UserProfile } from "@/service/userService";
 import { listActiveFeatureUpdates, type FeatureUpdate } from "@/service/featureUpdateService";
+import { getHomeInfo, type HomeInfo } from "@/service/homeInfoService";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -60,8 +61,11 @@ const shortcuts = [
 
 const urgentReminderStoragePrefix = "adminDashboard:urgentReminder";
 const birthdayLookaheadDays = 7;
+const reminderRefreshMs = 60000;
+const defaultBusinessClosingHour = 18;
 
 type ReminderModal = "cash" | "birthdays" | "features";
+type CashReminderPhase = "morning" | "closing";
 
 interface BirthdayReminder {
   id: string;
@@ -92,6 +96,87 @@ function getTodayKey() {
   const month = String(today.getMonth() + 1).padStart(2, "0");
   const day = String(today.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getReminderStorageKey(type: string, userId: string, detail: string) {
+  return `${urgentReminderStoragePrefix}:${type}:${userId}:${detail}`;
+}
+
+function getBirthdayReminderSignature(birthdays: BirthdayReminder[]) {
+  return birthdays
+    .map((birthday) => `${birthday.id}:${birthday.daysUntil}`)
+    .sort()
+    .join(",");
+}
+
+function getFeatureUpdateSignature(updates: FeatureUpdate[]) {
+  return updates.map((update) => update.id).sort().join(",");
+}
+
+function parseTimeParts(value: string) {
+  const matches = Array.from(value.matchAll(/(\d{1,2})[:h](\d{2})/gi));
+  const lastMatch = matches.at(-1);
+  if (!lastMatch) return null;
+
+  const hour = Number(lastMatch[1]);
+  const minute = Number(lastMatch[2]);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+
+  return { hour, minute };
+}
+
+function normalizeScheduleLine(line: string) {
+  return line
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+function lineAppliesToWeekday(line: string, day: number) {
+  const normalized = normalizeScheduleLine(line);
+  if (day >= 1 && day <= 5 && normalized.includes("segunda") && normalized.includes("sexta")) return true;
+  if (day === 6 && normalized.includes("sabado")) return true;
+  if (day === 0 && normalized.includes("domingo")) return true;
+
+  const dayNames = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"];
+  return normalized.includes(dayNames[day]);
+}
+
+function getBusinessClosingDate(homeInfo: HomeInfo | null, now = new Date()) {
+  const scheduleLines = [
+    homeInfo?.schedule_line1,
+    homeInfo?.schedule_line2,
+    homeInfo?.schedule_line3,
+  ].filter(Boolean) as string[];
+  const todayLine = scheduleLines.find((line) => lineAppliesToWeekday(line, now.getDay()));
+  if (todayLine && normalizeScheduleLine(todayLine).includes("fechado")) return null;
+
+  const closingTime = todayLine ? parseTimeParts(todayLine) : null;
+
+  const closingDate = new Date(now);
+  closingDate.setHours(
+    closingTime?.hour ?? defaultBusinessClosingHour,
+    closingTime?.minute ?? 0,
+    0,
+    0,
+  );
+
+  return closingDate;
+}
+
+function getCashReminderPhase(openCashSession: OpenCashSession | null, homeInfo: HomeInfo | null) {
+  if (!openCashSession) return null;
+
+  const now = new Date();
+  if (now.getHours() < 12) return "morning";
+
+  const closingDate = getBusinessClosingDate(homeInfo, now);
+  if (!closingDate) return null;
+
+  const minutesUntilClosing = (closingDate.getTime() - now.getTime()) / 60000;
+  if (minutesUntilClosing <= 30) return "closing";
+
+  return null;
 }
 
 function parseLocalDate(value?: string | null) {
@@ -370,6 +455,7 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [cashPreview, setCashPreview] = useState<CashClosingSummary | null>(null);
   const [openCashSession, setOpenCashSession] = useState<OpenCashSession | null>(null);
+  const [cashReminderPhase, setCashReminderPhase] = useState<CashReminderPhase | null>(null);
   const [birthdays, setBirthdays] = useState<BirthdayReminder[]>([]);
   const [featureUpdates, setFeatureUpdates] = useState<FeatureUpdate[]>([]);
   const [activeReminderModal, setActiveReminderModal] = useState<ReminderModal | null>(null);
@@ -382,72 +468,127 @@ export function AdminDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
+  const enqueueReminderModals = useCallback((nextQueue: ReminderModal[]) => {
+    if (nextQueue.length === 0) return;
+
+    const uniqueQueue = nextQueue.filter(
+      (modal, index) => nextQueue.indexOf(modal) === index && modal !== activeReminderModal,
+    );
+
+    if (!activeReminderModal) {
+      const [nextModal, ...remainingModals] = uniqueQueue;
+      setActiveReminderModal(nextModal ?? null);
+      setPendingReminderModals((current) =>
+        [...current, ...remainingModals].filter(
+          (modal, index, list) => list.indexOf(modal) === index,
+        ),
+      );
+      return;
+    }
+
+    setPendingReminderModals((current) =>
+      [...current, ...uniqueQueue].filter((modal, index, list) => list.indexOf(modal) === index),
+    );
+  }, [activeReminderModal]);
+
+  const loadUrgentReminders = useCallback(async () => {
     if (!isAdmin || !user?.id) return;
 
-    let active = true;
-
-    Promise.allSettled([
+    const [cashResult, customersResult, featureUpdatesResult, homeInfoResult] = await Promise.allSettled([
       getCashClosingPreview(),
       listUsers({ role: "client", page: 1, limit: 200 }),
       listActiveFeatureUpdates(),
-    ]).then(([cashResult, customersResult, featureUpdatesResult]) => {
-      if (!active) return;
+      getHomeInfo(),
+    ]);
 
-      const loadedCashPreview = cashResult.status === "fulfilled" ? cashResult.value : null;
-      const loadedOpenCashSession = getStoredOpenCashSession();
-      const loadedBirthdays =
-        customersResult.status === "fulfilled"
-          ? buildBirthdayReminders(customersResult.value.items)
-          : [];
-      const loadedFeatureUpdates =
-        featureUpdatesResult.status === "fulfilled" ? featureUpdatesResult.value : [];
-      const nextQueue: ReminderModal[] = [];
+    const loadedCashPreview = cashResult.status === "fulfilled" ? cashResult.value : null;
+    const loadedOpenCashSession = getStoredOpenCashSession();
+    const loadedHomeInfo = homeInfoResult.status === "fulfilled" ? homeInfoResult.value : null;
+    const loadedCashReminderPhase = getCashReminderPhase(loadedOpenCashSession, loadedHomeInfo);
+    const loadedBirthdays =
+      customersResult.status === "fulfilled"
+        ? buildBirthdayReminders(customersResult.value.items)
+        : [];
+    const loadedFeatureUpdates =
+      featureUpdatesResult.status === "fulfilled" ? featureUpdatesResult.value : [];
+    const nextQueue: ReminderModal[] = [];
 
-      setCashPreview(loadedCashPreview);
-      setOpenCashSession(loadedOpenCashSession);
-      setBirthdays(loadedBirthdays);
-      setFeatureUpdates(loadedFeatureUpdates);
+    setCashPreview(loadedCashPreview);
+    setOpenCashSession(loadedOpenCashSession);
+    setCashReminderPhase(loadedCashReminderPhase);
+    setBirthdays(loadedBirthdays);
+    setFeatureUpdates(loadedFeatureUpdates);
 
-      if (
-        (loadedOpenCashSession || (loadedCashPreview?.paymentCount ?? 0) > 0) &&
-        sessionStorage.getItem(`${urgentReminderStoragePrefix}:cash:${user.id}:${getTodayKey()}`) !== "dismissed"
-      ) {
-        nextQueue.push("cash");
+    if (
+      loadedCashReminderPhase &&
+      sessionStorage.getItem(getReminderStorageKey("cash", user.id, `${getTodayKey()}:${loadedCashReminderPhase}`)) !== "dismissed"
+    ) {
+      nextQueue.push("cash");
+    }
+
+    const birthdaySignature = getBirthdayReminderSignature(loadedBirthdays);
+    if (
+      loadedBirthdays.length > 0 &&
+      sessionStorage.getItem(getReminderStorageKey("birthdays", user.id, `${getTodayKey()}:${birthdaySignature}`)) !== "dismissed"
+    ) {
+      nextQueue.push("birthdays");
+    }
+
+    const featureSignature = getFeatureUpdateSignature(loadedFeatureUpdates);
+    if (
+      loadedFeatureUpdates.length > 0 &&
+      sessionStorage.getItem(getReminderStorageKey("features", user.id, featureSignature)) !== "dismissed"
+    ) {
+      nextQueue.push("features");
+    }
+
+    enqueueReminderModals(nextQueue);
+  }, [enqueueReminderModals, isAdmin, user?.id]);
+
+  useEffect(() => {
+    if (!isAdmin || !user?.id) return;
+
+    void loadUrgentReminders();
+
+    const timer = window.setInterval(() => {
+      void loadUrgentReminders();
+    }, reminderRefreshMs);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void loadUrgentReminders();
       }
+    };
 
-      if (
-        loadedBirthdays.length > 0 &&
-        sessionStorage.getItem(`${urgentReminderStoragePrefix}:birthdays:${user.id}:${getTodayKey()}`) !== "dismissed"
-      ) {
-        nextQueue.push("birthdays");
-      }
-
-      const featureIds = loadedFeatureUpdates.map((update) => update.id).join(",");
-      if (
-        loadedFeatureUpdates.length > 0 &&
-        sessionStorage.getItem(`${urgentReminderStoragePrefix}:features:${user.id}:${featureIds}`) !== "dismissed"
-      ) {
-        nextQueue.push("features");
-      }
-
-      setActiveReminderModal(nextQueue[0] ?? null);
-      setPendingReminderModals(nextQueue.slice(1));
-    });
+    window.addEventListener("focus", loadUrgentReminders);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", loadUrgentReminders);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [isAdmin, user?.id]);
+  }, [isAdmin, loadUrgentReminders, user?.id]);
 
   function dismissReminderModal(modal: ReminderModal) {
     if (!user?.id) return;
 
     if (modal === "features") {
-      const featureIds = featureUpdates.map((update) => update.id).join(",");
-      sessionStorage.setItem(`${urgentReminderStoragePrefix}:features:${user.id}:${featureIds}`, "dismissed");
+      const featureSignature = getFeatureUpdateSignature(featureUpdates);
+      sessionStorage.setItem(getReminderStorageKey("features", user.id, featureSignature), "dismissed");
+    } else if (modal === "birthdays") {
+      const birthdaySignature = getBirthdayReminderSignature(birthdays);
+      sessionStorage.setItem(
+        getReminderStorageKey("birthdays", user.id, `${getTodayKey()}:${birthdaySignature}`),
+        "dismissed",
+      );
+    } else if (cashReminderPhase) {
+      sessionStorage.setItem(
+        getReminderStorageKey("cash", user.id, `${getTodayKey()}:${cashReminderPhase}`),
+        "dismissed",
+      );
     } else {
-      sessionStorage.setItem(`${urgentReminderStoragePrefix}:${modal}:${user.id}:${getTodayKey()}`, "dismissed");
+      sessionStorage.setItem(getReminderStorageKey("cash", user.id, `${getTodayKey()}:unknown`), "dismissed");
     }
 
     const [nextModal, ...remainingModals] = pendingReminderModals;
