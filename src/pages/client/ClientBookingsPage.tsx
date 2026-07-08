@@ -10,6 +10,7 @@ import {
   Plus,
   Search,
   Scissors,
+  Star,
   XCircle,
   Zap,
   User as UserIcon,
@@ -67,8 +68,9 @@ import {
   type Subscription,
 } from "@/service/subscriptionService";
 import { getBarbershopProfile, type BarbershopProfile } from "@/service/barbershopProfileService";
-import { getSettings, type SubscriptionBarberRule } from "@/service/settingsService";
+import { getSettings, type BookingPaymentMethod, type SubscriptionBarberRule } from "@/service/settingsService";
 import { createAppointmentPayment } from "@/service/paymentService";
+import { createReview } from "@/service/reviewService";
 import { listServices, type Service } from "@/service/serviceService";
 import { isFitAppointment } from "@/utils/fitAppointment";
 import { buildWhatsAppMessage, openWhatsApp, type WhatsAppMessageData } from "@/utils/whatsapp";
@@ -162,7 +164,22 @@ function isConflictError(error: unknown) {
 }
 
 function normalizeText(v: string) {
-  return v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  return v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function normalizePlanFeatureText(raw: unknown) {
+  if (typeof raw !== "string") return null;
+  const text = raw.trim();
+  if (!text) return null;
+  if (text.includes("::")) {
+    const parts = text.split("::");
+    const label = parts[parts.length - 1]?.trim();
+    return label ? normalizeText(label) : null;
+  }
+  if (UUID_RE.test(text)) return null;
+  return normalizeText(text);
 }
 
 function getServiceDuration(s: Service) {
@@ -227,6 +244,7 @@ export function ClientBookingsPage() {
 
   // Regra de barbeiro por assinatura
   const [subscriptionBarberRule, setSubscriptionBarberRule] = useState<SubscriptionBarberRule>("fixed");
+  const [hiddenPaymentMethods, setHiddenPaymentMethods] = useState<BookingPaymentMethod[]>([]);
 
   // Perfil da barbearia (para WhatsApp)
   const [barbershopProfile, setBarbershopProfile] = useState<BarbershopProfile | null>(null);
@@ -236,6 +254,10 @@ export function ClientBookingsPage() {
 
   // Local: salvar direto
   const [savingLocal, setSavingLocal] = useState(false);
+  const [reviewAppointment, setReviewAppointment] = useState<Appointment | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [savingReview, setSavingReview] = useState(false);
 
   const limit = 20;
 
@@ -286,6 +308,7 @@ export function ClientBookingsPage() {
       try {
         const settings = await getSettings();
         setSubscriptionBarberRule(settings.subscriptionBarberRule ?? "fixed");
+        setHiddenPaymentMethods(settings.hiddenBookingPaymentMethods ?? []);
       } catch {
         // fallback para "fixed" se o endpoint não estiver acessível para o usuário
       }
@@ -309,8 +332,11 @@ export function ClientBookingsPage() {
   const isFixedRule = subscriptionBarberRule === "fixed";
   const hasActiveSubscription =
     mySubscription?.status === "active" || mySubscription?.status === "paused";
+  const isBookingForDependentWithoutPlan = Boolean(bookingForDependent);
+  const hasActiveSubscriptionForBooking =
+    hasActiveSubscription && !isBookingForDependentWithoutPlan;
   const lockedBarberId =
-    isFixedRule && hasActiveSubscription ? (mySubscription?.monthlyBarberId ?? null) : null;
+    isFixedRule && hasActiveSubscriptionForBooking ? (mySubscription?.monthlyBarberId ?? null) : null;
   const activeLockedBarberId = (lockedBarberId && barbers.some((b) => b.id === lockedBarberId)) ? lockedBarberId : null;
   const hasLockedBarber = Boolean(activeLockedBarberId);
   useEffect(() => {
@@ -325,21 +351,23 @@ export function ClientBookingsPage() {
 
   const isServiceCoveredByPlan = useCallback(
     (s: Service) => {
-      if (!hasActiveSubscription || !mySubscription?.plan?.features) {
-        return s.covered_by_plan === true;
-      }
+      if (!hasActiveSubscriptionForBooking || !mySubscription?.plan?.features) return false;
+
       const normServiceName = normalizeText(s.name || "");
-      const isFeatured = mySubscription.plan.features.some((feature: string) => {
-        const normFeature = normalizeText(feature);
-        return (
-          normFeature === normServiceName ||
-          normFeature.includes(normServiceName) ||
-          normServiceName.includes(normFeature)
-        );
+      return mySubscription.plan.features.some((feature: string) => {
+        const normFeature = normalizePlanFeatureText(feature);
+        return normFeature === normServiceName;
       });
-      return isFeatured || s.covered_by_plan === true;
     },
-    [hasActiveSubscription, mySubscription],
+    [hasActiveSubscriptionForBooking, mySubscription],
+  );
+
+  const allSelectedServicesCoveredByPlan = useMemo(
+    () =>
+      selectedServices.length > 0 &&
+      hasActiveSubscriptionForBooking &&
+      selectedServices.every((s) => isServiceCoveredByPlan(s)),
+    [hasActiveSubscriptionForBooking, isServiceCoveredByPlan, selectedServices],
   );
 
   useEffect(() => {
@@ -378,6 +406,12 @@ export function ClientBookingsPage() {
   }
 
   function toggleService(id: string, checked: boolean) {
+    const service = services.find((s) => s.id === id);
+    if (checked && hasActiveSubscriptionForBooking && service && !isServiceCoveredByPlan(service)) {
+      toast.error("Este servico nao esta coberto pelo seu plano.");
+      return;
+    }
+
     setForm((prev) => ({
       ...prev,
       serviceIds: checked ? [...prev.serviceIds, id] : prev.serviceIds.filter((s) => s !== id),
@@ -394,10 +428,14 @@ export function ClientBookingsPage() {
   }
 
   // Clique em "Confirmar agendamento" → abre escolha de pagamento
-  function handleBookingSubmit(e: FormEvent) {
+  async function handleBookingSubmit(e: FormEvent) {
     e.preventDefault();
     const err = validateForm();
     if (err) { toast.error(err); return; }
+    if (allSelectedServicesCoveredByPlan) {
+      await handleSubscriptionPayment();
+      return;
+    }
     setChoiceOpen(true);
   }
 
@@ -439,6 +477,7 @@ export function ClientBookingsPage() {
         services: selectedServices.map((s) => s.name),
         total: totalPrice,
         notes: form.notes?.trim(),
+        googleMapsUrl: barbershopProfile?.googleMapsUrl,
       });
       setBookingOpen(false);
       setBookingForDependent(null);
@@ -493,6 +532,7 @@ export function ClientBookingsPage() {
         services: selectedServices.map((s) => s.name),
         total: 0, // 0 custo extra
         notes: form.notes?.trim(),
+        googleMapsUrl: barbershopProfile?.googleMapsUrl,
       });
       setBookingOpen(false);
       setBookingForDependent(null);
@@ -547,6 +587,7 @@ export function ClientBookingsPage() {
           services: selectedServices.map((s) => s.name),
           total: totalPrice,
           notes: form.notes?.trim(),
+          googleMapsUrl: barbershopProfile?.googleMapsUrl,
         });
         setBookingOpen(false);
         setBookingForDependent(null);
@@ -592,6 +633,7 @@ export function ClientBookingsPage() {
       services: selectedServices.map((s) => s.name),
       total: totalPrice,
       notes: form.notes?.trim(),
+      googleMapsUrl: barbershopProfile?.googleMapsUrl,
     });
     setPaymentOpen(false);
     setBookingOpen(false);
@@ -607,6 +649,33 @@ export function ClientBookingsPage() {
       await loadAppointments();
     } catch (err) {
       toast.error(getApiMessage(err));
+    }
+  }
+
+  function openReviewDialog(appointment: Appointment) {
+    setReviewAppointment(appointment);
+    setReviewRating(5);
+    setReviewComment("");
+  }
+
+  async function handleReviewSubmit() {
+    if (!reviewAppointment) return;
+    setSavingReview(true);
+
+    try {
+      await createReview({
+        appointmentId: reviewAppointment.id,
+        rating: reviewRating,
+        comment: reviewComment.trim() || null,
+      });
+      toast.success("Avaliacao registrada.");
+      setReviewAppointment(null);
+      setReviewRating(5);
+      setReviewComment("");
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setSavingReview(false);
     }
   }
 
@@ -702,6 +771,7 @@ export function ClientBookingsPage() {
                     const serviceText = appt.services.map((s) => s.serviceName).join(", ") || "Sem servico";
                     const barberName = appt.barber?.displayName || "Sem barbeiro";
                     const canCancel = appt.status === "scheduled" || appt.status === "confirmed";
+                    const canReview = appt.status === "completed";
 
                     return (
                       <tr key={appt.id} className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30">
@@ -743,15 +813,25 @@ export function ClientBookingsPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          {canCancel && (
+                          {(canCancel || canReview) && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button className="p-1 text-muted-foreground transition-colors hover:text-foreground"><MoreHorizontal size={16} /></button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem variant="destructive" onClick={() => handleCancel(appt)}>
-                                  <XCircle size={14} />Cancelar agendamento
-                                </DropdownMenuItem>
+                                {canReview && (
+                                  <DropdownMenuItem onClick={() => openReviewDialog(appt)}>
+                                    <Star size={14} />Avaliar atendimento
+                                  </DropdownMenuItem>
+                                )}
+                                {canCancel && (
+                                  <>
+                                    {canReview && <DropdownMenuSeparator />}
+                                    <DropdownMenuItem variant="destructive" onClick={() => handleCancel(appt)}>
+                                      <XCircle size={14} />Cancelar agendamento
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           )}
@@ -793,7 +873,10 @@ export function ClientBookingsPage() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => setBookingForDependent(null)}
+                      onClick={() => {
+                        setBookingForDependent(null);
+                        setField("time", "");
+                      }}
                       className={cn(
                         "flex-1 min-w-[140px] px-4 py-2 text-sm font-medium rounded-lg border transition-all text-center",
                         !bookingForDependent
@@ -807,7 +890,10 @@ export function ClientBookingsPage() {
                       <button
                         key={dep.id}
                         type="button"
-                        onClick={() => setBookingForDependent(dep)}
+                        onClick={() => {
+                          setBookingForDependent(dep);
+                          setField("time", "");
+                        }}
                         className={cn(
                           "flex-1 min-w-[140px] px-4 py-2 text-sm font-medium rounded-lg border transition-all text-center truncate",
                           bookingForDependent?.id === dep.id
@@ -845,7 +931,7 @@ export function ClientBookingsPage() {
                     <Lock size={11} />
                     Barbeiro fixo do seu plano.
                   </p>
-                ) : isFixedRule && hasActiveSubscription ? (
+                ) : isFixedRule && hasActiveSubscriptionForBooking ? (
                   <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Info size={11} />
                     O barbeiro escolhido será vinculado ao seu plano após o agendamento.
@@ -865,15 +951,44 @@ export function ClientBookingsPage() {
                   {services.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Nenhum servico disponivel.</p>
                   ) : (
-                    services.map((s) => (
-                      <label key={s.id} className="flex cursor-pointer items-start gap-3 rounded-md p-2 text-sm hover:bg-secondary/60">
-                        <Checkbox checked={form.serviceIds.includes(s.id)} onCheckedChange={(c) => toggleService(s.id, c === true)} />
-                        <span className="min-w-0">
-                          <span className="block font-medium text-foreground">{s.name}</span>
-                          <span className="block text-xs text-muted-foreground">{getServiceDuration(s)} min — {formatCurrency(getServicePrice(s))}</span>
-                        </span>
-                      </label>
-                    ))
+                    services.map((s) => {
+                      const isCovered = isServiceCoveredByPlan(s);
+                      const isOutOfPlanForSubscriber = hasActiveSubscriptionForBooking && !isCovered;
+
+                      return (
+                        <label
+                          key={s.id}
+                          className={cn(
+                            "flex items-start gap-3 rounded-md p-2 text-sm",
+                            isOutOfPlanForSubscriber
+                              ? "cursor-not-allowed opacity-50"
+                              : "cursor-pointer hover:bg-secondary/60",
+                          )}
+                        >
+                          <Checkbox
+                            checked={form.serviceIds.includes(s.id)}
+                            disabled={isOutOfPlanForSubscriber}
+                            onCheckedChange={(c) => toggleService(s.id, c === true)}
+                          />
+                          <span className="min-w-0">
+                            <span className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+                              {s.name}
+                              {isCovered && (
+                                <Badge className="border-emerald-500/20 bg-emerald-500/10 px-2 py-0 text-[11px] text-emerald-600 hover:bg-emerald-500/10">
+                                  Coberto pelo seu plano
+                                </Badge>
+                              )}
+                              {isOutOfPlanForSubscriber && (
+                                <Badge variant="outline" className="px-2 py-0 text-[11px]">
+                                  Fora do seu plano
+                                </Badge>
+                              )}
+                            </span>
+                            <span className="block text-xs text-muted-foreground">{getServiceDuration(s)} min — {formatCurrency(getServicePrice(s))}</span>
+                          </span>
+                        </label>
+                      );
+                    })
                   )}
                 </div>
                 {selectedServices.length > 0 && (
@@ -911,15 +1026,69 @@ export function ClientBookingsPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!reviewAppointment} onOpenChange={(open) => { if (!open && !savingReview) setReviewAppointment(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Avaliar atendimento</DialogTitle>
+            <DialogDescription>
+              Sua avaliacao sera enviada para a barbearia.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nota</Label>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map((rating) => (
+                  <button
+                    key={rating}
+                    type="button"
+                    onClick={() => setReviewRating(rating)}
+                    className="rounded-md p-1 text-muted-foreground transition hover:bg-secondary hover:text-amber-500"
+                    aria-label={`Nota ${rating}`}
+                  >
+                    <Star
+                      size={24}
+                      className={rating <= reviewRating ? "fill-amber-500 text-amber-500" : ""}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="review-comment">Comentario</Label>
+              <Textarea
+                id="review-comment"
+                value={reviewComment}
+                onChange={(event) => setReviewComment(event.target.value)}
+                placeholder="Conte como foi sua experiencia."
+                maxLength={1000}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setReviewAppointment(null)} disabled={savingReview}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleReviewSubmit} disabled={savingReview}>
+              {savingReview ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Enviar avaliacao
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <PaymentChoiceModal
         isOpen={choiceOpen}
         onClose={() => setChoiceOpen(false)}
         onChoose={handlePaymentChoice}
         summary={choiceSummary}
-        canPayCard={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscription)}
-        canPayPix={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscription)}
-        canPayLocal={!selectedServices.every((s) => isServiceCoveredByPlan(s) && hasActiveSubscription)}
-        canPaySubscription={hasActiveSubscription && selectedServices.every((s) => isServiceCoveredByPlan(s))}
+        canPayCard={!allSelectedServicesCoveredByPlan && !hiddenPaymentMethods.includes("cartao")}
+        canPayPix={!allSelectedServicesCoveredByPlan && !hiddenPaymentMethods.includes("pix")}
+        canPayLocal={!allSelectedServicesCoveredByPlan && !hiddenPaymentMethods.includes("local")}
+        canPaySubscription={allSelectedServicesCoveredByPlan}
       />
 
       {/* Loading — processando agendamento */}

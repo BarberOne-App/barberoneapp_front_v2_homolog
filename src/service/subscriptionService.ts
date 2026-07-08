@@ -26,7 +26,7 @@ export interface Subscription {
   user: SubscriptionUser | null;
   plan: SubscriptionPlan | null;
   amount: number;
-  status: "active" | "paused" | "cancelled" | "expired";
+  status: "active" | "paused" | "cancelled" | "expired" | "pending";
   nextBillingAt: string | null;
   lastBillingAt?: string | null;
   endedAt?: string | null;
@@ -75,6 +75,7 @@ export async function listSubscriptions(params: ListSubscriptionsParams = {}) {
 export async function updateSubscription(
   id: string,
   data: {
+    planId?: string;
     status?: Subscription["status"];
     autoRenewal?: boolean;
     isRecurring?: boolean;
@@ -139,7 +140,7 @@ export async function getMyActiveSubscription(): Promise<Subscription | null> {
   // para bloquear nova assinatura (constraint único no banco)
   const items = response.data.items;
   return (
-    items.find((s) => s.status === "active" || s.status === "paused") ??
+    items.find((s) => s.status === "active" || s.status === "paused" || s.status === "pending") ??
     items.find((s) => s.status === "cancelled" || s.status === "expired") ??
     null
   );

@@ -174,6 +174,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
     email: '',
     phone: '',
     cnpj: '',
+    googleMapsUrl: '',
   });
   const [businessSlug, setBusinessSlug] = useState('');
   const [businessLogoUrl, setBusinessLogoUrl] = useState('');
@@ -289,6 +290,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
           email: profile.email ?? '',
           phone: profile.phone ? formatPhone(profile.phone) : '',
           cnpj: profile.cnpj ? formatCNPJ(profile.cnpj) : '',
+          googleMapsUrl: profile.googleMapsUrl ?? '',
         });
         setBusinessSlug(profile.slug ?? '');
         setBusinessLogoUrl(profile.logoUrl ?? '');
@@ -590,6 +592,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
         phone: businessForm.phone.trim(),
         cnpj: businessForm.cnpj.replace(/\D/g, ''),
         logoUrl: businessLogoUrl,
+        googleMapsUrl: businessForm.googleMapsUrl.trim(),
       });
 
       setBusinessForm({
@@ -597,6 +600,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
         email: profile.email ?? '',
         phone: profile.phone ?? '',
         cnpj: profile.cnpj ? formatCNPJ(profile.cnpj) : '',
+        googleMapsUrl: profile.googleMapsUrl ?? '',
       });
       setBusinessSlug(profile.slug ?? '');
       persistStoredBarbershop(profile);
@@ -731,6 +735,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
       phone: businessForm.phone,
       cnpj: businessForm.cnpj,
       logoUrl,
+      googleMapsUrl: businessForm.googleMapsUrl,
     });
 
     setBusinessForm({
@@ -738,6 +743,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
       email: profile.email ?? '',
       phone: profile.phone ?? '',
       cnpj: profile.cnpj ?? '',
+      googleMapsUrl: profile.googleMapsUrl ?? '',
     });
     setBusinessSlug(profile.slug ?? '');
     setBusinessLogoUrl(profile.logoUrl ?? '');
@@ -1101,6 +1107,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
           phone: businessForm.phone,
           cnpj: businessForm.cnpj,
           logoUrl: businessLogoUrl,
+          googleMapsUrl: businessForm.googleMapsUrl,
         }),
         updateHomeInfo({
           ...(homeInfo ?? {}),
@@ -1116,6 +1123,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
         email: profile.email ?? '',
         phone: profile.phone ?? '',
         cnpj: profile.cnpj ?? '',
+        googleMapsUrl: profile.googleMapsUrl ?? '',
       });
       setBusinessSlug(profile.slug ?? '');
       setBusinessLogoUrl(profile.logoUrl ?? '');
@@ -1176,6 +1184,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
           phone: businessForm.phone,
           cnpj: businessForm.cnpj,
           logoUrl: businessLogoUrl,
+          googleMapsUrl: businessForm.googleMapsUrl,
         }),
         updateHomeInfo({
           ...(homeInfo ?? {}),
@@ -1188,6 +1197,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
         email: profile.email ?? '',
         phone: profile.phone ?? '',
         cnpj: profile.cnpj ?? '',
+        googleMapsUrl: profile.googleMapsUrl ?? '',
       });
       setBusinessSlug(profile.slug ?? '');
       setBusinessLogoUrl(profile.logoUrl ?? '');
@@ -1531,6 +1541,20 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
                   disabled={isLoadingBusinessProfile}
                   className="w-full bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
                 />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium text-foreground">Link do Google Maps</label>
+                <input
+                  type="url"
+                  value={businessForm.googleMapsUrl}
+                  onChange={(event) => updateBusinessField('googleMapsUrl', event.target.value)}
+                  disabled={isLoadingBusinessProfile}
+                  placeholder="https://maps.app.goo.gl/..."
+                  className="w-full bg-secondary text-sm text-foreground rounded-md px-3 py-2 border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Este link sera enviado junto com a mensagem de confirmacao do agendamento.
+                </p>
               </div>
             </div>
             <div className="mt-6 flex justify-end">

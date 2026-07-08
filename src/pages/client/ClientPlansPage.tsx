@@ -20,9 +20,11 @@ import {
   subscribeClientToPlan,
 } from "@/service/platformSubscriptionService";
 import {
+  createSubscription,
   getMyActiveSubscription,
   type Subscription,
 } from "@/service/subscriptionService";
+import { getSettings, type BookingPaymentMethod } from "@/service/settingsService";
 
 /* ── helpers ── */
 
@@ -37,6 +39,7 @@ const paymentMethodLabels: Record<Plan["paymentMethod"], string> = {
   credito: "Cartao de credito",
   debito: "Cartao de debito",
   pix: "Pix",
+  local: "Pagar no local",
 };
 
 function formatCardNumber(value: string) {
@@ -304,13 +307,32 @@ function SubscribeModal({ plan, isChangingPlan, onClose, onSuccess }: SubscribeM
 interface PlanCardProps {
   plan: Plan;
   isCurrentPlan: boolean;
+  isPendingPlan: boolean;
   isChangingPlan: boolean;
+  hiddenPaymentMethods: BookingPaymentMethod[];
+  processingPlanId?: string | null;
   onSubscribe: (plan: Plan) => void;
 }
 
-function PlanCard({ plan, isCurrentPlan, isChangingPlan, onSubscribe }: PlanCardProps) {
+function getPlanPaymentChannel(plan: Plan): BookingPaymentMethod {
+  if (plan.paymentMethod === "local") return "local";
+  return plan.paymentMethod === "pix" ? "pix" : "cartao";
+}
+
+function PlanCard({
+  plan,
+  isCurrentPlan,
+  isPendingPlan,
+  isChangingPlan,
+  hiddenPaymentMethods,
+  processingPlanId,
+  onSubscribe,
+}: PlanCardProps) {
   const accentColor = plan.color ?? "#d4af37";
-  const canSubscribeOnline = ["credito", "debito", "pix"].includes(plan.paymentMethod);
+  const canSubscribeOnline = ["credito", "debito", "pix", "local"].includes(plan.paymentMethod);
+  const paymentMethodEnabled = !hiddenPaymentMethods.includes(getPlanPaymentChannel(plan));
+  const canSubscribe = canSubscribeOnline && paymentMethodEnabled;
+  const isProcessing = processingPlanId === plan.id;
 
   return (
     <div
@@ -318,9 +340,13 @@ function PlanCard({ plan, isCurrentPlan, isChangingPlan, onSubscribe }: PlanCard
       style={{ borderTopColor: accentColor, borderTopWidth: 3 }}
     >
       <div className="absolute right-4 top-4 flex gap-2">
-        {isCurrentPlan && (
-          <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-500/30">
-            Meu plano
+        {(isCurrentPlan || isPendingPlan) && (
+          <Badge className={
+            isPendingPlan
+              ? "bg-amber-500/15 text-amber-700 border-amber-500/30"
+              : "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+          }>
+            {isPendingPlan ? "Pendente" : "Meu plano"}
           </Badge>
         )}
         {plan.recommended && !isCurrentPlan && (
@@ -361,8 +387,13 @@ function PlanCard({ plan, isCurrentPlan, isChangingPlan, onSubscribe }: PlanCard
       )}
 
       <div className="px-6 pb-6 pt-4 border-t border-border">
-        {isCurrentPlan && plan.paymentMethod === "pix" ? (
-          <Button className="w-full" onClick={() => onSubscribe(plan)}>
+        {isPendingPlan ? (
+          <div className="flex items-center justify-center gap-2 rounded-lg bg-amber-500/10 py-2 text-sm font-medium text-amber-700">
+            <Check size={15} />
+            Aguardando confirmacao
+          </div>
+        ) : isCurrentPlan && plan.paymentMethod === "pix" ? (
+          <Button className="w-full" onClick={() => onSubscribe(plan)} disabled={!paymentMethodEnabled}>
             Renovar com PIX
           </Button>
         ) : isCurrentPlan ? (
@@ -375,12 +406,18 @@ function PlanCard({ plan, isCurrentPlan, isChangingPlan, onSubscribe }: PlanCard
             className="w-full"
             variant={isChangingPlan ? "outline" : "default"}
             onClick={() => onSubscribe(plan)}
-            disabled={!canSubscribeOnline}
+            disabled={!canSubscribe || isProcessing}
           >
-            {!canSubscribeOnline
+            {isProcessing
+              ? "Registrando..."
+              : !paymentMethodEnabled
+              ? "Forma de pagamento indisponivel"
+              : !canSubscribeOnline
               ? `Pagamento: ${paymentMethodLabels[plan.paymentMethod]}`
               : plan.paymentMethod === "pix"
                 ? "Assinar com PIX"
+                : plan.paymentMethod === "local"
+                  ? "Pagar no local"
                 : plan.paymentMethod === "debito"
                   ? "Assinar com cartao de debito"
                 : isChangingPlan
@@ -402,16 +439,20 @@ export function ClientPlansPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [hiddenPaymentMethods, setHiddenPaymentMethods] = useState<BookingPaymentMethod[]>([]);
+  const [localSubscribingPlanId, setLocalSubscribingPlanId] = useState<string | null>(null);
 
   async function load() {
     setError(false);
     try {
-      const [plansData, sub] = await Promise.all([
+      const [plansData, sub, settings] = await Promise.all([
         listPlans({ active: true }),
         getMyActiveSubscription(),
+        getSettings(),
       ]);
       setPlans(plansData);
       setMySubscription(sub);
+      setHiddenPaymentMethods(settings.hiddenBookingPaymentMethods ?? []);
     } catch {
       setError(true);
     } finally {
@@ -422,8 +463,39 @@ export function ClientPlansPage() {
   useEffect(() => { void load(); }, []);
 
   const isActive = mySubscription?.status === "active" || mySubscription?.status === "paused";
+  const isPending = mySubscription?.status === "pending";
   const isCancelledOrExpired =
     mySubscription?.status === "cancelled" || mySubscription?.status === "expired";
+
+  async function handleSubscribe(plan: Plan) {
+    if (isPending) {
+      toast.info("Ja existe uma assinatura aguardando confirmacao de pagamento.");
+      return;
+    }
+
+    if (plan.paymentMethod !== "local") {
+      setSelectedPlan(plan);
+      return;
+    }
+
+    setLocalSubscribingPlanId(plan.id);
+    try {
+      await createSubscription({
+        planId: plan.id,
+        amount: plan.price,
+        paymentMethod: "local",
+        isRecurring: false,
+        autoRenewal: false,
+      });
+      toast.success("Solicitacao enviada. O plano sera liberado apos confirmacao do pagamento no local.");
+      setLoading(true);
+      await load();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setLocalSubscribingPlanId(null);
+    }
+  }
 
   if (loading) {
     return (
@@ -466,6 +538,18 @@ export function ClientPlansPage() {
         </div>
       )}
 
+      {isPending && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <p className="text-sm font-medium text-amber-700">
+            Sua assinatura esta aguardando confirmacao de pagamento
+            {mySubscription?.plan?.name ? ` - ${mySubscription.plan.name}` : ""}.
+          </p>
+          <p className="mt-0.5 text-xs text-amber-700/80">
+            O plano sera liberado pela barbearia apos o pagamento no local.
+          </p>
+        </div>
+      )}
+
       {isCancelledOrExpired && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
           <p className="text-sm font-medium text-amber-600">
@@ -491,8 +575,11 @@ export function ClientPlansPage() {
             key={plan.id}
             plan={plan}
             isCurrentPlan={isActive && mySubscription?.planId === plan.id}
-            isChangingPlan={isActive && mySubscription?.planId !== plan.id}
-            onSubscribe={setSelectedPlan}
+            isPendingPlan={isPending && mySubscription?.planId === plan.id}
+            isChangingPlan={(isActive || isPending) && mySubscription?.planId !== plan.id}
+            hiddenPaymentMethods={hiddenPaymentMethods}
+            processingPlanId={localSubscribingPlanId}
+            onSubscribe={(targetPlan) => void handleSubscribe(targetPlan)}
           />
           ))}
         </div>

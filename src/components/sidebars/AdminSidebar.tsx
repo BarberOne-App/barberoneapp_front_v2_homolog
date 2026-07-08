@@ -12,6 +12,7 @@ import {
   PlusCircle,
   Scissors,
   Settings,
+  Star,
   UserCog,
   Users,
   UserX,
@@ -81,6 +82,17 @@ function buildSections(): SidebarSection[] {
             { icon: Calendar, label: "Calendario de Recebiveis", href: "/subscription-receivables" },
             { icon: UserX, label: "Inadimplentes", href: "/subscription-defaulters" },
             { icon: BanknoteArrowDown, label: "Solicitar Saque", href: "/subscription-withdrawals" },
+          ],
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          icon: Star,
+          label: "Relacionamento",
+          children: [
+            { icon: Star, label: "Avaliacoes", href: "/reviews" },
           ],
         },
       ],
