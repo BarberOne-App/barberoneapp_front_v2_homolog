@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Calendar, CreditCard, History, Scissors } from "lucide-react";
+import { ArrowRight, Calendar, CreditCard, History, Loader2, Scissors, Star, Trophy } from "lucide-react";
 
 import { BannerCarousel } from "@/components/BannerCarousel";
 import { RecentBookings } from "@/components/RecentBookings";
 import { StatCard } from "@/components/StatCard";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "../../hooks/useAuth";
 import { listAppointments } from "@/service/appointmentService";
 import type { DashboardAppointment } from "@/service/dashboardService";
+import { listReviews, type CustomerReview } from "@/service/reviewService";
 
 function formatNextAppointment(startAt: string): string {
   const date = new Date(startAt);
@@ -34,14 +36,37 @@ function formatNextAppointment(startAt: string): string {
   return `${dayMonth} ${time}`;
 }
 
+function getInitials(name?: string | null) {
+  return String(name || "?")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
+function renderStars(rating: number) {
+  return Array.from({ length: 5 }, (_, index) => (
+    <Star
+      key={index}
+      size={14}
+      className={index < Math.round(rating) ? "fill-amber-500 text-amber-500" : "text-muted-foreground/40"}
+    />
+  ));
+}
+
 export function ClientDashboard() {
   const { user } = useAuth();
   const userName = user?.name?.trim() || "Usuario";
 
   const [appointments, setAppointments] = useState<DashboardAppointment[]>([]);
+  const [reviews, setReviews] = useState<CustomerReview[]>([]);
   const [nextAppointment, setNextAppointment] = useState<string>("—");
   const [completedCount, setCompletedCount] = useState<number | string>("—");
   const [upcomingCount, setUpcomingCount] = useState<number | string>("—");
+  const [topBarbersLoading, setTopBarbersLoading] = useState(true);
+  const [topBarbersError, setTopBarbersError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -78,6 +103,64 @@ export function ClientDashboard() {
         setNextAppointment("—");
       });
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    setTopBarbersLoading(true);
+    setTopBarbersError(null);
+
+    listReviews({ limit: 300 })
+      .then((res) => {
+        setReviews(res.items);
+      })
+      .catch(() => {
+        setReviews([]);
+        setTopBarbersError("Nao foi possivel carregar o ranking de barbeiros.");
+      })
+      .finally(() => {
+        setTopBarbersLoading(false);
+      });
+  }, [user?.id]);
+
+  const topBarbers = useMemo(() => {
+    const grouped = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        reviewCount: number;
+        ratingSum: number;
+      }
+    >();
+
+    reviews.forEach((review) => {
+      if (!review.barberId) return;
+
+      const current = grouped.get(review.barberId) ?? {
+        id: review.barberId,
+        name: review.barberName || "Barbeiro",
+        reviewCount: 0,
+        ratingSum: 0,
+      };
+
+      current.name = review.barberName || current.name;
+      current.reviewCount += 1;
+      current.ratingSum += Number(review.rating || 0);
+      grouped.set(review.barberId, current);
+    });
+
+    return Array.from(grouped.values())
+      .map((barber) => ({
+        ...barber,
+        averageRating: barber.reviewCount ? barber.ratingSum / barber.reviewCount : 0,
+      }))
+      .sort((a, b) => {
+        if (b.reviewCount !== a.reviewCount) return b.reviewCount - a.reviewCount;
+        return b.averageRating - a.averageRating;
+      })
+      .slice(0, 3);
+  }, [reviews]);
 
   const shortcuts = [
     {
@@ -165,6 +248,64 @@ export function ClientDashboard() {
             <p className="mt-1 text-sm text-muted-foreground">{shortcut.description}</p>
           </Link>
         ))}
+      </section>
+
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex items-center justify-between border-b border-border p-4">
+          <div>
+            <h3 className="text-base font-medium text-foreground">Top barbeiros mais avaliados</h3>
+            <p className="text-sm text-muted-foreground">Ranking por quantidade de avaliacoes recebidas.</p>
+          </div>
+          <Trophy className="h-5 w-5 text-amber-500" />
+        </div>
+
+        {topBarbersLoading ? (
+          <div className="p-10 text-center text-sm text-muted-foreground">
+            <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+            Carregando ranking...
+          </div>
+        ) : topBarbersError ? (
+          <div className="p-6 text-sm text-destructive">{topBarbersError}</div>
+        ) : topBarbers.length === 0 ? (
+          <div className="p-10 text-center text-sm text-muted-foreground">
+            <Star className="mx-auto mb-2 h-5 w-5" />
+            Nenhuma avaliacao registrada ainda.
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {topBarbers.map((barber, index) => (
+              <div key={barber.id} className="grid gap-4 p-4 sm:grid-cols-[auto_1fr_auto] sm:items-center">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/10 text-sm font-semibold text-amber-600">
+                  #{index + 1}
+                </div>
+
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar className="h-10 w-10">
+                    <AvatarFallback className="bg-primary/10 text-xs text-primary">
+                      {getInitials(barber.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">{barber.name}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <div className="flex">{renderStars(barber.averageRating)}</div>
+                      <span className="text-xs text-muted-foreground">
+                        {barber.averageRating.toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border px-3 py-2 text-left sm:text-right">
+                  <p className="text-lg font-semibold text-foreground">{barber.reviewCount}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {barber.reviewCount === 1 ? "avaliacao" : "avaliacoes"}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <RecentBookings appointments={appointments} />
