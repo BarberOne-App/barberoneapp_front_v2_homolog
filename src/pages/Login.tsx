@@ -61,7 +61,16 @@ export function Login() {
     message: string;
     barbershopName: string;
     trialExpiredAt: string;
+    barbershopId?: string;
+    barbershopSlug?: string;
+    subscriptionIntentToken?: string;
   } | null>(null);
+
+  // const [trialExpired, setTrialExpired] = useState<{
+  //   message: string;
+  //   barbershopName: string;
+  //   trialExpiredAt: string;
+  // } | null>(null);
 
   // pre-registration modal
   const [showCompleteModal, setShowCompleteModal] = useState(false);
@@ -86,14 +95,14 @@ export function Login() {
 
   const filteredBarbershops = barbershopSearch.trim().length >= 1
     ? allBarbershops.filter(s =>
-        s.name.toLowerCase().includes(barbershopSearch.toLowerCase()) ||
-        s.slug.toLowerCase().includes(barbershopSearch.toLowerCase())
-      )
+      s.name.toLowerCase().includes(barbershopSearch.toLowerCase()) ||
+      s.slug.toLowerCase().includes(barbershopSearch.toLowerCase())
+    )
     : allBarbershops;
 
   useEffect(() => {
     if (!showCompleteModal || hasBarbershopAlready) return;
-    api.get<BarbershopOption[]>("/barbershops/public").then(r => setAllBarbershops(r.data)).catch(() => {});
+    api.get<BarbershopOption[]>("/barbershops/public").then(r => setAllBarbershops(r.data)).catch(() => { });
   }, [showCompleteModal, hasBarbershopAlready]);
 
   useEffect(() => {
@@ -201,15 +210,30 @@ export function Login() {
       setErrorMessage("");
       await login(email.trim(), password);
       navigate("/", { replace: true });
-    } catch (err: unknown) {
+    }
+    catch (err: unknown) {
+
       if (err instanceof TrialExpiredError) {
         setTrialExpired({
           message: err.message,
           barbershopName: err.barbershopName,
           trialExpiredAt: err.trialExpiredAt,
+          barbershopId: err.barbershopId,
+          barbershopSlug: err.barbershopSlug,
+          subscriptionIntentToken: err.subscriptionIntentToken,
         });
         return;
       }
+
+      // if (err instanceof TrialExpiredError) {
+      //   setTrialExpired({
+      //     message: err.message,
+      //     barbershopName: err.barbershopName,
+      //     trialExpiredAt: err.trialExpiredAt,
+      //   });
+      //   return;
+      // }
+
       setErrorMessage(getErrorMessage(err));
     } finally {
       setLoading(false);
@@ -245,7 +269,35 @@ export function Login() {
             <div className="flex flex-col gap-3">
               <button
                 type="button"
-                onClick={() => navigate("/", { state: { scrollTo: "planos" } })}
+                onClick={() => {
+                  if (!trialExpired.barbershopId) {
+                    setErrorMessage("Não foi possível identificar a barbearia para reativação.");
+                    setTrialExpired(null);
+                    return;
+                  }
+
+                  const pendingSubscription = {
+                    mode: "reactivate",
+                    barbershopId: trialExpired.barbershopId,
+                    barbershopSlug: trialExpired.barbershopSlug,
+                    barbershopName: trialExpired.barbershopName,
+                    subscriptionIntentToken: trialExpired.subscriptionIntentToken,
+                  };
+
+                  sessionStorage.setItem(
+                    "pendingBarbershopSubscription",
+                    JSON.stringify(pendingSubscription)
+                  );
+
+                  navigate("/", {
+                    state: {
+                      scrollTo: "planos",
+                      subscriptionMode: "reactivate",
+                      barbershop: pendingSubscription,
+                    },
+                  });
+                }}
+                // onClick={() => navigate("/", { state: { scrollTo: "planos" } })}
                 className="flex h-11 w-full items-center justify-center rounded-lg bg-primary font-semibold text-primary-foreground shadow transition hover:bg-primary/90"
               >
                 Ver planos e assinar
@@ -333,9 +385,8 @@ export function Login() {
                               setBarbershopSearch(shop.name);
                               setShowBarbershopDropdown(false);
                             }}
-                            className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-muted ${
-                              modalBarbershopSlug === shop.slug ? "bg-primary/10 font-semibold text-primary" : "text-foreground"
-                            }`}
+                            className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-muted ${modalBarbershopSlug === shop.slug ? "bg-primary/10 font-semibold text-primary" : "text-foreground"
+                              }`}
                           >
                             <Scissors className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                             <span>{shop.name}</span>
