@@ -4,6 +4,7 @@ import { Menu } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { getProfileConfig } from "../../config/profileConfig";
 import { useAuth } from "../../hooks/useAuth";
 import { useSidebarMobile } from "../../layouts/ProfileLayout";
@@ -59,6 +60,7 @@ export function AppHeader({
     .map((item) => item[0]?.toUpperCase())
     .join("");
   const profilePhotoUrl = user?.photoUrl?.trim() || "";
+  const hideActionOnMobile = actionLabel === "Resumo";
 
   useEffect(() => {
     function refreshBarbershop() {
@@ -75,7 +77,7 @@ export function AppHeader({
   }, []);
 
   return (
-    <header className="flex items-center justify-between px-4 py-4 md:px-6">
+    <header className="flex items-start justify-between px-4 py-4 md:items-center md:px-6">
       <div className="flex min-w-0 items-center gap-3">
         {/* Hamburger — apenas mobile */}
         <button
@@ -110,11 +112,14 @@ export function AppHeader({
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-shrink-0 items-center gap-3 pt-0.5 md:pt-0">
         <Button
           asChild
           variant="outline"
-          className="border-border bg-card text-foreground hover:bg-secondary"
+          className={cn(
+            "border-border bg-card text-foreground hover:bg-secondary",
+            hideActionOnMobile && "hidden sm:inline-flex",
+          )}
         >
           <Link to={actionHref}>{actionLabel}</Link>
         </Button>

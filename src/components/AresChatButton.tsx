@@ -14,37 +14,14 @@ export function AresChatButton({ barbershopSlug }: AresChatButtonProps) {
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Suporte via AresChat"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        background: '#1a73e8',
-        color: '#fff',
-        textDecoration: 'none',
-        padding: '8px 16px',
-        borderRadius: '50px',
-        fontSize: '0.875rem',
-        fontWeight: 600,
-        transition: 'background 0.2s, transform 0.15s',
-        height: '36px',
-      }}
-      onMouseEnter={(e) => {
-        const el = e.currentTarget;
-        el.style.background = '#1558c0';
-        el.style.transform = 'translateY(-1px)';
-      }}
-      onMouseLeave={(e) => {
-        const el = e.currentTarget;
-        el.style.background = '#1a73e8';
-        el.style.transform = 'translateY(0)';
-      }}
+      className="inline-flex h-9 w-9 -translate-y-1 items-center justify-center rounded-full bg-[#1a73e8] p-0 text-sm font-semibold text-white no-underline transition-colors hover:bg-[#1558c0] sm:w-auto sm:translate-y-0 sm:gap-2 sm:px-4"
     >
       <img
         src={areschatIcon}
-        alt="AresChat"
-        style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+        alt=""
+        className="h-[22px] w-[22px] flex-shrink-0 rounded-full object-cover"
       />
-      <span>AresChat</span>
+      <span className="hidden sm:inline">AresChat</span>
     </a>
   );
 }
