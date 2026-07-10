@@ -187,9 +187,23 @@ export function PlatformSubscriptionTab() {
   //     .catch(() => { });
   // }, [loadSubscription, loadPlans]);
 
+  // const normalizedStatus = currentSub ? normalizeStatus(currentSub.status) : '';
+  // const hasActiveSub = isActivePlatformSubscription(currentSub);
+  // const isCurrentPlan = (plan: PlatformPlan) => hasActiveSub && currentSub?.plan?.id === plan.id;
+
   const normalizedStatus = currentSub ? normalizeStatus(currentSub.status) : '';
+
+  const isExpiredLikeStatus = ['expired', 'cancelled', 'paused', 'past_due'].includes(normalizedStatus);
+
   const hasActiveSub = isActivePlatformSubscription(currentSub);
-  const isCurrentPlan = (plan: PlatformPlan) => hasActiveSub && currentSub?.plan?.id === plan.id;
+
+  const hasCurrentPlatformPlan =
+    Boolean(currentSub) &&
+    !isExpiredLikeStatus &&
+    currentSub?.canceledAt === null;
+
+  const isCurrentPlan = (plan: PlatformPlan) =>
+    hasCurrentPlatformPlan && currentSub?.plan?.id === plan.id;
 
   const isReactivationFlow =
     pendingSubscription?.mode === 'reactivate' && Boolean(pendingSubscription.barbershopId);
@@ -285,9 +299,12 @@ export function PlatformSubscriptionTab() {
           )}
           <h3 className="text-lg font-medium text-foreground">Assinatura da plataforma</h3>
           {!loadingSubscription && !subscriptionError && currentSub && (
-            <Badge variant={hasActiveSub ? (STATUS_VARIANT[normalizedStatus] ?? 'default') : 'destructive'}>
-              {hasActiveSub ? (STATUS_LABEL[normalizedStatus] ?? currentSub.status) : 'Expirado'}
+            <Badge variant={STATUS_VARIANT[normalizedStatus] ?? 'outline'}>
+              {STATUS_LABEL[normalizedStatus] ?? currentSub.status}
             </Badge>
+            // <Badge variant={hasActiveSub ? (STATUS_VARIANT[normalizedStatus] ?? 'default') : 'destructive'}>
+            //   {hasActiveSub ? (STATUS_LABEL[normalizedStatus] ?? currentSub.status) : 'Expirado'}
+            // </Badge>
           )}
           {!loadingSubscription && !subscriptionError && !currentSub && (
             <Badge variant="outline">Sem assinatura</Badge>
@@ -386,8 +403,8 @@ export function PlatformSubscriptionTab() {
         <h3 className="text-lg font-medium text-foreground mb-4">
           {isReactivationFlow
             ? `Reativar ${pendingSubscription?.barbershopName || 'barbearia'}`
-            : hasActiveSub
-              ? 'Fazer upgrade de plano'
+            : hasCurrentPlatformPlan
+              ? 'Seu plano'
               : 'Escolha seu plano'}
           {/* {hasActiveSub ? 'Fazer upgrade de plano' : 'Escolha seu plano'} */}
         </h3>
@@ -416,8 +433,8 @@ export function PlatformSubscriptionTab() {
               const isCurrent = isCurrentPlan(plan);
               // const canSubscribe = !hasActiveSub;
               // const canUpgrade = hasActiveSub && !isCurrent;
-              const canSubscribe = isReactivationFlow || !hasActiveSub;
-              const canUpgrade = !isReactivationFlow && hasActiveSub && !isCurrent;
+              const canSubscribe = isReactivationFlow || !hasCurrentPlatformPlan;
+              const canUpgrade = !isReactivationFlow && hasCurrentPlatformPlan && !isCurrent;
 
               return (
                 <div
