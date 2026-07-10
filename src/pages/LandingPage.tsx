@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { PasswordInput } from '@/components/PasswordInput';
+import { LandingLeadChat } from '@/components/LandingLeadChat';
+import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import {
   ArrowRight, BadgeCheck, CalendarCheck, CheckCircle2, ClipboardCheck,
   Clock, CreditCard, Lock, Menu, MessageCircle, Scissors,
@@ -731,6 +733,7 @@ export function LandingPage() {
   const [pendingSubscription, setPendingSubscription] =
     useState<PendingBarbershopSubscription | null>(null);
 
+  const [leadModalOpen, setLeadModalOpen] = useState(false);
 
   useEffect(() => {
     apiFetchPlans()
@@ -1181,6 +1184,17 @@ export function LandingPage() {
       </footer>
 
       {/* ── Modals ── */}
+      <button
+        type="button"
+        onClick={() => setLeadModalOpen(true)}
+        data-lead-chat-trigger
+        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full bg-emerald-500 px-4 py-3 font-semibold text-white shadow-xl shadow-emerald-500/20 transition hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-black"
+        aria-label="Falar com o time de vendas pelo WhatsApp"
+      >
+        <WhatsAppIcon className="h-5 w-5" />
+        <span className="hidden sm:inline">Fale com vendas</span>
+      </button>
+      <LandingLeadChat open={leadModalOpen} onOpenChange={setLeadModalOpen} />
       {selectedPlan && (
         <RegisterModal plan={selectedPlan} onClose={() => setSelectedPlan(null)}
           onRegistered={(result) => onRegistered(selectedPlan, result)} />

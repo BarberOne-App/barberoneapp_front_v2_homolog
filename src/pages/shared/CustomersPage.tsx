@@ -977,7 +977,7 @@ export function CustomersPage() {
                               )}
                               <DropdownMenuItem onClick={() => openEditDialog(customer)}>
                                 <Edit size={14} />
-                                Editar
+                                Reset de senha
                               </DropdownMenuItem>
                               {(() => {
                                 const sub = subscriptionMap.get(customer.id);
