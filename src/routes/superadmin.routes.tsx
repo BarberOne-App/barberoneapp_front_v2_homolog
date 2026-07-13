@@ -6,6 +6,7 @@ import { SuperAdminPlansPage } from "../pages/super_admin/SuperAdminPlansPage";
 import { SuperAdminReportsPage } from "../pages/super_admin/SuperAdminReportsPage";
 import { SuperAdminAresChatPage } from "../pages/super_admin/SuperAdminAresChatPage";
 import { SuperAdminFeatureUpdatesPage } from "../pages/super_admin/SuperAdminFeatureUpdatesPage";
+import { SuperAdminLandingLeadsPage } from "../pages/super_admin/SuperAdminLandingLeadsPage";
 import type { AppRoute } from "./types";
 
 export const superAdminRoutes: AppRoute[] = [
@@ -44,6 +45,12 @@ export const superAdminRoutes: AppRoute[] = [
     title: "AresChat",
     breadcrumbs: ["Super Admin", "AresChat"],
     Component: SuperAdminAresChatPage,
+  },
+  {
+    path: "/landing-leads",
+    title: "Contatos interessados",
+    breadcrumbs: ["Super Admin", "Contatos interessados"],
+    Component: SuperAdminLandingLeadsPage,
   },
   {
     path: "/feature-updates",
