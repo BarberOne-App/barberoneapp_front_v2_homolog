@@ -3,21 +3,44 @@ import { X, CreditCard, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { subscribeBarbershopPlatformPlan, type PlatformPlan } from '@/service/platformSubscriptionService';
+import { subscribeBarbershopPlatformPlan, reactivateBarbershopPlatformPlan, type PlatformPlan } from '@/service/platformSubscriptionService';
 import { useAuth } from '@/hooks/useAuth';
+
+// interface SubscriptionPaymentModalProps {
+//   isOpen: boolean;
+//   plan: PlatformPlan | null;
+//   onClose: () => void;
+//   onSuccess: () => void;
+// }
+
+type SubscriptionPaymentMode = 'subscribe' | 'reactivate';
 
 interface SubscriptionPaymentModalProps {
   isOpen: boolean;
   plan: PlatformPlan | null;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: () => void | Promise<void>;
+
+  mode?: SubscriptionPaymentMode;
+  barbershopId?: string;
+  barbershopName?: string;
+  subscriptionIntentToken?: string;
 }
 
 function formatCardNumber(value: string) {
   return value.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
 }
 
-export function SubscriptionPaymentModal({ isOpen, plan, onClose, onSuccess }: SubscriptionPaymentModalProps) {
+export function SubscriptionPaymentModal({
+  isOpen,
+  plan,
+  onClose,
+  onSuccess,
+  mode = 'subscribe',
+  barbershopId,
+  barbershopName,
+  subscriptionIntentToken,
+}: SubscriptionPaymentModalProps) {
   const { user } = useAuth();
   const [processing, setProcessing] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -31,6 +54,8 @@ export function SubscriptionPaymentModal({ isOpen, plan, onClose, onSuccess }: S
     phone: '',
     installments: 1,
   });
+
+  const isReactivationFlow = mode === 'reactivate';
 
   if (!isOpen || !plan) return null;
 
@@ -52,28 +77,98 @@ export function SubscriptionPaymentModal({ isOpen, plan, onClose, onSuccess }: S
     return null;
   }
 
+  // async function handleSubmit(e: React.FormEvent) {
+  //   e.preventDefault();
+  //   const err = validate();
+  //   if (err) { toast.error(err); return; }
+
+  //   if (!plan) return;
+  //   setProcessing(true);
+  //   try {
+  //     await subscribeBarbershopPlatformPlan({
+  //       platformPlanId: plan.id,
+  //       amount,
+  //       cardForm: { ...cardForm, number: cardForm.number.replace(/\s/g, '') },
+  //       customer: { name: user?.name, email: user?.email },
+  //     });
+  //     toast.success('Assinatura criada com sucesso!');
+  //     onSuccess();
+  //     onClose();
+  //   } catch (error: unknown) {
+  //     const msg =
+  //       (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+  //       (error as { message?: string })?.message ||
+  //       'Não foi possível criar a assinatura.';
+  //     toast.error(msg);
+  //   } finally {
+  //     setProcessing(false);
+  //   }
+  // }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
     const err = validate();
-    if (err) { toast.error(err); return; }
+    if (err) {
+      toast.error(err);
+      return;
+    }
 
     if (!plan) return;
+
+    if (isReactivationFlow && !barbershopId) {
+      toast.error('Não foi possível identificar a barbearia para reativação.');
+      return;
+    }
+
     setProcessing(true);
+
     try {
-      await subscribeBarbershopPlatformPlan({
-        platformPlanId: plan.id,
-        amount,
-        cardForm: { ...cardForm, number: cardForm.number.replace(/\s/g, '') },
-        customer: { name: user?.name, email: user?.email },
-      });
-      toast.success('Assinatura criada com sucesso!');
-      onSuccess();
+      const cleanCardForm = {
+        ...cardForm,
+        number: cardForm.number.replace(/\s/g, ''),
+        document: cardForm.document.replace(/\D/g, ''),
+        phone: cardForm.phone.replace(/\D/g, ''),
+      };
+
+      if (isReactivationFlow) {
+        await reactivateBarbershopPlatformPlan({
+          barbershopId: barbershopId!,
+          platformPlanId: plan.id,
+          amount,
+          cardForm: cleanCardForm,
+          subscriptionIntentToken,
+          customer: {
+            name: user?.name || barbershopName || 'Cliente BarberOne',
+            email: user?.email,
+          },
+        });
+
+        toast.success('Barbearia reativada com sucesso!');
+      } else {
+        await subscribeBarbershopPlatformPlan({
+          platformPlanId: plan.id,
+          amount,
+          cardForm: cleanCardForm,
+          customer: {
+            name: user?.name,
+            email: user?.email,
+          },
+        });
+
+        toast.success('Assinatura criada com sucesso!');
+      }
+
+      await onSuccess();
       onClose();
     } catch (error: unknown) {
       const msg =
         (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         (error as { message?: string })?.message ||
-        'Não foi possível criar a assinatura.';
+        (isReactivationFlow
+          ? 'Não foi possível reativar a barbearia.'
+          : 'Não foi possível criar a assinatura.');
+
       toast.error(msg);
     } finally {
       setProcessing(false);
@@ -101,8 +196,16 @@ export function SubscriptionPaymentModal({ isOpen, plan, onClose, onSuccess }: S
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
             <CreditCard size={22} />
           </div>
-          <h2 className="text-lg font-semibold text-foreground">Finalizar assinatura</h2>
-          <p className="text-sm text-muted-foreground">Assinatura recorrente mensal no cartão de crédito.</p>
+          <h2 className="text-lg font-semibold text-foreground">
+            {isReactivationFlow ? 'Reativar barbearia' : 'Finalizar assinatura'}
+          </h2>
+          {/* <h2 className="text-lg font-semibold text-foreground">Finalizar assinatura</h2> */}
+          {/* <p className="text-sm text-muted-foreground">Assinatura recorrente mensal no cartão de crédito.</p> */}
+          <p className="text-sm text-muted-foreground">
+            {isReactivationFlow
+              ? 'Assine um plano para liberar novamente o acesso desta barbearia.'
+              : 'Assinatura recorrente mensal no cartão de crédito.'}
+          </p>
         </div>
 
         {/* Resumo */}
@@ -118,6 +221,12 @@ export function SubscriptionPaymentModal({ isOpen, plan, onClose, onSuccess }: S
             </p>
           </div>
         </div>
+        {isReactivationFlow && barbershopName && (
+          <div className="mx-6 mt-3 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
+            <p className="text-muted-foreground">Barbearia que será reativada</p>
+            <p className="font-semibold text-foreground">{barbershopName}</p>
+          </div>
+        )}
 
         {/* Formulário */}
         <form onSubmit={handleSubmit} className="space-y-4 px-6 py-4">
@@ -234,7 +343,14 @@ export function SubscriptionPaymentModal({ isOpen, plan, onClose, onSuccess }: S
             </Button>
             <Button type="submit" className="flex-1 gap-2" disabled={processing}>
               {processing && <Spinner />}
-              {processing ? 'Criando assinatura...' : 'Confirmar assinatura'}
+              {processing
+                ? isReactivationFlow
+                  ? 'Reativando...'
+                  : 'Criando assinatura...'
+                : isReactivationFlow
+                  ? 'Confirmar reativação'
+                  : 'Confirmar assinatura'}
+              {/* {processing ? 'Criando assinatura...' : 'Confirmar assinatura'} */}
             </Button>
           </div>
         </form>

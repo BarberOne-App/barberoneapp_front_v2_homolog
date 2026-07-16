@@ -16,6 +16,22 @@ export interface PlatformPlan {
   color?: string | null;
 }
 
+type CardForm = {
+  number: string;
+  holderName: string;
+  expMonth: string;
+  expYear: string;
+  cvv: string;
+  document: string;
+  phone: string;
+  installments: number;
+};
+
+type SubscriptionCustomer = {
+  name?: string | null;
+  email?: string | null;
+};
+
 export interface PlatformSubscription {
   id: string;
   status: string;
@@ -33,6 +49,50 @@ export async function getBarbershopPlatformSubscription(): Promise<{ subscriptio
   return data;
 }
 
+function onlyNumbers(value: string | null | undefined) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+export async function reactivateBarbershopPlatformPlan(data: {
+  barbershopId: string;
+  platformPlanId: string;
+  amount: number;
+  cardForm: CardForm;
+  customer?: SubscriptionCustomer;
+  subscriptionIntentToken?: string;
+}) {
+  if (!data.barbershopId) {
+    throw new Error('Barbearia não identificada para reativação.');
+  }
+
+  if (!data.platformPlanId) {
+    throw new Error('Plano não identificado para reativação.');
+  }
+
+  if (!data.subscriptionIntentToken) {
+    throw new Error('Token de reativação não encontrado.');
+  }
+
+  const cardToken = await createPagarmeCardToken(data.cardForm);
+
+  const response = await api.post(
+    `/barbershops/${data.barbershopId}/reactivate-subscription`,
+    {
+      platformPlanId: data.platformPlanId,
+      amount: data.amount,
+      cardToken,
+      subscriptionIntentToken: data.subscriptionIntentToken,
+      customer: {
+        name: data.customer?.name,
+        email: data.customer?.email,
+        document: onlyNumbers(data.cardForm.document),
+        phone: onlyNumbers(data.cardForm.phone),
+      },
+    }
+  );
+
+  return response.data;
+}
 export async function cancelBarbershopPlatformSubscription(): Promise<{ ok: boolean }> {
   const { data } = await api.post('/pagarme/subscriptions/barbershop-platform-subscriptions/cancel');
   return data;

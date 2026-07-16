@@ -788,7 +788,7 @@ export function ClientBookingsPage() {
               </DropdownMenuContent>
             </DropdownMenu>
             <Button size="sm" className="gap-2" onClick={() => { setForm({ ...emptyForm, date: dateToDateString(new Date()), barberId: activeLockedBarberId ?? "" }); setBookingOpen(true); }}>
-              <Plus size={14} /> Marcar Horario
+              <Plus size={14} /> Marcar Horário
             </Button>
           </div>
         </div>
@@ -892,10 +892,10 @@ export function ClientBookingsPage() {
         )}
 
         <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <span>Pagina {page} de {totalPages} - {total} agendamentos</span>
+          <span>Página {page} de {totalPages} - {total} agendamentos</span>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>Anterior</Button>
-            <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Proxima</Button>
+            <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Próxima</Button>
           </div>
         </div>
       </div>
@@ -905,9 +905,9 @@ export function ClientBookingsPage() {
         <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-2xl">
           <form onSubmit={handleBookingSubmit} className="flex min-h-0 flex-1 flex-col gap-5">
             <DialogHeader className="flex-shrink-0">
-              <DialogTitle>Marcar Horario</DialogTitle>
+              <DialogTitle>Marcar Horário</DialogTitle>
               <DialogDescription>
-                Escolha o barbeiro, servico e um horario disponivel.
+                Escolha o barbeiro, serviço e um horário disponível.
               </DialogDescription>
             </DialogHeader>
 
