@@ -9,6 +9,7 @@ import { PlansPage } from "../pages/admin/PlansPage";
 import { ProductsPage } from "../pages/admin/ProductsPage";
 import { SchedulesPage } from "../pages/shared/SchedulesPage";
 import { ServicesPage } from "../pages/shared/ServicesPage";
+import { ServiceTabsPage } from "../pages/shared/ServiceTabsPage";
 import type { AppRoute } from "./types";
 
 export const receptionistRoutes: AppRoute[] = [
@@ -29,6 +30,13 @@ export const receptionistRoutes: AppRoute[] = [
     title: "Agenda",
     breadcrumbs: ["Operacao", "Agenda"],
     Component: FitAppointmentPage,
+  },
+  {
+    path: "/service-tabs",
+    title: "Comandas",
+    breadcrumbs: ["Operação", "Comandas"],
+    Component: ServiceTabsPage,
+    requiredPermission: "managePayments",
   },
   {
     path: "/schedules",
