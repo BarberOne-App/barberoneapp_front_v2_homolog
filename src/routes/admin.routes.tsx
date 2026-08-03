@@ -2,6 +2,7 @@ import { AdminDashboard } from "../pages/admin/AdminDashboard";
 import { AdminSettingsPage } from "../pages/admin/AdminSettingsPage";
 import { AdminSubscriptionsPage } from "../pages/admin/AdminSubscriptionsPage";
 import { EmployeePayrollPage } from "../pages/admin/EmployeePayrollPage";
+import { EmployeeAppointmentHistoryPage } from "../pages/admin/EmployeeAppointmentHistoryPage";
 import { ExtraPaymentsPage } from "../pages/admin/ExtraPaymentsPage";
 import { GalleryPage } from "../pages/admin/GalleryPage";
 import { PlansPage } from "../pages/admin/PlansPage";
@@ -43,6 +44,12 @@ export const adminRoutes: AppRoute[] = [
     title: "Agendamentos",
     breadcrumbs: ["Operacao", "Agendamentos"],
     Component: BookingsPage,
+  },
+  {
+    path: "/employee-appointment-history",
+    title: "Histórico de atendimentos",
+    breadcrumbs: ["Operação", "Histórico de atendimentos"],
+    Component: EmployeeAppointmentHistoryPage,
   },
   {
     path: "/encaixe",

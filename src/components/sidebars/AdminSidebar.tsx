@@ -6,6 +6,7 @@ import {
   CreditCard,
   BanknoteArrowDown,
   HandCoins,
+  History,
   Image,
   LayoutList,
   Package,
@@ -36,6 +37,7 @@ function buildSections(): SidebarSection[] {
           label: "Operacao",
           children: [
             { icon: Calendar, label: "Agendamentos", href: "/bookings" },
+            { icon: History, label: "Histórico de atendimentos", href: "/employee-appointment-history" },
             { icon: Zap, label: "Agenda", href: "/encaixe" },
             { icon: Calendar, label: "Calendario", href: "/schedules" },
           ],
