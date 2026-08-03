@@ -2,6 +2,7 @@ import { AdminDashboard } from "../pages/admin/AdminDashboard";
 import { AdminSettingsPage } from "../pages/admin/AdminSettingsPage";
 import { AdminSubscriptionsPage } from "../pages/admin/AdminSubscriptionsPage";
 import { EmployeePayrollPage } from "../pages/admin/EmployeePayrollPage";
+import { EmployeeAppointmentHistoryPage } from "../pages/admin/EmployeeAppointmentHistoryPage";
 import { ExtraPaymentsPage } from "../pages/admin/ExtraPaymentsPage";
 import { GalleryPage } from "../pages/admin/GalleryPage";
 import { PlansPage } from "../pages/admin/PlansPage";
@@ -21,6 +22,8 @@ import { PaymentsPage } from "../pages/shared/PaymentsPage";
 import { ReviewsPage } from "../pages/shared/ReviewsPage";
 import { SchedulesPage } from "../pages/shared/SchedulesPage";
 import { ServicesPage } from "../pages/shared/ServicesPage";
+import { ServiceTabsPage } from "../pages/shared/ServiceTabsPage";
+import { ServiceTabHistoryPage } from "../pages/admin/ServiceTabHistoryPage";
 import { StockPage } from "../pages/admin/StockPage";
 import { UsersPage } from "../pages/shared/UsersPage";
 import type { AppRoute } from "./types";
@@ -43,6 +46,24 @@ export const adminRoutes: AppRoute[] = [
     title: "Agendamentos",
     breadcrumbs: ["Operacao", "Agendamentos"],
     Component: BookingsPage,
+  },
+  {
+    path: "/employee-appointment-history",
+    title: "Histórico de atendimentos",
+    breadcrumbs: ["Operação", "Histórico de atendimentos"],
+    Component: EmployeeAppointmentHistoryPage,
+  },
+  {
+    path: "/service-tabs",
+    title: "Comandas",
+    breadcrumbs: ["Operação", "Comandas"],
+    Component: ServiceTabsPage,
+  },
+  {
+    path: "/service-tab-history",
+    title: "Histórico de comandas",
+    breadcrumbs: ["Operação", "Histórico de comandas"],
+    Component: ServiceTabHistoryPage,
   },
   {
     path: "/encaixe",

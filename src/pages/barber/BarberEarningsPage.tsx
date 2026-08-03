@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -15,11 +16,13 @@ import { Button } from "@/components/ui/button";
 import { useMyBarber } from "@/hooks/useMyBarber";
 import { listAppointments, type Appointment } from "@/service/appointmentService";
 import {
+  getEmployeePayrollSummary,
   getMyPayrollSummary,
   type EmployeePayment,
   type EmployeePayrollRow,
 } from "@/service/employeePayrollService";
 import { getHomeInfo } from "@/service/homeInfoService";
+import type { Barber } from "@/service/barberService";
 
 /* ─── types ─── */
 
@@ -193,7 +196,15 @@ interface EarningsStats {
 
 /* ─── component ─── */
 
-export function BarberEarningsPage() {
+interface BarberEarningsPageProps {
+  barberOverride?: Barber;
+  onBack?: () => void;
+}
+
+export function BarberEarningsPage({
+  barberOverride,
+  onBack,
+}: BarberEarningsPageProps = {}) {
   const [frequency, setFrequency] = useState<PaymentFrequency>("monthly");
   const [periodStart, setPeriodStart] = useState<Date>(() => {
     const now = new Date();
@@ -203,7 +214,8 @@ export function BarberEarningsPage() {
   const [row, setRow] = useState<EmployeePayrollRow | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const { barber, loading: barberLoading } = useMyBarber();
+  const { barber: ownBarber, loading: barberLoading } = useMyBarber(!barberOverride);
+  const barber = barberOverride ?? ownBarber;
 
   const periodEnd = getPeriodEnd(periodStart, frequency);
   const periodStartStr = dateToStr(periodStart);
@@ -231,7 +243,13 @@ export function BarberEarningsPage() {
           allAppointments: true,
           limit: 100,
         }),
-        getMyPayrollSummary({ periodStart: periodStartStr, periodEnd: periodEndStr }),
+        barberOverride
+          ? getEmployeePayrollSummary({
+              employeeId: barber.userId ?? barber.id,
+              periodStart: periodStartStr,
+              periodEnd: periodEndStr,
+            })
+          : getMyPayrollSummary({ periodStart: periodStartStr, periodEnd: periodEndStr }),
       ]);
       setAppointments(appointmentsRes.items);
       setRow(summaryRes.items[0] ?? null);
@@ -240,7 +258,7 @@ export function BarberEarningsPage() {
     } finally {
       setLoading(false);
     }
-  }, [barber, periodStartStr, periodEndStr]);
+  }, [barber, barberOverride, periodStartStr, periodEndStr]);
 
   useEffect(() => {
     void load();
@@ -349,10 +367,32 @@ export function BarberEarningsPage() {
     stats.extraPayments.length > 0 ||
     stats.payrollPayments.length > 0;
 
-  const isPageLoading = barberLoading || loading;
+  const isPageLoading = (!barberOverride && barberLoading) || loading;
 
   return (
     <div className="space-y-6">
+      {barberOverride && (
+        <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={onBack}
+            aria-label="Voltar para barbeiros"
+          >
+            <ArrowLeft size={18} />
+          </Button>
+          <div>
+            <p className="font-semibold text-foreground">
+              {barberOverride.displayName}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Histórico de ganhos e atendimentos do barbeiro
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Navegação de período */}
       <div className="flex items-center justify-between rounded-xl border border-border bg-card px-5 py-4">
         <div>

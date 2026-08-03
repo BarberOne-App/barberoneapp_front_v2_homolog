@@ -133,7 +133,7 @@ export function ExtraPaymentsPage() {
 
   useEffect(() => {
     void loadPayments();
-    listUsers({ excludeRole: "client", limit: 200 })
+    listUsers({ excludeRole: "client", limit: 200, active: true })
       .then((res) => setEmployees(res.items))
       .catch(() => {});
   }, [loadPayments]);
