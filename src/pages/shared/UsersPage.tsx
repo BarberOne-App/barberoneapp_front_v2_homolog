@@ -11,8 +11,7 @@ import {
   Plus,
   Search,
   Shield,
-  UserCheck,
-  UserX,
+  Trash2,
   UserCog,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -63,11 +62,10 @@ import { Switch } from "@/components/ui/switch";
 import { uploadProfilePhoto } from "@/service/uploadService";
 import {
   createUser,
-  deactivateUser,
+  deleteUser,
   listUsers,
   updateUser,
   updateUserPermissions,
-  setUserActive,
   type ListUsersParams,
   type UserProfile,
 } from "@/service/userService";
@@ -82,7 +80,6 @@ import { listServices, type Service } from "@/service/serviceService";
 type UserRole = NonNullable<ListUsersParams["role"]>;
 type ManagedUserRole = Exclude<UserRole, "client">;
 type RoleFilter = "all" | ManagedUserRole;
-type StatusFilter = "all" | "active" | "inactive";
 type PermissionKey =
   | "viewAdmin"
   | "manageEmployees"
@@ -317,7 +314,6 @@ export function UsersPage() {
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -331,7 +327,7 @@ export function UsersPage() {
   const [permissionsForm, setPermissionsForm] = useState<UserPermissions>({
     ...emptyPermissions,
   });
-  const [userToDeactivate, setUserToDeactivate] = useState<UserProfile | null>(null);
+  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -350,7 +346,6 @@ export function UsersPage() {
         q: search.trim() || undefined,
         page,
         limit,
-        active: statusFilter === "all" ? undefined : statusFilter === "active",
       });
 
       setUsers(result.items);
@@ -360,7 +355,7 @@ export function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [limit, page, roleFilter, search, statusFilter]);
+  }, [limit, page, roleFilter, search]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -560,29 +555,19 @@ export function UsersPage() {
     }
   }
 
-  async function handleDeactivate() {
-    if (!userToDeactivate) return;
+  async function handleDelete() {
+    if (!userToDelete) return;
 
     try {
-      await deactivateUser(userToDeactivate.id);
-      toast.success("Funcionario desativado. O historico foi preservado.");
-      setUserToDeactivate(null);
+      await deleteUser(userToDelete.id);
+      toast.success("Funcionario removido.");
+      setUserToDelete(null);
 
       if (users.length === 1 && page > 1) {
         setPage((current) => current - 1);
       } else {
         await loadUsers();
       }
-    } catch (err) {
-      toast.error(getApiMessage(err));
-    }
-  }
-
-  async function handleReactivate(user: UserProfile) {
-    try {
-      await setUserActive(user.id, true);
-      toast.success("Funcionario reativado.");
-      await loadUsers();
     } catch (err) {
       toast.error(getApiMessage(err));
     }
@@ -675,27 +660,6 @@ export function UsersPage() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                  {statusFilter === "inactive" ? <UserX size={14} /> : <UserCheck size={14} />}
-                  Status
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuRadioGroup
-                  value={statusFilter}
-                  onValueChange={(value) => {
-                    setStatusFilter(value as StatusFilter);
-                    setPage(1);
-                  }}
-                >
-                  <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="active">Ativos</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="inactive">Inativos</DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
             <Button size="sm" className="gap-2" onClick={openCreateDialog}>
               <Plus size={14} />
               Adicionar Funcionario
@@ -718,9 +682,6 @@ export function UsersPage() {
                     Perfil
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Permissoes
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -738,14 +699,14 @@ export function UsersPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                       Carregando funcionarios...
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={7} className="p-8 text-center text-sm text-muted-foreground">
                       Nenhum funcionario encontrado.
                     </td>
                   </tr>
@@ -777,16 +738,6 @@ export function UsersPage() {
                               </div>
                             </div>
                           </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge
-                            variant="outline"
-                            className={user.active
-                              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600"
-                              : "border-slate-500/20 bg-slate-500/10 text-slate-500"}
-                          >
-                            {user.active ? "Ativo" : "Inativo"}
-                          </Badge>
                         </td>
                         <td className="px-4 py-3">
                           <Badge
@@ -843,29 +794,22 @@ export function UsersPage() {
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem disabled={!user.active} onClick={() => openEditDialog(user)}>
+                              <DropdownMenuItem onClick={() => openEditDialog(user)}>
                                 <Edit size={14} />
                                 Editar
                               </DropdownMenuItem>
-                              <DropdownMenuItem disabled={!user.active} onClick={() => openPermissionsDialog(user)}>
+                              <DropdownMenuItem onClick={() => openPermissionsDialog(user)}>
                                 <Shield size={14} />
                                 Permissoes
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              {user.active ? (
-                                <DropdownMenuItem
-                                  variant="destructive"
-                                  onClick={() => setUserToDeactivate(user)}
-                                >
-                                  <UserX size={14} />
-                                  Desativar
-                                </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem onClick={() => void handleReactivate(user)}>
-                                  <UserCheck size={14} />
-                                  Reativar
-                                </DropdownMenuItem>
-                              )}
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() => setUserToDelete(user)}
+                              >
+                                <Trash2 size={14} />
+                                Remover
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </td>
@@ -1271,25 +1215,25 @@ export function UsersPage() {
       </Dialog>
 
       <AlertDialog
-        open={Boolean(userToDeactivate)}
+        open={Boolean(userToDelete)}
         onOpenChange={(open) => {
-          if (!open) setUserToDeactivate(null);
+          if (!open) setUserToDelete(null);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Desativar funcionario?</AlertDialogTitle>
+            <AlertDialogTitle>Remover funcionario?</AlertDialogTitle>
             <AlertDialogDescription>
-              {userToDeactivate?.name} perdera o acesso e nao aparecera em novos agendamentos. Agendamentos, pagamentos e todo o historico existente serao preservados.
+              Esta acao remove {userToDelete?.name} do cadastro da barbearia.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={handleDeactivate}
+              onClick={handleDelete}
             >
-              Desativar
+              Remover
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
