@@ -35,6 +35,8 @@ export interface UserProfile {
   visits?: number;
   lastVisit?: string | null;
   lastAppointmentStatus?: string | null;
+  active: boolean;
+  deactivatedAt?: string | null;
 }
 
 export interface ListUsersParams {
@@ -43,6 +45,7 @@ export interface ListUsersParams {
   q?: string;
   page?: number;
   limit?: number;
+  active?: boolean;
 }
 
 export interface ListUsersResponse {
@@ -77,6 +80,7 @@ export interface UpdateUserPayload {
   salary?: number | null;
   resetPassword?: boolean;
   newPassword?: string;
+  active?: boolean;
 }
 
 export async function listUsers(params: ListUsersParams = {}) {
@@ -108,9 +112,17 @@ export async function updateUserPermissions(
   return response.data;
 }
 
-export async function deleteUser(userId: string) {
+export async function deactivateUser(userId: string) {
   const response = await api.delete<{ ok: boolean }>(`/users/${userId}`);
 
+  return response.data;
+}
+
+// Mantem compatibilidade com telas legadas; o backend agora faz exclusao logica.
+export const deleteUser = deactivateUser;
+
+export async function setUserActive(userId: string, active: boolean) {
+  const response = await api.patch<UserProfile>(`/users/${userId}`, { active });
   return response.data;
 }
 
