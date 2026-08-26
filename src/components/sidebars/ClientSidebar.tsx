@@ -1,4 +1,4 @@
-import { Calendar, Home, LayoutList, Scissors, Settings, Star } from "lucide-react";
+import { Calendar, Home, LayoutList, Package, Scissors, Settings, ShoppingCart, Star } from "lucide-react";
 
 import { ProfileSidebar } from "../shared/ProfileSidebar";
 import type { SidebarSection } from "../shared/ProfileSidebar";
@@ -25,6 +25,8 @@ const sections: SidebarSection[] = [
         children: [
           { icon: Scissors, label: "Servicos", href: "/services" },
           { icon: LayoutList, label: "Planos", href: "/plans" },
+          { icon: Package, label: "Produtos", href: "/products" },
+          { icon: ShoppingCart, label: "Carrinho", href: "/cart" },
         ],
       },
     ],
