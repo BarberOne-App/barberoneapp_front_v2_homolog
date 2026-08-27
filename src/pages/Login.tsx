@@ -9,6 +9,7 @@ import barberOneLogo from "../assets/image/barberOne-logo.png";
 import { useAuth } from "../hooks/useAuth";
 import { TrialExpiredError } from "../service/authService";
 import type { AuthResponse } from "../service/authService";
+import { saveSubscriptionRenewalContext } from "../service/platformSubscriptionService";
 import { getDefaultRouteForRole } from "../config/profileConfig";
 
 interface BarbershopOption {
@@ -59,8 +60,11 @@ export function Login() {
   const [errorMessage, setErrorMessage] = useState("");
   const [trialExpired, setTrialExpired] = useState<{
     message: string;
+    barbershopId: string;
+    barbershopSlug: string;
     barbershopName: string;
     trialExpiredAt: string;
+    subscriptionIntentToken: string;
   } | null>(null);
 
   // pre-registration modal
@@ -212,8 +216,11 @@ export function Login() {
       if (err instanceof TrialExpiredError) {
         setTrialExpired({
           message: err.message,
+          barbershopId: err.barbershopId,
+          barbershopSlug: err.barbershopSlug,
           barbershopName: err.barbershopName,
           trialExpiredAt: err.trialExpiredAt,
+          subscriptionIntentToken: err.subscriptionIntentToken,
         });
         return;
       }
@@ -221,6 +228,23 @@ export function Login() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleSubscriptionRenewal() {
+    if (!trialExpired?.barbershopId || !trialExpired.subscriptionIntentToken) {
+      setTrialExpired(null);
+      setErrorMessage("Não foi possível iniciar a renovação. Entre novamente para gerar uma nova autorização.");
+      return;
+    }
+
+    saveSubscriptionRenewalContext({
+      barbershopId: trialExpired.barbershopId,
+      barbershopSlug: trialExpired.barbershopSlug,
+      barbershopName: trialExpired.barbershopName,
+      expiredAt: trialExpired.trialExpiredAt,
+      subscriptionIntentToken: trialExpired.subscriptionIntentToken,
+    });
+    navigate("/renew-subscription");
   }
 
   return (
@@ -250,7 +274,7 @@ export function Login() {
             <div className="flex flex-col gap-3">
               <button
                 type="button"
-                onClick={() => navigate("/", { state: { scrollTo: "planos" } })}
+                onClick={handleSubscriptionRenewal}
                 className="flex h-11 w-full items-center justify-center rounded-lg bg-primary font-semibold text-primary-foreground shadow transition hover:bg-primary/90"
               >
                 Ver planos e assinar

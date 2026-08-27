@@ -36,6 +36,55 @@ export interface PlatformSubscriptionAlert {
   message: string;
 }
 
+export interface SubscriptionRenewalContext {
+  barbershopId: string;
+  barbershopSlug?: string;
+  barbershopName: string;
+  expiredAt: string;
+  subscriptionIntentToken: string;
+  expiresAt: number;
+}
+
+const SUBSCRIPTION_RENEWAL_CONTEXT_KEY = 'barberone:subscription-renewal';
+
+export function saveSubscriptionRenewalContext(
+  context: Omit<SubscriptionRenewalContext, 'expiresAt'>,
+) {
+  const value: SubscriptionRenewalContext = {
+    ...context,
+    expiresAt: Date.now() + 30 * 60 * 1000,
+  };
+  sessionStorage.setItem(SUBSCRIPTION_RENEWAL_CONTEXT_KEY, JSON.stringify(value));
+}
+
+export function loadSubscriptionRenewalContext(): SubscriptionRenewalContext | null {
+  const stored = sessionStorage.getItem(SUBSCRIPTION_RENEWAL_CONTEXT_KEY);
+  if (!stored) return null;
+
+  try {
+    const value = JSON.parse(stored) as Partial<SubscriptionRenewalContext>;
+    const valid = Boolean(
+      value.barbershopId &&
+      value.barbershopName &&
+      value.subscriptionIntentToken &&
+      value.expiresAt &&
+      value.expiresAt > Date.now(),
+    );
+    if (!valid) {
+      sessionStorage.removeItem(SUBSCRIPTION_RENEWAL_CONTEXT_KEY);
+      return null;
+    }
+    return value as SubscriptionRenewalContext;
+  } catch {
+    sessionStorage.removeItem(SUBSCRIPTION_RENEWAL_CONTEXT_KEY);
+    return null;
+  }
+}
+
+export function clearSubscriptionRenewalContext() {
+  sessionStorage.removeItem(SUBSCRIPTION_RENEWAL_CONTEXT_KEY);
+}
+
 export async function getBarbershopPlatformSubscription(): Promise<{
   subscription: PlatformSubscription | null;
   alert: PlatformSubscriptionAlert | null;
@@ -130,5 +179,32 @@ export async function subscribeBarbershopPlatformPlan(payload: SubscribePlatform
     },
   });
 
+  return data;
+}
+
+export async function reactivateBarbershopPlatformPlan(payload: {
+  barbershopId: string;
+  platformPlanId: string;
+  amount: number;
+  subscriptionIntentToken: string;
+  cardForm: CardFormData;
+  customer?: { name?: string; email?: string };
+}) {
+  const cardToken = await createPagarmeCardToken(payload.cardForm);
+  const { data } = await api.post(
+    `/barbershops/${payload.barbershopId}/reactivate-subscription`,
+    {
+      platformPlanId: payload.platformPlanId,
+      amount: payload.amount,
+      subscriptionIntentToken: payload.subscriptionIntentToken,
+      cardToken,
+      customer: {
+        name: payload.customer?.name ?? payload.cardForm.holderName,
+        email: payload.customer?.email ?? '',
+        document: payload.cardForm.document,
+        phone: payload.cardForm.phone,
+      },
+    },
+  );
   return data;
 }

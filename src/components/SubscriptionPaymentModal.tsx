@@ -3,7 +3,11 @@ import { X, CreditCard, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { subscribeBarbershopPlatformPlan, type PlatformPlan } from '@/service/platformSubscriptionService';
+import {
+  reactivateBarbershopPlatformPlan,
+  subscribeBarbershopPlatformPlan,
+  type PlatformPlan,
+} from '@/service/platformSubscriptionService';
 import { useAuth } from '@/hooks/useAuth';
 
 interface SubscriptionPaymentModalProps {
@@ -11,13 +15,26 @@ interface SubscriptionPaymentModalProps {
   plan: PlatformPlan | null;
   onClose: () => void;
   onSuccess: () => void;
+  reactivation?: {
+    barbershopId: string;
+    barbershopName: string;
+    subscriptionIntentToken: string;
+  };
+  onAuthorizationExpired?: () => void;
 }
 
 function formatCardNumber(value: string) {
   return value.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
 }
 
-export function SubscriptionPaymentModal({ isOpen, plan, onClose, onSuccess }: SubscriptionPaymentModalProps) {
+export function SubscriptionPaymentModal({
+  isOpen,
+  plan,
+  onClose,
+  onSuccess,
+  reactivation,
+  onAuthorizationExpired,
+}: SubscriptionPaymentModalProps) {
   const { user } = useAuth();
   const [processing, setProcessing] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -60,16 +77,30 @@ export function SubscriptionPaymentModal({ isOpen, plan, onClose, onSuccess }: S
     if (!plan) return;
     setProcessing(true);
     try {
-      await subscribeBarbershopPlatformPlan({
-        platformPlanId: plan.id,
-        amount,
-        cardForm: { ...cardForm, number: cardForm.number.replace(/\s/g, '') },
-        customer: { name: user?.name, email: user?.email },
-      });
-      toast.success('Assinatura criada com sucesso!');
+      const normalizedCardForm = { ...cardForm, number: cardForm.number.replace(/\s/g, '') };
+      if (reactivation) {
+        await reactivateBarbershopPlatformPlan({
+          barbershopId: reactivation.barbershopId,
+          platformPlanId: plan.id,
+          amount,
+          subscriptionIntentToken: reactivation.subscriptionIntentToken,
+          cardForm: normalizedCardForm,
+          customer: { name: cardForm.holderName },
+        });
+      } else {
+        await subscribeBarbershopPlatformPlan({
+          platformPlanId: plan.id,
+          amount,
+          cardForm: normalizedCardForm,
+          customer: { name: user?.name, email: user?.email },
+        });
+      }
+      toast.success(reactivation ? 'Assinatura renovada e acesso reativado!' : 'Assinatura criada com sucesso!');
       onSuccess();
       onClose();
     } catch (error: unknown) {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (reactivation && status === 401) onAuthorizationExpired?.();
       const msg =
         (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         (error as { message?: string })?.message ||
@@ -101,8 +132,11 @@ export function SubscriptionPaymentModal({ isOpen, plan, onClose, onSuccess }: S
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
             <CreditCard size={22} />
           </div>
-          <h2 className="text-lg font-semibold text-foreground">Finalizar assinatura</h2>
+          <h2 className="text-lg font-semibold text-foreground">
+            {reactivation ? 'Renovar assinatura' : 'Finalizar assinatura'}
+          </h2>
           <p className="text-sm text-muted-foreground">Assinatura recorrente mensal no cartão de crédito.</p>
+          {reactivation && <p className="text-xs font-medium text-primary">{reactivation.barbershopName}</p>}
         </div>
 
         {/* Resumo */}
@@ -234,7 +268,7 @@ export function SubscriptionPaymentModal({ isOpen, plan, onClose, onSuccess }: S
             </Button>
             <Button type="submit" className="flex-1 gap-2" disabled={processing}>
               {processing && <Spinner />}
-              {processing ? 'Criando assinatura...' : 'Confirmar assinatura'}
+              {processing ? 'Processando...' : reactivation ? 'Confirmar renovação' : 'Confirmar assinatura'}
             </Button>
           </div>
         </form>

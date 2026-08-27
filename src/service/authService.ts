@@ -10,13 +10,26 @@ function maskToken(token?: string) {
 
 export class TrialExpiredError extends Error {
   trialExpiredAt: string;
+  barbershopId: string;
+  barbershopSlug: string;
   barbershopName: string;
+  subscriptionIntentToken: string;
 
-  constructor(message: string, trialExpiredAt: string, barbershopName: string) {
-    super(message);
+  constructor(details: {
+    message: string;
+    trialExpiredAt: string;
+    barbershopId: string;
+    barbershopSlug: string;
+    barbershopName: string;
+    subscriptionIntentToken: string;
+  }) {
+    super(details.message);
     this.name = "TrialExpiredError";
-    this.trialExpiredAt = trialExpiredAt;
-    this.barbershopName = barbershopName;
+    this.trialExpiredAt = details.trialExpiredAt;
+    this.barbershopId = details.barbershopId;
+    this.barbershopSlug = details.barbershopSlug;
+    this.barbershopName = details.barbershopName;
+    this.subscriptionIntentToken = details.subscriptionIntentToken;
   }
 }
 
@@ -38,7 +51,10 @@ export interface AuthResponse {
   refreshToken: string;
   trialExpired?: boolean;
   trialExpiredAt?: string;
+  barbershopId?: string;
+  barbershopSlug?: string;
   barbershopName?: string;
+  subscriptionIntentToken?: string;
   message?: string;
   requiresProfileCompletion?: boolean;
   created?: boolean;
@@ -76,11 +92,14 @@ export async function login(data: LoginPayload) {
   const response = await api.post<AuthResponse>("/auth/login", data);
 
   if (response.data.trialExpired) {
-    throw new TrialExpiredError(
-      response.data.message ?? "Período de teste expirado.",
-      response.data.trialExpiredAt ?? new Date().toISOString(),
-      response.data.barbershopName ?? ""
-    );
+    throw new TrialExpiredError({
+      message: response.data.message ?? "Período de teste expirado.",
+      trialExpiredAt: response.data.trialExpiredAt ?? new Date().toISOString(),
+      barbershopId: response.data.barbershopId ?? "",
+      barbershopSlug: response.data.barbershopSlug ?? "",
+      barbershopName: response.data.barbershopName ?? "",
+      subscriptionIntentToken: response.data.subscriptionIntentToken ?? "",
+    });
   }
 
   const accessToken = response.data.accessToken || response.data.token || "";
