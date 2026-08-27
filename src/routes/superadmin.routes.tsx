@@ -7,6 +7,7 @@ import { SuperAdminReportsPage } from "../pages/super_admin/SuperAdminReportsPag
 import { SuperAdminAresChatPage } from "../pages/super_admin/SuperAdminAresChatPage";
 import { SuperAdminFeatureUpdatesPage } from "../pages/super_admin/SuperAdminFeatureUpdatesPage";
 import { SuperAdminLandingLeadsPage } from "../pages/super_admin/SuperAdminLandingLeadsPage";
+import { SuperAdminSubscriptionCalendarPage } from "../pages/super_admin/SuperAdminSubscriptionCalendarPage";
 import type { AppRoute } from "./types";
 
 export const superAdminRoutes: AppRoute[] = [
@@ -33,6 +34,12 @@ export const superAdminRoutes: AppRoute[] = [
     title: "Assinaturas",
     breadcrumbs: ["Super Admin", "Assinaturas"],
     Component: SuperAdminSubscriptionsPage,
+  },
+  {
+    path: "/subscription-calendar",
+    title: "Calendário de Cobranças",
+    breadcrumbs: ["Super Admin", "Calendário de Cobranças"],
+    Component: SuperAdminSubscriptionCalendarPage,
   },
   {
     path: "/platform-plans",

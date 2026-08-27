@@ -36,6 +36,29 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    const responseMessage = typeof error?.response?.data === "string"
+      ? error.response.data
+      : Array.isArray(error?.response?.data)
+        ? error.response.data.join(" ")
+        : String(error?.response?.data?.message || "");
+
+    if (
+      error?.response?.status === 403 &&
+      responseMessage.toLowerCase().includes("acesso indisponível para esta barbearia")
+    ) {
+      sessionStorage.setItem(
+        "accessBlockedMessage",
+        "O acesso da barbearia foi suspenso. Entre novamente para consultar e regularizar a assinatura."
+      );
+      localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("user");
+      localStorage.removeItem("barbershop");
+      if (window.location.pathname !== "/login") {
+        window.location.replace("/login");
+      }
+    }
+
     if (error?.response?.status === 401) {
       localStorage.removeItem("token");
       localStorage.removeItem("refreshToken");

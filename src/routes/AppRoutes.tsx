@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { ShieldOff } from "lucide-react";
 
 import { AppHeader } from "../components/shared/AppHeader";
+import { PlatformBillingAlertBanner } from "../components/PlatformBillingAlertBanner";
 import { getProfileConfig, normalizeRole } from "../config/profileConfig";
 import type { UserRole } from "../config/profileConfig";
 import { useAuth } from "../hooks/useAuth";
@@ -102,6 +103,7 @@ function PageShell({
         actionLabel={actionLabel}
         actionHref={actionHref}
       />
+      <PlatformBillingAlertBanner />
       <div className="p-6">
         {blocked ? (
           <AccessDenied permission={route.requiredPermission!} />

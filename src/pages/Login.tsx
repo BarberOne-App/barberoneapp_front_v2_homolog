@@ -82,6 +82,13 @@ export function Login() {
   const [showBarbershopDropdown, setShowBarbershopDropdown] = useState(false);
   const barbershopDropdownRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const blockedMessage = sessionStorage.getItem("accessBlockedMessage");
+    if (!blockedMessage) return;
+    sessionStorage.removeItem("accessBlockedMessage");
+    setErrorMessage(blockedMessage);
+  }, []);
+
   const hasBarbershopAlready = !!(pendingGoogleData?.barbershop || pendingGoogleData?.currentBarbershop);
 
   const filteredBarbershops = barbershopSearch.trim().length >= 1
@@ -236,9 +243,7 @@ export function Login() {
               </div>
               <h2 className="text-xl font-bold text-foreground">Acesso suspenso</h2>
               <p className="text-sm text-muted-foreground">
-                O período de teste da barbearia{" "}
-                <span className="font-semibold text-foreground">{trialExpired.barbershopName}</span>{" "}
-                expirou. Para continuar usando a plataforma, assine um plano.
+                {trialExpired.message}
               </p>
             </div>
 

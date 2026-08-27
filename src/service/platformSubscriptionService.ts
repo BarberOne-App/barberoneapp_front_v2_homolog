@@ -28,7 +28,18 @@ export interface PlatformSubscription {
   createdAt: string | null;
 }
 
-export async function getBarbershopPlatformSubscription(): Promise<{ subscription: PlatformSubscription | null }> {
+export interface PlatformSubscriptionAlert {
+  kind: 'trial_ending' | 'subscription_due' | 'subscription_ending';
+  severity: 'warning' | 'critical';
+  daysRemaining: number;
+  dueDate: string;
+  message: string;
+}
+
+export async function getBarbershopPlatformSubscription(): Promise<{
+  subscription: PlatformSubscription | null;
+  alert: PlatformSubscriptionAlert | null;
+}> {
   const { data } = await api.get('/pagarme/subscriptions/barbershop-platform-subscriptions/current');
   return data;
 }

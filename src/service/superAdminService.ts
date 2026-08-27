@@ -75,6 +75,50 @@ export interface SuperAdminBarbershop {
   };
 }
 
+export interface SuperAdminPlatformSubscriptionScheduleItem {
+  id: string;
+  barbershopId: string;
+  barbershopName: string;
+  barbershopStatus?: string | null;
+  subscriptionStatus: string;
+  platformPlanId?: string | null;
+  planName: string;
+  paymentMethod?: string | null;
+  amount?: number | null;
+  dueDate: string;
+  daysRemaining: number;
+}
+
+export type ManualPlatformPaymentMethod = "pix" | "cash";
+
+export interface ManualPlatformSubscriptionPayment {
+  id: string;
+  idempotencyKey: string;
+  barbershopId: string;
+  barbershopName?: string | null;
+  subscriptionId: string;
+  platformPlanId?: string | null;
+  planName?: string | null;
+  confirmedBy: string;
+  confirmedByName?: string | null;
+  paymentMethod: ManualPlatformPaymentMethod;
+  amount: number;
+  paidAt: string;
+  previousDueDate?: string | null;
+  nextBillingDate: string;
+  referenceCode?: string | null;
+  notes?: string | null;
+  receiptUrl?: string | null;
+  createdAt: string;
+}
+
+export interface SuperAdminPlatformSubscriptionAlerts {
+  days: number;
+  items: SuperAdminPlatformSubscriptionScheduleItem[];
+  upcomingCount: number;
+  overdueCount: number;
+}
+
 export interface SuperAdminBarbershopDetail extends SuperAdminBarbershop {
   updated_at?: string;
   stripe_connect_account_id?: string | null;
@@ -155,6 +199,27 @@ export async function getSuperAdminDashboard(): Promise<SuperAdminDashboard> {
   return response.data;
 }
 
+export async function getSuperAdminPlatformSubscriptionAlerts(
+  days = 7
+): Promise<SuperAdminPlatformSubscriptionAlerts> {
+  const response = await api.get<SuperAdminPlatformSubscriptionAlerts>(
+    "/super-admin/platform-subscriptions/alerts",
+    { params: { days } }
+  );
+  return response.data;
+}
+
+export async function getSuperAdminPlatformSubscriptionSchedule(params: {
+  from: string;
+  to: string;
+}): Promise<{ items: SuperAdminPlatformSubscriptionScheduleItem[] }> {
+  const response = await api.get<{ items: SuperAdminPlatformSubscriptionScheduleItem[] }>(
+    "/super-admin/platform-subscriptions/schedule",
+    { params }
+  );
+  return response.data;
+}
+
 /* ─── barbearias ─── */
 
 export async function listSuperAdminBarbershops(
@@ -209,6 +274,43 @@ export async function activatePixPlatformSubscription(
   const response = await api.post<SuperAdminPlatformSubscription>(
     `/super-admin/barbershops/${barbershopId}/platform-subscription/pix/activate`,
     payload
+  );
+  return response.data;
+}
+
+export async function registerManualPlatformSubscriptionPayment(
+  barbershopId: string,
+  payload: {
+    platformPlanId: string;
+    paymentMethod: ManualPlatformPaymentMethod;
+    amount: number;
+    paidAt?: string;
+    nextBillingDate?: string;
+    referenceCode?: string;
+    notes?: string;
+    receiptUrl?: string;
+    idempotencyKey: string;
+  }
+): Promise<{
+  subscription: SuperAdminPlatformSubscription;
+  payment: ManualPlatformSubscriptionPayment;
+  duplicated: boolean;
+}> {
+  const response = await api.post(
+    `/super-admin/barbershops/${barbershopId}/platform-subscription/payments`,
+    payload
+  );
+  return response.data;
+}
+
+export async function listManualPlatformSubscriptionPayments(params: {
+  barbershopId?: string;
+  page?: number;
+  limit?: number;
+} = {}): Promise<PaginatedResponse<ManualPlatformSubscriptionPayment>> {
+  const response = await api.get<PaginatedResponse<ManualPlatformSubscriptionPayment>>(
+    "/super-admin/platform-subscription-payments",
+    { params }
   );
   return response.data;
 }
