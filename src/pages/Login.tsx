@@ -248,22 +248,47 @@ export function Login() {
     }
   }
 
-  function handleSubscriptionRenewal() {
-    if (!trialExpired?.barbershopId || !trialExpired.subscriptionIntentToken) {
-      setTrialExpired(null);
-      setErrorMessage("Não foi possível iniciar a renovação. Entre novamente para gerar uma nova autorização.");
-      return;
-    }
+  // function handleSubscriptionRenewal() {
+  //   if (!trialExpired?.barbershopId || !trialExpired.subscriptionIntentToken) {
+  //     setTrialExpired(null);
+  //     setErrorMessage("Não foi possível iniciar a renovação. Entre novamente para gerar uma nova autorização.");
+  //     return;
+  //   }
 
-    saveSubscriptionRenewalContext({
-      barbershopId: trialExpired.barbershopId,
-      barbershopSlug: trialExpired.barbershopSlug,
-      barbershopName: trialExpired.barbershopName,
-      expiredAt: trialExpired.trialExpiredAt,
-      subscriptionIntentToken: trialExpired.subscriptionIntentToken,
-    });
-    navigate("/renew-subscription");
+  //   saveSubscriptionRenewalContext({
+  //     barbershopId: trialExpired.barbershopId,
+  //     barbershopSlug: trialExpired.barbershopSlug,
+  //     barbershopName: trialExpired.barbershopName,
+  //     expiredAt: trialExpired.trialExpiredAt,
+  //     subscriptionIntentToken: trialExpired.subscriptionIntentToken,
+  //   });
+  //   navigate("/renew-subscription");
+  // }
+
+  function handleSubscriptionRenewal() {
+  if (
+    !trialExpired?.barbershopId ||
+    !trialExpired.subscriptionIntentToken ||
+    !trialExpired.barbershopName ||
+    !trialExpired.trialExpiredAt
+  ) {
+    setTrialExpired(null);
+    setErrorMessage(
+      "Não foi possível iniciar a renovação. Entre novamente para gerar uma nova autorização."
+    );
+    return;
   }
+
+  saveSubscriptionRenewalContext({
+    barbershopId: trialExpired.barbershopId,
+    barbershopSlug: trialExpired.barbershopSlug,
+    barbershopName: trialExpired.barbershopName,
+    expiredAt: trialExpired.trialExpiredAt,
+    subscriptionIntentToken: trialExpired.subscriptionIntentToken,
+  });
+
+  navigate("/renew-subscription");
+}
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-6 py-10">
