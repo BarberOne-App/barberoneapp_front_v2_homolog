@@ -60,12 +60,18 @@ export function Login() {
   const [errorMessage, setErrorMessage] = useState("");
   const [trialExpired, setTrialExpired] = useState<{
     message: string;
-    barbershopId: string;
-    barbershopSlug: string;
-    barbershopName: string;
-    trialExpiredAt: string;
-    subscriptionIntentToken: string;
+    barbershopName?: string;
+    trialExpiredAt?: string;
+    barbershopId?: string;
+    barbershopSlug?: string;
+    subscriptionIntentToken?: string;
   } | null>(null);
+
+  // const [trialExpired, setTrialExpired] = useState<{
+  //   message: string;
+  //   barbershopName: string;
+  //   trialExpiredAt: string;
+  // } | null>(null);
 
   // pre-registration modal
   const [showCompleteModal, setShowCompleteModal] = useState(false);
@@ -97,14 +103,14 @@ export function Login() {
 
   const filteredBarbershops = barbershopSearch.trim().length >= 1
     ? allBarbershops.filter(s =>
-        s.name.toLowerCase().includes(barbershopSearch.toLowerCase()) ||
-        s.slug.toLowerCase().includes(barbershopSearch.toLowerCase())
-      )
+      s.name.toLowerCase().includes(barbershopSearch.toLowerCase()) ||
+      s.slug.toLowerCase().includes(barbershopSearch.toLowerCase())
+    )
     : allBarbershops;
 
   useEffect(() => {
     if (!showCompleteModal || hasBarbershopAlready) return;
-    api.get<BarbershopOption[]>("/barbershops/public").then(r => setAllBarbershops(r.data)).catch(() => {});
+    api.get<BarbershopOption[]>("/barbershops/public").then(r => setAllBarbershops(r.data)).catch(() => { });
   }, [showCompleteModal, hasBarbershopAlready]);
 
   useEffect(() => {
@@ -212,7 +218,9 @@ export function Login() {
       setErrorMessage("");
       await login(email.trim(), password);
       navigate("/", { replace: true });
-    } catch (err: unknown) {
+    }
+    catch (err: unknown) {
+
       if (err instanceof TrialExpiredError) {
         setTrialExpired({
           message: err.message,
@@ -224,6 +232,16 @@ export function Login() {
         });
         return;
       }
+
+      // if (err instanceof TrialExpiredError) {
+      //   setTrialExpired({
+      //     message: err.message,
+      //     barbershopName: err.barbershopName,
+      //     trialExpiredAt: err.trialExpiredAt,
+      //   });
+      //   return;
+      // }
+
       setErrorMessage(getErrorMessage(err));
     } finally {
       setLoading(false);
@@ -362,9 +380,8 @@ export function Login() {
                               setBarbershopSearch(shop.name);
                               setShowBarbershopDropdown(false);
                             }}
-                            className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-muted ${
-                              modalBarbershopSlug === shop.slug ? "bg-primary/10 font-semibold text-primary" : "text-foreground"
-                            }`}
+                            className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-muted ${modalBarbershopSlug === shop.slug ? "bg-primary/10 font-semibold text-primary" : "text-foreground"
+                              }`}
                           >
                             <Scissors className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                             <span>{shop.name}</span>

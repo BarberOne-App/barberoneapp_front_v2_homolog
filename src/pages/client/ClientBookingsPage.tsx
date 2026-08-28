@@ -327,7 +327,7 @@ export function ClientBookingsPage() {
 
   const selectedServices = useMemo(() => services.filter((s) => form.serviceIds.includes(s.id)), [form.serviceIds, services]);
   const totalDuration = useMemo(() => selectedServices.reduce((sum, s) => sum + getServiceDuration(s), 0), [selectedServices]);
-  const totalPrice = useMemo(() => selectedServices.reduce((sum, s) => sum + getServicePrice(s), 0), [selectedServices]);
+  // const totalPrice = useMemo(() => selectedServices.reduce((sum, s) => sum + getServicePrice(s), 0), [selectedServices]);
 
   const isFixedRule = subscriptionBarberRule === "fixed";
   const hasActiveSubscription =
@@ -400,21 +400,40 @@ export function ClientBookingsPage() {
   }, [appointments]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
+  const totalPrice = useMemo(() => {
+    return selectedServices.reduce((sum, service) => {
+      // Serviço coberto pelo plano não entra no total
+      if (isServiceCoveredByPlan(service)) {
+        return sum;
+      }
 
+      return sum + getServicePrice(service);
+    }, 0);
+  }, [selectedServices, isServiceCoveredByPlan]);
   function setField<K extends keyof BookingFormState>(key: K, value: BookingFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function toggleService(id: string, checked: boolean) {
-    const service = services.find((s) => s.id === id);
-    if (checked && hasActiveSubscriptionForBooking && service && !isServiceCoveredByPlan(service)) {
-      toast.error("Este servico nao esta coberto pelo seu plano.");
-      return;
-    }
+  // function toggleService(id: string, checked: boolean) {
+  //   const service = services.find((s) => s.id === id);
+  //   if (checked && hasActiveSubscriptionForBooking && service && !isServiceCoveredByPlan(service)) {
+  //     toast.error("Este serviço nao esta coberto pelo seu plano.");
+  //     return;
+  //   }
 
+  //   setForm((prev) => ({
+  //     ...prev,
+  //     serviceIds: checked ? [...prev.serviceIds, id] : prev.serviceIds.filter((s) => s !== id),
+  //     time: "",
+  //   }));
+  // }
+
+  function toggleService(id: string, checked: boolean) {
     setForm((prev) => ({
       ...prev,
-      serviceIds: checked ? [...prev.serviceIds, id] : prev.serviceIds.filter((s) => s !== id),
+      serviceIds: checked
+        ? [...prev.serviceIds, id]
+        : prev.serviceIds.filter((serviceId) => serviceId !== id),
       time: "",
     }));
   }
@@ -422,8 +441,8 @@ export function ClientBookingsPage() {
   function validateForm(): string | null {
     if (!form.barberId) return "Selecione o barbeiro.";
     if (!form.date) return "Selecione a data.";
-    if (form.serviceIds.length === 0) return "Selecione pelo menos um servico.";
-    if (!form.time) return "Selecione o horario.";
+    if (form.serviceIds.length === 0) return "Selecione pelo menos um serviço.";
+    if (!form.time) return "Selecione o horário.";
     return null;
   }
 
@@ -451,7 +470,16 @@ export function ClientBookingsPage() {
         date: form.date,
         time: form.time,
         notes: form.notes.trim() || null,
-        services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
+        services: selectedServices.map((service) => ({
+          id: service.id,
+          name: service.name,
+          basePrice: isServiceCoveredByPlan(service)
+            ? 0
+            : getServicePrice(service),
+          durationMinutes: service.durationMinutes,
+          quantity: 1,
+        })),
+        // services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
         products: [],
       });
 
@@ -485,7 +513,7 @@ export function ClientBookingsPage() {
       await loadAppointments();
     } catch (err) {
       if (isConflictError(err)) {
-        toast.error("Voce ja possui um agendamento neste horario. Confira seus agendamentos abaixo.");
+        toast.error("Voce ja possui um agendamento neste horário. Confira seus agendamentos abaixo.");
         await loadAppointments();
       } else {
         toast.error(getApiMessage(err));
@@ -507,7 +535,16 @@ export function ClientBookingsPage() {
         date: form.date,
         time: form.time,
         notes: form.notes.trim() || null,
-        services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
+        services: selectedServices.map((service) => ({
+          id: service.id,
+          name: service.name,
+          basePrice: isServiceCoveredByPlan(service)
+            ? 0
+            : getServicePrice(service),
+          durationMinutes: service.durationMinutes,
+          quantity: 1,
+        })),
+        // services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
         products: [],
       });
 
@@ -540,7 +577,7 @@ export function ClientBookingsPage() {
       await loadAppointments();
     } catch (err) {
       if (isConflictError(err)) {
-        toast.error("Voce ja possui um agendamento neste horario. Confira seus agendamentos abaixo.");
+        toast.error("Voce ja possui um agendamento neste horário. Confira seus agendamentos abaixo.");
         await loadAppointments();
       } else {
         toast.error(getApiMessage(err));
@@ -562,7 +599,16 @@ export function ClientBookingsPage() {
         date: form.date,
         time: form.time,
         notes: form.notes.trim() || null,
-        services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
+        services: selectedServices.map((service) => ({
+          id: service.id,
+          name: service.name,
+          basePrice: isServiceCoveredByPlan(service)
+            ? 0
+            : getServicePrice(service),
+          durationMinutes: service.durationMinutes,
+          quantity: 1,
+        })),
+        // services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
         products: [],
       });
 
@@ -601,7 +647,7 @@ export function ClientBookingsPage() {
       setPaymentOpen(true);
     } catch (err) {
       if (isConflictError(err)) {
-        toast.error("Voce ja possui um agendamento neste horario. Confira seus agendamentos abaixo.");
+        toast.error("Voce ja possui um agendamento neste horário. Confira seus agendamentos abaixo.");
         await loadAppointments();
       } else {
         toast.error(getApiMessage(err));
@@ -668,7 +714,7 @@ export function ClientBookingsPage() {
         rating: reviewRating,
         comment: reviewComment.trim() || null,
       });
-      toast.success("Avaliacao registrada.");
+      toast.success("Avaliação registrada.");
       setReviewAppointment(null);
       setReviewRating(5);
       setReviewComment("");
@@ -742,7 +788,7 @@ export function ClientBookingsPage() {
               </DropdownMenuContent>
             </DropdownMenu>
             <Button size="sm" className="gap-2" onClick={() => { setForm({ ...emptyForm, date: dateToDateString(new Date()), barberId: activeLockedBarberId ?? "" }); setBookingOpen(true); }}>
-              <Plus size={14} /> Marcar Horario
+              <Plus size={14} /> Marcar Horário
             </Button>
           </div>
         </div>
@@ -754,7 +800,7 @@ export function ClientBookingsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  {["Servico", "Data e Hora", "Barbeiro", "Valor", "Status"].map((col) => (
+                  {["Serviço", "Data e Hora", "Barbeiro", "Valor", "Status"].map((col) => (
                     <th key={col} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">{col}</th>
                   ))}
                   <th className="w-10 px-4 py-3" />
@@ -768,7 +814,7 @@ export function ClientBookingsPage() {
                 ) : (
                   filteredAppointments.map((appt) => {
                     const start = formatDateTime(appt.startAt);
-                    const serviceText = appt.services.map((s) => s.serviceName).join(", ") || "Sem servico";
+                    const serviceText = appt.services.map((s) => s.serviceName).join(", ") || "Sem serviço";
                     const barberName = appt.barber?.displayName || "Sem barbeiro";
                     const canCancel = appt.status === "scheduled" || appt.status === "confirmed";
                     const canReview = appt.status === "completed";
@@ -846,10 +892,10 @@ export function ClientBookingsPage() {
         )}
 
         <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <span>Pagina {page} de {totalPages} - {total} agendamentos</span>
+          <span>Página {page} de {totalPages} - {total} agendamentos</span>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>Anterior</Button>
-            <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Proxima</Button>
+            <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Próxima</Button>
           </div>
         </div>
       </div>
@@ -859,9 +905,9 @@ export function ClientBookingsPage() {
         <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-2xl">
           <form onSubmit={handleBookingSubmit} className="flex min-h-0 flex-1 flex-col gap-5">
             <DialogHeader className="flex-shrink-0">
-              <DialogTitle>Marcar Horario</DialogTitle>
+              <DialogTitle>Marcar Horário</DialogTitle>
               <DialogDescription>
-                Escolha o barbeiro, servico e um horario disponivel.
+                Escolha o barbeiro, serviço e um horário disponível.
               </DialogDescription>
             </DialogHeader>
 
@@ -880,8 +926,8 @@ export function ClientBookingsPage() {
                       className={cn(
                         "flex-1 min-w-[140px] px-4 py-2 text-sm font-medium rounded-lg border transition-all text-center",
                         !bookingForDependent
-                           ? "bg-primary/10 border-primary text-primary"
-                           : "bg-secondary/40 border-border text-foreground hover:bg-secondary"
+                          ? "bg-primary/10 border-primary text-primary"
+                          : "bg-secondary/40 border-border text-foreground hover:bg-secondary"
                       )}
                     >
                       Para mim ({user?.name})
@@ -940,81 +986,82 @@ export function ClientBookingsPage() {
               </div>
 
               <>
-              <div className="space-y-2">
-                <Label>Data</Label>
-                <AppCalendar value={dateStringToDate(form.date)} onChange={(d) => { setField("date", dateToDateString(d)); setField("time", ""); }} fromYear={new Date().getFullYear()} toYear={new Date().getFullYear() + 1} className="h-9 rounded-md" />
-              </div>
+                <div className="space-y-2">
+                  <Label>Data</Label>
+                  <AppCalendar value={dateStringToDate(form.date)} onChange={(d) => { setField("date", dateToDateString(d)); setField("time", ""); }} fromYear={new Date().getFullYear()} toYear={new Date().getFullYear() + 1} className="h-9 rounded-md" />
+                </div>
 
-              <div className="space-y-3 md:col-span-2">
-                <Label>Servicos</Label>
-                <div className="grid max-h-52 gap-2 overflow-y-auto rounded-md border border-border p-3 md:grid-cols-2">
-                  {services.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhum servico disponivel.</p>
-                  ) : (
-                    services.map((s) => {
-                      const isCovered = isServiceCoveredByPlan(s);
-                      const isOutOfPlanForSubscriber = hasActiveSubscriptionForBooking && !isCovered;
+                <div className="space-y-3 md:col-span-2">
+                  <Label>Serviços</Label>
+                  <div className="grid max-h-52 gap-2 overflow-y-auto rounded-md border border-border p-3 md:grid-cols-2">
+                    {services.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Nenhum serviço disponível.</p>
+                    ) : (
+                      services.map((s) => {
+                        const isCovered = isServiceCoveredByPlan(s);
+                        const isOutOfPlanForSubscriber = hasActiveSubscriptionForBooking && !isCovered;
 
-                      return (
-                        <label
-                          key={s.id}
-                          className={cn(
-                            "flex items-start gap-3 rounded-md p-2 text-sm",
-                            isOutOfPlanForSubscriber
-                              ? "cursor-not-allowed opacity-50"
-                              : "cursor-pointer hover:bg-secondary/60",
-                          )}
-                        >
-                          <Checkbox
-                            checked={form.serviceIds.includes(s.id)}
-                            disabled={isOutOfPlanForSubscriber}
-                            onCheckedChange={(c) => toggleService(s.id, c === true)}
-                          />
-                          <span className="min-w-0">
-                            <span className="flex flex-wrap items-center gap-2 font-medium text-foreground">
-                              {s.name}
-                              {isCovered && (
-                                <Badge className="border-emerald-500/20 bg-emerald-500/10 px-2 py-0 text-[11px] text-emerald-600 hover:bg-emerald-500/10">
-                                  Coberto pelo seu plano
-                                </Badge>
-                              )}
-                              {isOutOfPlanForSubscriber && (
-                                <Badge variant="outline" className="px-2 py-0 text-[11px]">
-                                  Fora do seu plano
-                                </Badge>
-                              )}
+                        return (
+                          <label
+                            key={s.id}
+                            className="flex cursor-pointer items-start gap-3 rounded-md p-2 text-sm hover:bg-secondary/60"
+                          // className={cn(
+                          //   "flex items-start gap-3 rounded-md p-2 text-sm",
+                          //   isOutOfPlanForSubscriber
+                          //     ? "cursor-not-allowed opacity-50"
+                          //     : "cursor-pointer hover:bg-secondary/60",
+                          // )}
+                          >
+                            <Checkbox
+                              checked={form.serviceIds.includes(s.id)}
+                              // disabled={isOutOfPlanForSubscriber}
+                              onCheckedChange={(c) => toggleService(s.id, c === true)}
+                            />
+                            <span className="min-w-0">
+                              <span className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+                                {s.name}
+                                {isCovered && (
+                                  <Badge className="border-emerald-500/20 bg-emerald-500/10 px-2 py-0 text-[11px] text-emerald-600 hover:bg-emerald-500/10">
+                                    Coberto pelo seu plano
+                                  </Badge>
+                                )}
+                                {isOutOfPlanForSubscriber && (
+                                  <Badge variant="outline" className="px-2 py-0 text-[11px]">
+                                    Fora do seu plano
+                                  </Badge>
+                                )}
+                              </span>
+                              <span className="block text-xs text-muted-foreground">{getServiceDuration(s)} min — {formatCurrency(getServicePrice(s))}</span>
                             </span>
-                            <span className="block text-xs text-muted-foreground">{getServiceDuration(s)} min — {formatCurrency(getServicePrice(s))}</span>
-                          </span>
-                        </label>
-                      );
-                    })
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                  {selectedServices.length > 0 && (
+                    <p className="text-xs text-muted-foreground text-right">
+                      Total: <span className="font-medium text-foreground">{formatCurrency(totalPrice)}</span>
+                    </p>
                   )}
                 </div>
-                {selectedServices.length > 0 && (
-                  <p className="text-xs text-muted-foreground text-right">
-                    Total: <span className="font-medium text-foreground">{formatCurrency(totalPrice)}</span>
-                  </p>
-                )}
-              </div>
 
-              <div className="space-y-2 md:col-span-2">
-                <Label>Horario</Label>
-                <Select value={form.time} onValueChange={(v) => setField("time", v)} disabled={!form.barberId || !form.date || totalDuration <= 0 || slotsLoading}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder={slotsLoading ? "Carregando horarios..." : "Selecionar horario"} /></SelectTrigger>
-                  <SelectContent>{slots.map((slot) => <SelectItem key={slot} value={slot}>{slot}</SelectItem>)}</SelectContent>
-                </Select>
-                {!slotsLoading && totalDuration > 0 && slots.length === 0 && form.barberId && form.date ? (
-                  <p className="text-xs text-muted-foreground">Nenhum horario disponivel. Tente outra data.</p>
-                ) : !slotsLoading && slots.length > 0 ? (
-                  <p className="text-xs text-muted-foreground">{slots.length} horarios disponiveis para {totalDuration} min.</p>
-                ) : null}
-              </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Horário</Label>
+                  <Select value={form.time} onValueChange={(v) => setField("time", v)} disabled={!form.barberId || !form.date || totalDuration <= 0 || slotsLoading}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder={slotsLoading ? "Carregando horários..." : "Selecionar horário"} /></SelectTrigger>
+                    <SelectContent>{slots.map((slot) => <SelectItem key={slot} value={slot}>{slot}</SelectItem>)}</SelectContent>
+                  </Select>
+                  {!slotsLoading && totalDuration > 0 && slots.length === 0 && form.barberId && form.date ? (
+                    <p className="text-xs text-muted-foreground">Nenhum horário disponível. Tente outra data.</p>
+                  ) : !slotsLoading && slots.length > 0 ? (
+                    <p className="text-xs text-muted-foreground">{slots.length} horários disponíveis para {totalDuration} min.</p>
+                  ) : null}
+                </div>
 
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="booking-notes">Observacoes</Label>
-                <Textarea id="booking-notes" value={form.notes} onChange={(e) => setField("notes", e.target.value)} placeholder="Opcional — Ex: preferencia de estilo, etc." />
-              </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="booking-notes">Observações</Label>
+                  <Textarea id="booking-notes" value={form.notes} onChange={(e) => setField("notes", e.target.value)} placeholder="Opcional — Ex: preferência de estilo, etc." />
+                </div>
               </>
             </div>
 
@@ -1031,7 +1078,7 @@ export function ClientBookingsPage() {
           <DialogHeader>
             <DialogTitle>Avaliar atendimento</DialogTitle>
             <DialogDescription>
-              Sua avaliacao sera enviada para a barbearia.
+              Sua avaliação será enviada para a barbearia.
             </DialogDescription>
           </DialogHeader>
 

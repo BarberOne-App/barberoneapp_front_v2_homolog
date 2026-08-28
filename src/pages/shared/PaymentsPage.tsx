@@ -56,7 +56,7 @@ const statusLabels: Record<PaymentStatus, string> = {
   paid: "Pago",
   failed: "Falhou",
   refunded: "Reembolsado",
-  covered: "Coberto",
+  covered: "Coberto pelo plano",
 };
 
 const statusStyles: Record<PaymentStatus, string> = {
@@ -155,7 +155,7 @@ function downloadCsv(payments: PaymentWithType[]) {
     getPaymentDescription(payment),
     String(payment.amount).replace(".", ","),
     methodLabels[payment.method] || payment.method,
-    statusLabels[payment.status] || payment.status,
+    statusLabels[getDisplayStatus(payment)] || getDisplayStatus(payment),
     formatDateTime(payment.paidAt || payment.createdAt),
   ]);
 
@@ -170,6 +170,12 @@ function downloadCsv(payments: PaymentWithType[]) {
   link.download = "pagamentos.csv";
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function getDisplayStatus(payment: PaymentWithType): PaymentStatus {
+  return payment.method === "subscription"
+    ? "covered"
+    : payment.status;
 }
 
 export function PaymentsPage() {
@@ -230,7 +236,7 @@ export function PaymentsPage() {
           getPaymentDescription(payment),
           payment.appointment?.barber?.displayName,
           methodLabels[payment.method],
-          statusLabels[payment.status],
+          statusLabels[getDisplayStatus(payment)],
         ]
           .filter(Boolean)
           .join(" "),
@@ -462,113 +468,140 @@ export function PaymentsPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredPayments.map((payment) => (
-                    <tr
-                      key={payment.id}
-                      className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
-                    >
-                      <td className="p-4">
-                        <Checkbox
-                          checked={selectedRows.includes(payment.id)}
-                          onCheckedChange={() => toggleRow(payment.id)}
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <p className="text-sm font-medium text-foreground">
-                            {payment.user?.name || "Cliente"}
-                          </p>
-                          <p className="text-xs text-muted-foreground">#{payment.id.slice(0, 8)}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <p className="text-sm font-medium text-foreground">
-                            {getPaymentDescription(payment)}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {typeLabels[payment.paymentType]}
-                            {payment.appointment?.barber?.displayName
-                              ? ` - ${payment.appointment.barber.displayName}`
-                              : ""}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-foreground">
-                        {formatCurrency(payment.amount)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 text-sm text-foreground">
-                          <CreditCard size={14} className="text-muted-foreground" />
-                          {methodLabels[payment.method] || payment.method}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Calendar size={14} />
-                          {formatDateTime(payment.paidAt || payment.createdAt)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge
-                          variant="outline"
-                          className={`rounded-full px-2 py-0.5 text-xs ${statusStyles[payment.status]}`}
-                        >
-                          {(payment.status === "paid" || payment.status === "approved") && (
-                            <CheckCircle size={12} className="mr-1 inline" />
-                          )}
-                          {statusLabels[payment.status] || payment.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              className="p-1 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                              disabled={updatingId === payment.id}
-                            >
-                              {updatingId === payment.id ? (
-                                <Loader2 size={16} className="animate-spin" />
-                              ) : (
-                                <MoreHorizontal size={16} />
+                  filteredPayments.map((payment) => {
+                    const displayStatus = getDisplayStatus(payment);
+
+                    return (
+                      <tr
+                        key={payment.id}
+                        className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
+                      >
+                        <td className="p-4">
+                          <Checkbox
+                            checked={selectedRows.includes(payment.id)}
+                            onCheckedChange={() => toggleRow(payment.id)}
+                          />
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">
+                              {payment.user?.name || "Cliente"}
+                            </p>
+
+                            <p className="text-xs text-muted-foreground">
+                              #{payment.id.slice(0, 8)}
+                            </p>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">
+                              {getPaymentDescription(payment)}
+                            </p>
+
+                            <p className="text-xs text-muted-foreground">
+                              {typeLabels[payment.paymentType]}
+
+                              {payment.appointment?.barber?.displayName
+                                ? ` - ${payment.appointment.barber.displayName}`
+                                : ""}
+                            </p>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 text-sm font-medium text-foreground">
+                          {formatCurrency(payment.amount)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-sm text-foreground">
+                            <CreditCard size={14} className="text-muted-foreground" />
+
+                            {methodLabels[payment.method] || payment.method}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Calendar size={14} />
+
+                            {formatDateTime(payment.paidAt || payment.createdAt)}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant="outline"
+                            className={`rounded-full px-2 py-0.5 text-xs ${statusStyles[displayStatus]
+                              }`}
+                          >
+                            {(displayStatus === "paid" ||
+                              displayStatus === "approved" ||
+                              displayStatus === "covered") && (
+                                <CheckCircle size={12} className="mr-1 inline" />
                               )}
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              disabled={payment.status === "paid"}
-                              onClick={() => changePaymentStatus(payment, "paid")}
-                            >
-                              <CheckCircle size={14} />
-                              Marcar como pago
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              disabled={payment.status === "pending"}
-                              onClick={() => changePaymentStatus(payment, "pending")}
-                            >
-                              <RefreshCcw size={14} />
-                              Marcar pendente
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              disabled={payment.status === "failed"}
-                              onClick={() => changePaymentStatus(payment, "failed")}
-                            >
-                              <XCircle size={14} />
-                              Marcar falha
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              disabled={payment.status === "refunded"}
-                              onClick={() => changePaymentStatus(payment, "refunded")}
-                            >
-                              <RefreshCcw size={14} />
-                              Marcar reembolso
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
-                  ))
+
+                            {statusLabels[displayStatus] || displayStatus}
+                          </Badge>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                className="p-1 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                                disabled={updatingId === payment.id}
+                              >
+                                {updatingId === payment.id ? (
+                                  <Loader2 size={16} className="animate-spin" />
+                                ) : (
+                                  <MoreHorizontal size={16} />
+                                )}
+                              </button>
+                            </DropdownMenuTrigger>
+
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                disabled={payment.status === "paid"}
+                                onClick={() => changePaymentStatus(payment, "paid")}
+                              >
+                                <CheckCircle size={14} />
+                                Marcar como pago
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                disabled={payment.status === "pending"}
+                                onClick={() => changePaymentStatus(payment, "pending")}
+                              >
+                                <RefreshCcw size={14} />
+                                Marcar pendente
+                              </DropdownMenuItem>
+
+                              <DropdownMenuSeparator />
+
+                              <DropdownMenuItem
+                                disabled={payment.status === "failed"}
+                                onClick={() => changePaymentStatus(payment, "failed")}
+                              >
+                                <XCircle size={14} />
+                                Marcar falha
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                disabled={payment.status === "refunded"}
+                                onClick={() => changePaymentStatus(payment, "refunded")}
+                              >
+                                <RefreshCcw size={14} />
+                                Marcar reembolso
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -624,11 +657,10 @@ export function PaymentsPage() {
                 key={value}
                 type="button"
                 onClick={() => setSelectedLocalMethod(value)}
-                className={`rounded-lg border px-4 py-3 text-sm font-medium transition-colors ${
-                  selectedLocalMethod === value
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-card text-foreground hover:bg-secondary/50"
-                }`}
+                className={`rounded-lg border px-4 py-3 text-sm font-medium transition-colors ${selectedLocalMethod === value
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-card text-foreground hover:bg-secondary/50"
+                  }`}
               >
                 {label}
               </button>
