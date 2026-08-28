@@ -13,14 +13,6 @@ import axios from "axios";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type PendingBarbershopSubscription = {
-  mode: "reactivate";
-  barbershopId: string;
-  barbershopSlug?: string;
-  barbershopName?: string;
-  subscriptionIntentToken?: string;
-};
-
 interface Plan {
   id: string;
   name: string;
@@ -149,30 +141,6 @@ async function apiSubscribe(
     { platformPlanId: planId, cardToken, amount, barbershopId: barbershop?.id, customer },
     { headers: { Authorization: `Bearer ${token}` } },
   );
-}
-
-async function apiReactivateSubscribe(
-  planId: string,
-  cardToken: string,
-  amount: number,
-  params: {
-    barbershopId: string;
-    subscriptionIntentToken: string;
-    customer: {
-      name: string;
-      email?: string;
-      document: string;
-      phone: string;
-    };
-  }
-) {
-  await api.post(`/barbershops/${params.barbershopId}/reactivate-subscription`, {
-    platformPlanId: planId,
-    cardToken,
-    amount,
-    subscriptionIntentToken: params.subscriptionIntentToken,
-    customer: params.customer,
-  });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -462,32 +430,10 @@ function RegisterModal({ plan, onClose, onRegistered }: {
 
 // ─── Subscription Payment Modal ────────────────────────────────────────────────
 
-// function SubscriptionPaymentModal({ plan, customerName, customerEmail, onClose, onSuccess, onFreeTrial }: {
-//   plan: Plan;
-//   customerName: string;
-//   customerEmail: string;
-//   onClose: () => void;
-//   onSuccess: () => void;
-//   onFreeTrial?: () => void;
-function SubscriptionPaymentModal({
-  plan,
-  customerName,
-  customerEmail,
-  mode = "subscribe",
-  barbershopId,
-  barbershopName,
-  subscriptionIntentToken,
-  onClose,
-  onSuccess,
-  onFreeTrial,
-}: {
+function SubscriptionPaymentModal({ plan, customerName, customerEmail, onClose, onSuccess, onFreeTrial }: {
   plan: Plan;
   customerName: string;
   customerEmail: string;
-  mode?: "subscribe" | "reactivate";
-  barbershopId?: string;
-  barbershopName?: string;
-  subscriptionIntentToken?: string;
   onClose: () => void;
   onSuccess: () => void;
   onFreeTrial?: () => void;
@@ -498,7 +444,6 @@ function SubscriptionPaymentModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const isReactivationFlow = mode === "reactivate";
 
   const handleChange = (field: keyof CardForm, value: string) => setCard((p) => ({ ...p, [field]: value }));
 
@@ -516,32 +461,12 @@ function SubscriptionPaymentModal({
     try {
       setLoading(true);
       const cardToken = await apiTokenizeCard(card);
-      // await apiSubscribe(plan.id, cardToken, plan.price, {
-      //   name: customerName,
-      //   email: customerEmail,
-      //   document: card.document.replace(/\D/g, ""),
-      //   phone: card.phone.replace(/\D/g, ""),
-      // });
-      const customer = {
-        name: customerName || barbershopName || "Cliente BarberOne",
-        email: customerEmail || "",
+      await apiSubscribe(plan.id, cardToken, plan.price, {
+        name: customerName,
+        email: customerEmail,
         document: card.document.replace(/\D/g, ""),
         phone: card.phone.replace(/\D/g, ""),
-      };
-
-      if (isReactivationFlow) {
-        if (!barbershopId || !subscriptionIntentToken) {
-          throw new Error("Dados de reativação não encontrados. Faça login novamente.");
-        }
-
-        await apiReactivateSubscribe(plan.id, cardToken, plan.price, {
-          barbershopId,
-          subscriptionIntentToken,
-          customer,
-        });
-      } else {
-        await apiSubscribe(plan.id, cardToken, plan.price, customer);
-      }
+      });
       setSuccess(true);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.response?.data?.error || err?.message || "Não foi possível processar o pagamento. Verifique os dados e tente novamente.");
@@ -710,16 +635,7 @@ function PlanCardSkeleton() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-// interface PaymentCtx { plan: Plan; customerName: string; customerEmail: string; }
-interface PaymentCtx {
-  plan: Plan;
-  customerName: string;
-  customerEmail: string;
-  mode?: "subscribe" | "reactivate";
-  barbershopId?: string;
-  barbershopName?: string;
-  subscriptionIntentToken?: string;
-}
+interface PaymentCtx { plan: Plan; customerName: string; customerEmail: string; }
 
 export function LandingPage() {
   const navigate = useNavigate();
@@ -730,9 +646,6 @@ export function LandingPage() {
   const [plansError, setPlansError] = useState("");
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [paymentCtx, setPaymentCtx] = useState<PaymentCtx | null>(null);
-  const [pendingSubscription, setPendingSubscription] =
-    useState<PendingBarbershopSubscription | null>(null);
-
   const [leadModalOpen, setLeadModalOpen] = useState(false);
 
   useEffect(() => {
@@ -757,57 +670,6 @@ export function LandingPage() {
     }
   }, [state]);
 
-  useEffect(() => {
-    const stateBarbershop = (state as any)?.barbershop;
-
-    if (stateBarbershop?.mode === "reactivate" && stateBarbershop?.barbershopId) {
-      setPendingSubscription(stateBarbershop);
-      sessionStorage.setItem(
-        "pendingBarbershopSubscription",
-        JSON.stringify(stateBarbershop)
-      );
-      return;
-    }
-
-    const raw = sessionStorage.getItem("pendingBarbershopSubscription");
-
-    if (!raw) return;
-
-    try {
-      const parsed = JSON.parse(raw) as PendingBarbershopSubscription;
-
-      if (parsed?.mode === "reactivate" && parsed.barbershopId) {
-        setPendingSubscription(parsed);
-      }
-    } catch {
-      sessionStorage.removeItem("pendingBarbershopSubscription");
-    }
-  }, [state]);
-
-  function handleSelectPlan(plan: Plan) {
-    if (isReactivationFlow && pendingSubscription) {
-      setSelectedPlan(null);
-
-      setPaymentCtx({
-        plan,
-        mode: "reactivate",
-        customerName: pendingSubscription.barbershopName || "Cliente BarberOne",
-        customerEmail: "",
-        barbershopId: pendingSubscription.barbershopId,
-        barbershopName: pendingSubscription.barbershopName,
-        subscriptionIntentToken: pendingSubscription.subscriptionIntentToken,
-      });
-
-      return;
-    }
-
-    setSelectedPlan(plan);
-  }
-
-  const isReactivationFlow =
-    pendingSubscription?.mode === "reactivate" &&
-    Boolean(pendingSubscription.barbershopId);
-
   const goLogin = () => navigate("/login");
 
   const onRegistered = (plan: Plan, result: RegisterResult) => {
@@ -815,19 +677,7 @@ export function LandingPage() {
     setPaymentCtx({ plan, customerName: result.user.name, customerEmail: result.user.email });
   };
 
-  const onSubscriptionSuccess = () => {
-    const wasReactivation = paymentCtx?.mode === "reactivate";
-
-    setPaymentCtx(null);
-
-    if (wasReactivation) {
-      sessionStorage.removeItem("pendingBarbershopSubscription");
-    }
-
-    navigate("/login");
-  };
-
-  // const onSubscriptionSuccess = () => { setPaymentCtx(null); navigate("/login"); };
+  const onSubscriptionSuccess = () => { setPaymentCtx(null); navigate("/login"); };
 
   return (
     <div id="topo" className="bg-black min-h-screen">
@@ -1041,21 +891,6 @@ export function LandingPage() {
             <p className="text-neutral-400">Todos incluem agendamento online, cadastro de clientes e recorrência.</p>
           </div>
 
-          {isReactivationFlow && pendingSubscription && (
-            <div className="mb-8 rounded-xl border border-orange-500/30 bg-orange-500/10 px-5 py-4 text-left">
-              <p className="text-sm font-semibold text-orange-400">
-                Reativação de barbearia existente
-              </p>
-              <p className="mt-1 text-sm text-neutral-300">
-                Você está assinando um plano para liberar novamente o acesso da barbearia{" "}
-                <strong className="text-white">
-                  {pendingSubscription.barbershopName || "selecionada"}
-                </strong>
-                . Nenhuma nova barbearia será criada.
-              </p>
-            </div>
-          )}
-
           {plansError ? (
             <p className="text-center text-red-400 py-8 bg-red-500/5 border border-red-500/20 rounded-xl">{plansError}</p>
           ) : (
@@ -1094,10 +929,8 @@ export function LandingPage() {
                           ))}
                         </ul>
                       )}
-                      <button onClick={() => handleSelectPlan(plan)} className={`w-full py-3 rounded-lg text-sm transition-all ${styles.btn}`}>
-                        {/* <button onClick={() => setSelectedPlan(plan)} className={`w-full py-3 rounded-lg text-sm transition-all ${styles.btn}`}> */}
-                        {/* Assinar {plan.name} */}
-                        {isReactivationFlow ? "Reativar com este plano" : "Começar agora"}
+                      <button onClick={() => setSelectedPlan(plan)} className={`w-full py-3 rounded-lg text-sm transition-all ${styles.btn}`}>
+                        Assinar {plan.name}
                       </button>
                     </article>
                   );
@@ -1199,7 +1032,7 @@ export function LandingPage() {
         <RegisterModal plan={selectedPlan} onClose={() => setSelectedPlan(null)}
           onRegistered={(result) => onRegistered(selectedPlan, result)} />
       )}
-      {/* {paymentCtx && (
+      {paymentCtx && (
         <SubscriptionPaymentModal
           plan={paymentCtx.plan}
           customerName={paymentCtx.customerName}
@@ -1207,27 +1040,6 @@ export function LandingPage() {
           onClose={() => setPaymentCtx(null)}
           onSuccess={onSubscriptionSuccess}
           onFreeTrial={() => { setPaymentCtx(null); navigate("/login"); }}
-        />
-      )} */}
-      {paymentCtx && (
-        <SubscriptionPaymentModal
-          plan={paymentCtx.plan}
-          customerName={paymentCtx.customerName}
-          customerEmail={paymentCtx.customerEmail}
-          mode={paymentCtx.mode}
-          barbershopId={paymentCtx.barbershopId}
-          barbershopName={paymentCtx.barbershopName}
-          subscriptionIntentToken={paymentCtx.subscriptionIntentToken}
-          onClose={() => setPaymentCtx(null)}
-          onSuccess={onSubscriptionSuccess}
-          onFreeTrial={
-            paymentCtx.mode === "reactivate"
-              ? undefined
-              : () => {
-                setPaymentCtx(null);
-                navigate("/login");
-              }
-          }
         />
       )}
     </div>

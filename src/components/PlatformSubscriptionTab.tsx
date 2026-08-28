@@ -16,14 +16,6 @@ import { getBarbershopProfile } from '@/service/barbershopProfileService';
 
 const TRIAL_PERIOD_DAYS = 14;
 
-type PendingBarbershopSubscription = {
-  mode: 'reactivate';
-  barbershopId: string;
-  barbershopSlug?: string;
-  barbershopName?: string;
-  subscriptionIntentToken?: string;
-};
-
 function isActivePlatformSubscription(sub: PlatformSubscription | null): boolean {
   if (!sub) return false;
   const status = String(sub.status || '').trim().toLowerCase().replace('canceled', 'cancelled');
@@ -112,8 +104,6 @@ export function PlatformSubscriptionTab() {
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [changePlanTarget, setChangePlanTarget] = useState<PlatformPlan | null>(null);
   const [trialInfo, setTrialInfo] = useState<{ daysLeft: number; trialEndsAt: Date } | null>(null);
-  const [pendingSubscription, setPendingSubscription] =
-    useState<PendingBarbershopSubscription | null>(null);
 
   const loadSubscription = useCallback(async () => {
     setLoadingSubscription(true);
@@ -142,90 +132,22 @@ export function PlatformSubscriptionTab() {
   }, []);
 
   useEffect(() => {
-    const rawPendingSubscription = sessionStorage.getItem('pendingBarbershopSubscription');
-
-    if (rawPendingSubscription) {
-      try {
-        const parsed = JSON.parse(rawPendingSubscription) as PendingBarbershopSubscription;
-
-        if (parsed?.mode === 'reactivate' && parsed.barbershopId) {
-          setPendingSubscription(parsed);
-
-          // Nesse fluxo o usuário veio do login bloqueado por trial expirado.
-          // Então não tentamos carregar assinatura atual via token normal.
-          setCurrentSub(null);
-          setTrialInfo(null);
-          setLoadingSubscription(false);
-
-          loadPlans();
-          return;
-        }
-      } catch {
-        sessionStorage.removeItem('pendingBarbershopSubscription');
-      }
-    }
-
     loadSubscription();
     loadPlans();
-
     getBarbershopProfile()
       .then((profile) => {
         const info = computeTrialInfo(profile.createdAt, profile.platformSubscriptionStatus);
         setTrialInfo(info);
       })
-      .catch(() => { });
+      .catch(() => {});
   }, [loadSubscription, loadPlans]);
 
-  // useEffect(() => {
-  //   loadSubscription();
-  //   loadPlans();
-  //   getBarbershopProfile()
-  //     .then((profile) => {
-  //       const info = computeTrialInfo(profile.createdAt, profile.platformSubscriptionStatus);
-  //       setTrialInfo(info);
-  //     })
-  //     .catch(() => { });
-  // }, [loadSubscription, loadPlans]);
-
-  // const normalizedStatus = currentSub ? normalizeStatus(currentSub.status) : '';
-  // const hasActiveSub = isActivePlatformSubscription(currentSub);
-  // const isCurrentPlan = (plan: PlatformPlan) => hasActiveSub && currentSub?.plan?.id === plan.id;
-
   const normalizedStatus = currentSub ? normalizeStatus(currentSub.status) : '';
-
-  const isExpiredLikeStatus = ['expired', 'cancelled', 'paused', 'past_due'].includes(normalizedStatus);
-
   const hasActiveSub = isActivePlatformSubscription(currentSub);
-
-  const hasCurrentPlatformPlan =
-    Boolean(currentSub) &&
-    !isExpiredLikeStatus &&
-    currentSub?.canceledAt === null;
-
-  const isCurrentPlan = (plan: PlatformPlan) =>
-    hasCurrentPlatformPlan && currentSub?.plan?.id === plan.id;
-
-  const isReactivationFlow =
-    pendingSubscription?.mode === 'reactivate' && Boolean(pendingSubscription.barbershopId);
-
-  // function handleSelectPlan(plan: PlatformPlan, upgrade: boolean) {
-  //   if (upgrade) { setChangePlanTarget(plan); return; }
-  //   setSelectedPlan(plan);
-  //   setPaymentModalOpen(true);
-  // }
+  const isCurrentPlan = (plan: PlatformPlan) => hasActiveSub && currentSub?.plan?.id === plan.id;
 
   function handleSelectPlan(plan: PlatformPlan, upgrade: boolean) {
-    if (isReactivationFlow) {
-      setSelectedPlan(plan);
-      setPaymentModalOpen(true);
-      return;
-    }
-
-    if (upgrade) {
-      setChangePlanTarget(plan);
-      return;
-    }
-
+    if (upgrade) { setChangePlanTarget(plan); return; }
     setSelectedPlan(plan);
     setPaymentModalOpen(true);
   }
@@ -282,29 +204,11 @@ export function PlatformSubscriptionTab() {
       {/* Card de assinatura atual */}
       <div className="bg-card rounded-xl border border-border p-6">
         <div className="mb-4 flex items-center justify-between gap-3">
-          {isReactivationFlow && (
-            <div className="flex items-start gap-3 rounded-xl border border-primary/40 bg-primary/10 px-5 py-4">
-              <AlertTriangle size={18} className="mt-0.5 shrink-0 text-primary" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-foreground">
-                  Reativação de barbearia existente
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Você está assinando um plano para liberar novamente o acesso da barbearia{' '}
-                  <strong>{pendingSubscription?.barbershopName || 'selecionada'}</strong>.
-                  Nenhuma nova barbearia será criada.
-                </p>
-              </div>
-            </div>
-          )}
           <h3 className="text-lg font-medium text-foreground">Assinatura da plataforma</h3>
           {!loadingSubscription && !subscriptionError && currentSub && (
-            <Badge variant={STATUS_VARIANT[normalizedStatus] ?? 'outline'}>
-              {STATUS_LABEL[normalizedStatus] ?? currentSub.status}
+            <Badge variant={hasActiveSub ? (STATUS_VARIANT[normalizedStatus] ?? 'default') : 'destructive'}>
+              {hasActiveSub ? (STATUS_LABEL[normalizedStatus] ?? currentSub.status) : 'Expirado'}
             </Badge>
-            // <Badge variant={hasActiveSub ? (STATUS_VARIANT[normalizedStatus] ?? 'default') : 'destructive'}>
-            //   {hasActiveSub ? (STATUS_LABEL[normalizedStatus] ?? currentSub.status) : 'Expirado'}
-            // </Badge>
           )}
           {!loadingSubscription && !subscriptionError && !currentSub && (
             <Badge variant="outline">Sem assinatura</Badge>
@@ -340,8 +244,8 @@ export function PlatformSubscriptionTab() {
                   {currentSub.plan?.price != null
                     ? `${formatCurrency(currentSub.plan.price)}/mês`
                     : currentSub.amount != null
-                      ? `${formatCurrency(currentSub.amount)}/mês`
-                      : '-'}
+                    ? `${formatCurrency(currentSub.amount)}/mês`
+                    : '-'}
                 </p>
               </div>
               <div>
@@ -401,12 +305,7 @@ export function PlatformSubscriptionTab() {
       {/* Grid de planos */}
       <div className="bg-card rounded-xl border border-border p-6">
         <h3 className="text-lg font-medium text-foreground mb-4">
-          {isReactivationFlow
-            ? `Reativar ${pendingSubscription?.barbershopName || 'barbearia'}`
-            : hasCurrentPlatformPlan
-              ? 'Seu plano'
-              : 'Escolha seu plano'}
-          {/* {hasActiveSub ? 'Fazer upgrade de plano' : 'Escolha seu plano'} */}
+          {hasActiveSub ? 'Fazer upgrade de plano' : 'Escolha seu plano'}
         </h3>
 
         {loadingPlans ? (
@@ -431,20 +330,19 @@ export function PlatformSubscriptionTab() {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {plans.map((plan) => {
               const isCurrent = isCurrentPlan(plan);
-              // const canSubscribe = !hasActiveSub;
-              // const canUpgrade = hasActiveSub && !isCurrent;
-              const canSubscribe = isReactivationFlow || !hasCurrentPlatformPlan;
-              const canUpgrade = !isReactivationFlow && hasCurrentPlatformPlan && !isCurrent;
+              const canSubscribe = !hasActiveSub;
+              const canUpgrade = hasActiveSub && !isCurrent;
 
               return (
                 <div
                   key={plan.id}
-                  className={`relative flex flex-col rounded-xl border p-5 transition-all ${isCurrent
-                    ? 'border-primary bg-primary/5'
-                    : plan.isRecommended
+                  className={`relative flex flex-col rounded-xl border p-5 transition-all ${
+                    isCurrent
+                      ? 'border-primary bg-primary/5'
+                      : plan.isRecommended
                       ? 'border-primary/40 bg-card'
                       : 'border-border bg-card'
-                    }`}
+                  }`}
                   style={plan.color ? { borderColor: plan.color } : undefined}
                 >
                   {plan.isRecommended && !isCurrent && (
@@ -498,8 +396,7 @@ export function PlatformSubscriptionTab() {
                       </span>
                     ) : canSubscribe ? (
                       <Button className="w-full" onClick={() => handleSelectPlan(plan, false)}>
-                        {/* Assinar plano */}
-                        {isReactivationFlow ? 'Reativar com este plano' : 'Assinar plano'}
+                        Assinar plano
                       </Button>
                     ) : canUpgrade ? (
                       <Button variant="outline" className="w-full" onClick={() => handleSelectPlan(plan, true)}>
@@ -552,26 +449,8 @@ export function PlatformSubscriptionTab() {
       <SubscriptionPaymentModal
         isOpen={paymentModalOpen}
         plan={selectedPlan}
-        mode={isReactivationFlow ? 'reactivate' : 'subscribe'}
-        barbershopId={pendingSubscription?.barbershopId}
-        barbershopName={pendingSubscription?.barbershopName}
-        subscriptionIntentToken={pendingSubscription?.subscriptionIntentToken}
-        onClose={() => {
-          setPaymentModalOpen(false);
-          setSelectedPlan(null);
-        }}
-        onSuccess={async () => {
-          if (isReactivationFlow) {
-            sessionStorage.removeItem('pendingBarbershopSubscription');
-            setPendingSubscription(null);
-          }
-
-          await loadSubscription();
-        }}
-      // isOpen={paymentModalOpen}
-      // plan={selectedPlan}
-      // onClose={() => { setPaymentModalOpen(false); setSelectedPlan(null); }}
-      // onSuccess={loadSubscription}
+        onClose={() => { setPaymentModalOpen(false); setSelectedPlan(null); }}
+        onSuccess={loadSubscription}
       />
     </div>
   );

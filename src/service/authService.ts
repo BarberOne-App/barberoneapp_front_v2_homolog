@@ -8,18 +8,6 @@ function maskToken(token?: string) {
   return `${token.slice(0, 8)}...${token.slice(-4)}`;
 }
 
-// export class TrialExpiredError extends Error {
-//   trialExpiredAt: string;
-//   barbershopName: string;
-
-//   constructor(message: string, trialExpiredAt: string, barbershopName: string) {
-//     super(message);
-//     this.name = "TrialExpiredError";
-//     this.trialExpiredAt = trialExpiredAt;
-//     this.barbershopName = barbershopName;
-//   }
-// }
-
 export class TrialExpiredError extends Error {
   trialExpiredAt: string;
   barbershopId: string;
@@ -57,46 +45,10 @@ export interface RegisterPayload {
   password: string;
 }
 
-// export interface AuthResponse {
-//   accessToken?: string;
-//   token?: string;
-//   refreshToken: string;
-//   trialExpired?: boolean;
-//   trialExpiredAt?: string;
-//   barbershopName?: string;
-//   message?: string;
-//   requiresProfileCompletion?: boolean;
-//   created?: boolean;
-//   user: {
-//     id: string;
-//     name: string;
-//     email: string;
-//     role?: string;
-//     isAdmin?: boolean;
-//     photoUrl?: string | null;
-//     permissions?: Record<string, boolean> | null;
-//   };
-//   barbershop?: {
-//     id: string;
-//     name: string;
-//     slug: string;
-//     status?: string;
-//     logoUrl?: string;
-//   } | null;
-//   currentBarbershop?: {
-//     id: string;
-//     name: string;
-//     slug: string;
-//     status?: string;
-//     logoUrl?: string;
-//   } | null;
-// }
-
 export interface AuthResponse {
   accessToken?: string;
   token?: string;
   refreshToken: string;
-
   trialExpired?: boolean;
   trialExpiredAt?: string;
   barbershopId?: string;
@@ -106,7 +58,6 @@ export interface AuthResponse {
   message?: string;
   requiresProfileCompletion?: boolean;
   created?: boolean;
-
   user: {
     id: string;
     name: string;
@@ -116,7 +67,6 @@ export interface AuthResponse {
     photoUrl?: string | null;
     permissions?: Record<string, boolean> | null;
   };
-
   barbershop?: {
     id: string;
     name: string;
@@ -124,7 +74,6 @@ export interface AuthResponse {
     status?: string;
     logoUrl?: string;
   } | null;
-
   currentBarbershop?: {
     id: string;
     name: string;
@@ -141,14 +90,6 @@ export async function login(data: LoginPayload) {
   });
 
   const response = await api.post<AuthResponse>("/auth/login", data);
-
-  // if (response.data.trialExpired) {
-  //   throw new TrialExpiredError(
-  //     response.data.message ?? "Período de teste expirado.",
-  //     response.data.trialExpiredAt ?? new Date().toISOString(),
-  //     response.data.barbershopName ?? ""
-  //   );
-  // }
 
   if (response.data.trialExpired) {
     throw new TrialExpiredError({

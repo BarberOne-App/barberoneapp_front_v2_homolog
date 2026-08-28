@@ -164,13 +164,13 @@ export function ClientDashboard() {
 
   const shortcuts = [
     {
-      label: "Marcar horário",
-      description: "Escolha serviço, barbeiro e data.",
+      label: "Marcar horario",
+      description: "Escolha servico, barbeiro e data.",
       href: "/bookings",
       icon: Calendar,
     },
     {
-      label: "Ver histórico",
+      label: "Ver historico",
       description: "Consulte agendamentos anteriores.",
       href: "/bookings",
       icon: History,

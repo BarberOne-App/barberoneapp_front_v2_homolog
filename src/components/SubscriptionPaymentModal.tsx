@@ -10,15 +10,6 @@ import {
 } from '@/service/platformSubscriptionService';
 import { useAuth } from '@/hooks/useAuth';
 
-// interface SubscriptionPaymentModalProps {
-//   isOpen: boolean;
-//   plan: PlatformPlan | null;
-//   onClose: () => void;
-//   onSuccess: () => void;
-// }
-
-type SubscriptionPaymentMode = 'subscribe' | 'reactivate';
-
 interface SubscriptionPaymentModalProps {
   isOpen: boolean;
   plan: PlatformPlan | null;
@@ -30,12 +21,6 @@ interface SubscriptionPaymentModalProps {
     subscriptionIntentToken: string;
   };
   onAuthorizationExpired?: () => void;
-  onSuccess: () => void | Promise<void>;
-
-  mode?: SubscriptionPaymentMode;
-  barbershopId?: string;
-  barbershopName?: string;
-  subscriptionIntentToken?: string;
 }
 
 function formatCardNumber(value: string) {
@@ -49,10 +34,6 @@ export function SubscriptionPaymentModal({
   onSuccess,
   reactivation,
   onAuthorizationExpired,
-  mode = 'subscribe',
-  barbershopId,
-  barbershopName,
-  subscriptionIntentToken,
 }: SubscriptionPaymentModalProps) {
   const { user } = useAuth();
   const [processing, setProcessing] = useState(false);
@@ -67,8 +48,6 @@ export function SubscriptionPaymentModal({
     phone: '',
     installments: 1,
   });
-
-  const isReactivationFlow = mode === 'reactivate';
 
   if (!isOpen || !plan) return null;
 
@@ -90,59 +69,15 @@ export function SubscriptionPaymentModal({
     return null;
   }
 
-  // async function handleSubmit(e: React.FormEvent) {
-  //   e.preventDefault();
-  //   const err = validate();
-  //   if (err) { toast.error(err); return; }
-
-  //   if (!plan) return;
-  //   setProcessing(true);
-  //   try {
-  //     await subscribeBarbershopPlatformPlan({
-  //       platformPlanId: plan.id,
-  //       amount,
-  //       cardForm: { ...cardForm, number: cardForm.number.replace(/\s/g, '') },
-  //       customer: { name: user?.name, email: user?.email },
-  //     });
-  //     toast.success('Assinatura criada com sucesso!');
-  //     onSuccess();
-  //     onClose();
-  //   } catch (error: unknown) {
-  //     const msg =
-  //       (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-  //       (error as { message?: string })?.message ||
-  //       'Não foi possível criar a assinatura.';
-  //     toast.error(msg);
-  //   } finally {
-  //     setProcessing(false);
-  //   }
-  // }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
     const err = validate();
-    if (err) {
-      toast.error(err);
-      return;
-    }
+    if (err) { toast.error(err); return; }
 
     if (!plan) return;
-
-    if (isReactivationFlow && !barbershopId) {
-      toast.error('Não foi possível identificar a barbearia para reativação.');
-      return;
-    }
-
     setProcessing(true);
-
     try {
-      const normalizedCardForm = { ...cardForm,
-        number: cardForm.number.replace(/\s/g, ''),
-        document: cardForm.document.replace(/\D/g, ''),
-        phone: cardForm.phone.replace(/\D/g, '')
-       };
-        
+      const normalizedCardForm = { ...cardForm, number: cardForm.number.replace(/\s/g, '') };
       if (reactivation) {
         await reactivateBarbershopPlatformPlan({
           barbershopId: reactivation.barbershopId,
@@ -150,7 +85,7 @@ export function SubscriptionPaymentModal({
           amount,
           subscriptionIntentToken: reactivation.subscriptionIntentToken,
           cardForm: normalizedCardForm,
-          customer: { name: cardForm.holderName,  email: user?.email },
+          customer: { name: cardForm.holderName },
         });
       } else {
         await subscribeBarbershopPlatformPlan({
@@ -169,10 +104,7 @@ export function SubscriptionPaymentModal({
       const msg =
         (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         (error as { message?: string })?.message ||
-        (isReactivationFlow
-          ? 'Não foi possível reativar a barbearia.'
-          : 'Não foi possível criar a assinatura.');
-
+        'Não foi possível criar a assinatura.';
       toast.error(msg);
     } finally {
       setProcessing(false);
@@ -220,12 +152,6 @@ export function SubscriptionPaymentModal({
             </p>
           </div>
         </div>
-        {isReactivationFlow && barbershopName && (
-          <div className="mx-6 mt-3 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
-            <p className="text-muted-foreground">Barbearia que será reativada</p>
-            <p className="font-semibold text-foreground">{barbershopName}</p>
-          </div>
-        )}
 
         {/* Formulário */}
         <form onSubmit={handleSubmit} className="space-y-4 px-6 py-4">

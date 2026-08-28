@@ -34,7 +34,7 @@ const routeGroups: Record<UserRole, RouteGroup> = {
   client: {
     Layout: ClientLayout,
     routes: clientRoutes,
-    headerActionLabel: "Marcar horário",
+    headerActionLabel: "Marcar horario",
     headerActionHref: "/bookings",
   },
   barber: {
@@ -52,7 +52,7 @@ const routeGroups: Record<UserRole, RouteGroup> = {
   super_admin: {
     Layout: SuperAdminLayout,
     routes: superAdminRoutes,
-    headerActionLabel: "Métricas",
+    headerActionLabel: "Metricas",
     headerActionHref: "/overview",
   },
   receptionist: {
