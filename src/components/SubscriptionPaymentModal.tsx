@@ -30,12 +30,12 @@ interface SubscriptionPaymentModalProps {
     subscriptionIntentToken: string;
   };
   onAuthorizationExpired?: () => void;
-  // onSuccess: () => void | Promise<void>;
+  onSuccess: () => void | Promise<void>;
 
   mode?: SubscriptionPaymentMode;
-  // barbershopId?: string;
-  // barbershopName?: string;
-  // subscriptionIntentToken?: string;
+  barbershopId?: string;
+  barbershopName?: string;
+  subscriptionIntentToken?: string;
 }
 
 function formatCardNumber(value: string) {
@@ -49,10 +49,10 @@ export function SubscriptionPaymentModal({
   onSuccess,
   reactivation,
   onAuthorizationExpired,
-  // mode = 'subscribe',
-  // barbershopId,
-  // barbershopName,
-  // subscriptionIntentToken,
+  mode = 'subscribe',
+  barbershopId,
+  barbershopName,
+  subscriptionIntentToken,
 }: SubscriptionPaymentModalProps) {
   const { user } = useAuth();
   const [processing, setProcessing] = useState(false);
