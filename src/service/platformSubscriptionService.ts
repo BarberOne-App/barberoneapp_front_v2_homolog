@@ -113,6 +113,46 @@ function onlyNumbers(value: string | null | undefined) {
   return String(value || '').replace(/\D/g, '');
 }
 
+export async function reactivateBarbershopPlatformPlan(data: {
+  barbershopId: string;
+  platformPlanId: string;
+  amount: number;
+  cardForm: CardForm;
+  customer?: SubscriptionCustomer;
+  subscriptionIntentToken?: string;
+}) {
+  if (!data.barbershopId) {
+    throw new Error('Barbearia não identificada para reativação.');
+  }
+
+  if (!data.platformPlanId) {
+    throw new Error('Plano não identificado para reativação.');
+  }
+
+  if (!data.subscriptionIntentToken) {
+    throw new Error('Token de reativação não encontrado.');
+  }
+
+  const cardToken = await createPagarmeCardToken(data.cardForm);
+
+  const response = await api.post(
+    `/barbershops/${data.barbershopId}/reactivate-subscription`,
+    {
+      platformPlanId: data.platformPlanId,
+      amount: data.amount,
+      cardToken,
+      subscriptionIntentToken: data.subscriptionIntentToken,
+      customer: {
+        name: data.customer?.name,
+        email: data.customer?.email,
+        document: onlyNumbers(data.cardForm.document),
+        phone: onlyNumbers(data.cardForm.phone),
+      },
+    }
+  );
+
+  return response.data;
+}
 export async function cancelBarbershopPlatformSubscription(): Promise<{ ok: boolean }> {
   const { data } = await api.post('/pagarme/subscriptions/barbershop-platform-subscriptions/cancel');
   return data;
@@ -208,25 +248,9 @@ export async function reactivateBarbershopPlatformPlan(payload: {
   amount: number;
   subscriptionIntentToken: string;
   cardForm: CardFormData;
-  customer?: {
-    name?: string | null;
-    email?: string | null;
-  };
+  customer?: { name?: string; email?: string };
 }) {
-  if (!payload.barbershopId) {
-    throw new Error('Barbearia não identificada para reativação.');
-  }
-
-  if (!payload.platformPlanId) {
-    throw new Error('Plano não identificado para reativação.');
-  }
-
-  if (!payload.subscriptionIntentToken) {
-    throw new Error('Token de reativação não encontrado.');
-  }
-
   const cardToken = await createPagarmeCardToken(payload.cardForm);
-
   const { data } = await api.post(
     `/barbershops/${payload.barbershopId}/reactivate-subscription`,
     {
@@ -234,20 +258,13 @@ export async function reactivateBarbershopPlatformPlan(payload: {
       amount: payload.amount,
       subscriptionIntentToken: payload.subscriptionIntentToken,
       cardToken,
-
       customer: {
-        name:
-          payload.customer?.name ??
-          payload.cardForm.holderName ??
-          'Cliente BarberOne',
-
+        name: payload.customer?.name ?? payload.cardForm.holderName,
         email: payload.customer?.email ?? '',
-
-        document: onlyNumbers(payload.cardForm.document),
-        phone: onlyNumbers(payload.cardForm.phone),
+        document: payload.cardForm.document,
+        phone: payload.cardForm.phone,
       },
     },
   );
-
   return data;
 }
