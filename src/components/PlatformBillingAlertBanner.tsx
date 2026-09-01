@@ -20,16 +20,22 @@ function formatDate(value: string) {
 }
 
 export function PlatformBillingAlertBanner() {
-  const { user } = useAuth();
+  const { user, barbershopAccess } = useAuth();
   const [banner, setBanner] = useState<BillingBanner | null>(null);
 
   useEffect(() => {
     let active = true;
-    const role = String(user?.role || "").toLowerCase();
+    const role = barbershopAccess
+      ? "admin"
+      : String(user?.role || "").toLowerCase();
 
     async function loadAdminAlert() {
       const result = await getBarbershopPlatformSubscription();
-      if (!active || !result.alert) return;
+      if (!active) return;
+      if (!result.alert) {
+        setBanner(null);
+        return;
+      }
       const dueDate = formatDate(result.alert.dueDate);
       setBanner({
         title: result.alert.daysRemaining === 0
@@ -44,7 +50,11 @@ export function PlatformBillingAlertBanner() {
 
     async function loadSuperAdminAlert() {
       const result = await getSuperAdminPlatformSubscriptionAlerts(7);
-      if (!active || (result.upcomingCount === 0 && result.overdueCount === 0)) return;
+      if (!active) return;
+      if (result.upcomingCount === 0 && result.overdueCount === 0) {
+        setBanner(null);
+        return;
+      }
       const parts = [
         result.upcomingCount > 0
           ? `${result.upcomingCount} plano(s) vencem nos próximos 7 dias`
@@ -74,7 +84,7 @@ export function PlatformBillingAlertBanner() {
     return () => {
       active = false;
     };
-  }, [user?.role]);
+  }, [barbershopAccess, user?.role]);
 
   if (!banner) return null;
 

@@ -54,6 +54,7 @@ api.interceptors.response.use(
       localStorage.removeItem("refreshToken");
       localStorage.removeItem("user");
       localStorage.removeItem("barbershop");
+      localStorage.removeItem("superAdminBarbershopAccess");
       if (window.location.pathname !== "/login") {
         window.location.replace("/login");
       }
@@ -64,6 +65,7 @@ api.interceptors.response.use(
       localStorage.removeItem("refreshToken");
       localStorage.removeItem("user");
       localStorage.removeItem("barbershop");
+      localStorage.removeItem("superAdminBarbershopAccess");
 
       if (window.location.pathname !== "/login") {
         window.location.replace("/login");

@@ -1,6 +1,9 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, LogIn } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+
+import { useAuth } from "@/hooks/useAuth";
 
 import {
   listSuperAdminBarbershops,
@@ -68,6 +71,8 @@ const SUBSCRIPTION_OPTIONS = [
 ];
 
 export function SuperAdminBarbershopsPage() {
+  const navigate = useNavigate();
+  const { enterBarbershopAccess } = useAuth();
   const [barbershops, setBarbershops] = useState<SuperAdminBarbershop[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -81,6 +86,7 @@ export function SuperAdminBarbershopsPage() {
   const [selectedBarbershop, setSelectedBarbershop] = useState<SuperAdminBarbershopDetail | null>(null);
   const [selectedBarbershopUsers, setSelectedBarbershopUsers] = useState<SuperAdminBarbershopUser[]>([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [accessingBarbershopId, setAccessingBarbershopId] = useState<string | null>(null);
   const [statusReasonModal, setStatusReasonModal] = useState({
     open: false, barbershopId: "", barbershopName: "", nextStatus: "", reason: "",
   });
@@ -136,6 +142,18 @@ export function SuperAdminBarbershopsPage() {
   };
 
   const closeDetails = () => { setSelectedBarbershop(null); setSelectedBarbershopUsers([]); };
+
+  const accessBarbershop = async (shop: Pick<SuperAdminBarbershop, "id" | "name">) => {
+    setAccessingBarbershopId(shop.id);
+    try {
+      await enterBarbershopAccess(shop.id);
+      toast.success(`Acessando o painel de ${shop.name}.`);
+      navigate("/overview", { replace: true });
+    } catch {
+      toast.error("Não foi possível acessar o painel desta barbearia.");
+      setAccessingBarbershopId(null);
+    }
+  };
 
   const performStatusUpdate = async (barbershopId: string, nextStatus: string, reason?: string | null) => {
     try {
@@ -274,6 +292,15 @@ export function SuperAdminBarbershopsPage() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex flex-wrap gap-1">
+                      <button
+                        type="button"
+                        onClick={() => void accessBarbershop(shop)}
+                        disabled={accessingBarbershopId !== null}
+                        className="inline-flex items-center gap-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {accessingBarbershopId === shop.id ? <Loader2 size={12} className="animate-spin" /> : <LogIn size={12} />}
+                        Acessar painel
+                      </button>
                       <button type="button" onClick={() => void openDetails(shop.id)} className="rounded bg-secondary px-2 py-1 text-xs font-medium text-foreground hover:bg-secondary/80">Detalhes</button>
                       <button type="button" onClick={() => void handleStatusUpdate(shop.id, "active")} className="rounded bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-500/20">Ativar</button>
                       <button type="button" onClick={() => void handleStatusUpdate(shop.id, "inactive")} className="rounded bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-600 hover:bg-amber-500/20">Inativar</button>

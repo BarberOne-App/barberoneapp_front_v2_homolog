@@ -305,6 +305,7 @@ export async function registerManualPlatformSubscriptionPayment(
 
 export async function listManualPlatformSubscriptionPayments(params: {
   barbershopId?: string;
+  paymentDate?: string;
   page?: number;
   limit?: number;
 } = {}): Promise<PaginatedResponse<ManualPlatformSubscriptionPayment>> {

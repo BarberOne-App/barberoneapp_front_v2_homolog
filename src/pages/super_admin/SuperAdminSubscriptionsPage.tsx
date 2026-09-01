@@ -22,6 +22,23 @@ function fmtCurrency(value?: number | null) {
   return number.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function currentPaymentDate() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
+function fmtPaymentDateFilter(value: string) {
+  if (!value) return "Últimos pagamentos de todas as datas.";
+  const [year, month, day] = value.split("-");
+  return `Pagamentos de ${day}/${month}/${year}.`;
+}
+
 function statusLabel(status: string) {
   const labels: Record<string, string> = {
     active: "Ativa",
@@ -40,6 +57,8 @@ export function SuperAdminSubscriptionsPage() {
   const [barbershops, setBarbershops] = useState<SuperAdminBarbershop[]>([]);
   const [payments, setPayments] = useState<ManualPlatformSubscriptionPayment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyDate, setHistoryDate] = useState(currentPaymentDate);
   const [paymentTarget, setPaymentTarget] = useState<SuperAdminBarbershop | null>(null);
 
   async function loadData() {
@@ -54,9 +73,7 @@ export function SuperAdminSubscriptionsPage() {
         if (all.length >= (result?.total ?? 0) || items.length < 100) break;
         page += 1;
       }
-      const history = await listManualPlatformSubscriptionPayments({ limit: 20 });
       setBarbershops(all);
-      setPayments(Array.isArray(history.items) ? history.items : []);
     } catch {
       toast.error("Não foi possível carregar as assinaturas.");
     } finally {
@@ -64,9 +81,33 @@ export function SuperAdminSubscriptionsPage() {
     }
   }
 
+  async function loadHistory(paymentDate: string) {
+    setHistoryLoading(true);
+    try {
+      const history = await listManualPlatformSubscriptionPayments({
+        limit: 100,
+        ...(paymentDate ? { paymentDate } : {}),
+      });
+      setPayments(Array.isArray(history.items) ? history.items : []);
+    } catch {
+      setPayments([]);
+      toast.error("Não foi possível carregar o histórico de pagamentos.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  function applyHistoryDate(paymentDate: string) {
+    setHistoryDate(paymentDate);
+  }
+
   useEffect(() => {
     void loadData();
   }, []);
+
+  useEffect(() => {
+    void loadHistory(historyDate);
+  }, [historyDate]);
 
   const rows = useMemo(() => barbershops.map((shop) => ({
     id: shop.id,
@@ -112,12 +153,47 @@ export function SuperAdminSubscriptionsPage() {
       </div>
 
       <section className="overflow-hidden rounded-xl border border-border bg-card">
-        <div className="flex items-center gap-2 border-b border-border px-5 py-4"><ReceiptText size={18} className="text-primary" /><div><h3 className="font-semibold text-foreground">Histórico de pagamentos manuais</h3><p className="text-xs text-muted-foreground">Últimos registros confirmados pelo superadmin.</p></div></div>
+        <div className="flex flex-col gap-4 border-b border-border px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-center gap-2">
+            <ReceiptText size={18} className="text-primary" />
+            <div>
+              <h3 className="font-semibold text-foreground">Histórico de pagamentos manuais</h3>
+              <p className="text-xs text-muted-foreground">{fmtPaymentDateFilter(historyDate)}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+              Data do pagamento
+              <input
+                type="date"
+                value={historyDate}
+                onChange={(event) => applyHistoryDate(event.target.value)}
+                className="h-9 rounded-md border border-border bg-background px-3 text-sm font-normal text-foreground outline-none focus:border-primary"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => applyHistoryDate(currentPaymentDate())}
+              className="h-9 rounded-md border border-border px-3 text-xs font-semibold text-foreground hover:bg-secondary"
+            >
+              Hoje
+            </button>
+            <button
+              type="button"
+              onClick={() => applyHistoryDate("")}
+              className="h-9 rounded-md border border-border px-3 text-xs font-semibold text-foreground hover:bg-secondary"
+            >
+              Todas as datas
+            </button>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground"><th className="px-5 py-3">Pagamento</th><th className="px-5 py-3">Barbearia</th><th className="px-5 py-3">Plano</th><th className="px-5 py-3">Método</th><th className="px-5 py-3">Valor</th><th className="px-5 py-3">Novo vencimento</th><th className="px-5 py-3">Confirmado por</th><th className="px-5 py-3">Referência</th></tr></thead>
             <tbody>
-              {!loading && payments.length === 0 ? <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">Nenhum pagamento manual registrado.</td></tr> : payments.map((payment) => (
+              {historyLoading ? (
+                <tr><td colSpan={8} className="p-8 text-center text-muted-foreground"><Loader2 className="mx-auto mb-2 animate-spin" size={20} />Carregando histórico...</td></tr>
+              ) : payments.length === 0 ? <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">Nenhum pagamento manual encontrado para o período.</td></tr> : payments.map((payment) => (
                 <tr key={payment.id} className="border-b border-border last:border-0">
                   <td className="px-5 py-3 text-muted-foreground">{fmtDate(payment.paidAt)}</td>
                   <td className="px-5 py-3 font-medium text-foreground">{payment.barbershopName ?? "-"}</td>
@@ -141,7 +217,10 @@ export function SuperAdminSubscriptionsPage() {
           currentPlanId={paymentTarget.platformSubscription?.platform_plans?.id}
           currentDueDate={paymentTarget.platformSubscription?.next_billing_date}
           onClose={() => setPaymentTarget(null)}
-          onSuccess={loadData}
+          onSuccess={() => {
+            void loadData();
+            void loadHistory(historyDate);
+          }}
         />
       )}
     </div>

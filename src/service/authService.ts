@@ -1,5 +1,7 @@
 import api from "./api";
 
+export const SUPER_ADMIN_ACCESS_STORAGE_KEY = "superAdminBarbershopAccess";
+
 function maskToken(token?: string) {
   if (!token) {
     return null;
@@ -81,6 +83,22 @@ export interface AuthResponse {
     status?: string;
     logoUrl?: string;
   } | null;
+}
+
+function persistAuthResponse(response: AuthResponse) {
+  const accessToken = response.accessToken || response.token || "";
+  localStorage.setItem("token", accessToken);
+  localStorage.setItem("refreshToken", response.refreshToken);
+  localStorage.setItem("user", JSON.stringify(response.user));
+
+  const barbershop = response.currentBarbershop || response.barbershop;
+  if (barbershop) {
+    localStorage.setItem("barbershop", JSON.stringify(barbershop));
+  } else {
+    localStorage.removeItem("barbershop");
+  }
+
+  window.dispatchEvent(new Event("barbershop:updated"));
 }
 
 export async function login(data: LoginPayload) {
@@ -193,6 +211,7 @@ export function logout() {
   localStorage.removeItem("refreshToken");
   localStorage.removeItem("user");
   localStorage.removeItem("barbershop");
+  localStorage.removeItem(SUPER_ADMIN_ACCESS_STORAGE_KEY);
 }
 
 export function isAuthenticated() {
@@ -211,7 +230,14 @@ export async function fetchMe() {
     phone?: string | null;
     cpf?: string | null;
     birthDate?: string | null;
+    barbershop?: AuthResponse["barbershop"];
   }>("/auth/me");
+  return response.data;
+}
+
+export async function switchBarbershop(barbershopId: string | null) {
+  const response = await api.post<AuthResponse>("/auth/switch-barbershop", { barbershopId });
+  persistAuthResponse(response.data);
   return response.data;
 }
 

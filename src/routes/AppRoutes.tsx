@@ -4,6 +4,7 @@ import { ShieldOff } from "lucide-react";
 
 import { AppHeader } from "../components/shared/AppHeader";
 import { PlatformBillingAlertBanner } from "../components/PlatformBillingAlertBanner";
+import { SuperAdminBarbershopAccessBanner } from "../components/SuperAdminBarbershopAccessBanner";
 import { getProfileConfig, normalizeRole } from "../config/profileConfig";
 import type { UserRole } from "../config/profileConfig";
 import { useAuth } from "../hooks/useAuth";
@@ -103,6 +104,7 @@ function PageShell({
         actionLabel={actionLabel}
         actionHref={actionHref}
       />
+      <SuperAdminBarbershopAccessBanner />
       <PlatformBillingAlertBanner />
       <div className="p-6">
         {blocked ? (
@@ -120,10 +122,11 @@ function toChildPath(path: string) {
 }
 
 export function AppRoutes() {
-  const { user } = useAuth();
+  const { user, barbershopAccess } = useAuth();
   const role = normalizeRole(user?.role);
-  const profileConfig = getProfileConfig(role);
-  const { Layout, routes, headerActionLabel, headerActionHref } = routeGroups[role];
+  const effectiveRole: UserRole = role === "super_admin" && barbershopAccess ? "admin" : role;
+  const profileConfig = getProfileConfig(effectiveRole);
+  const { Layout, routes, headerActionLabel, headerActionHref } = routeGroups[effectiveRole];
 
   return (
     <PrivateRoute>
