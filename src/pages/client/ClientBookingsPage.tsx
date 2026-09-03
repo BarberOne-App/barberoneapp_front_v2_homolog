@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Calendar,
   Clock,
@@ -7,6 +8,8 @@ import {
   Lock,
   Loader2,
   MoreHorizontal,
+  Minus,
+  Package,
   Plus,
   Search,
   Scissors,
@@ -72,6 +75,7 @@ import { getSettings, type BookingPaymentMethod, type SubscriptionBarberRule } f
 import { createAppointmentPayment } from "@/service/paymentService";
 import { createReview } from "@/service/reviewService";
 import { listServices, type Service } from "@/service/serviceService";
+import { listProducts, type Product } from "@/service/productService";
 import { isFitAppointment } from "@/utils/fitAppointment";
 import { buildWhatsAppMessage, openWhatsApp, type WhatsAppMessageData } from "@/utils/whatsapp";
 
@@ -201,6 +205,8 @@ function getStoredBarbershopId(): string {
 }
 
 export function ClientBookingsPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   // Assinatura do cliente
@@ -227,6 +233,8 @@ export function ClientBookingsPage() {
   const [bookingForDependent, setBookingForDependent] = useState<Dependent | null>(null);
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productQuantities, setProductQuantities] = useState<Record<string, number>>({});
   const [slots, setSlots] = useState<string[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
 
@@ -295,13 +303,15 @@ export function ClientBookingsPage() {
     async function load() {
       try {
         const barbershopId = getStoredBarbershopId();
-        const [b, s, profile] = await Promise.all([
+        const [b, s, availableProducts, profile] = await Promise.all([
           listBarbers({ page: 1, limit: 100, barbershopId }),
           listServices({ includeInactive: false, page: 1, limit: 100, barbershopId }),
+          listProducts({ active: true }),
           getBarbershopProfile(barbershopId),
         ]);
         setBarbers(b.items);
         setServices(s.items.filter((sv) => sv.active));
+        setProducts(availableProducts.filter((product) => product.active && product.stock > 0));
         setBarbershopProfile(profile);
       } catch (err) { toast.error(getApiMessage(err)); }
 
@@ -325,13 +335,48 @@ export function ClientBookingsPage() {
     void load();
   }, [bookingOpen, user?.id]);
 
+  useEffect(() => {
+    const state = location.state as { openBooking?: boolean; serviceId?: string } | null;
+    if (!state?.openBooking || !state.serviceId) return;
+
+    setForm({
+      ...emptyForm,
+      date: dateToDateString(new Date()),
+      serviceIds: [state.serviceId],
+    });
+    setProductQuantities({});
+    setBookingOpen(true);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
+
   const selectedServices = useMemo(() => services.filter((s) => form.serviceIds.includes(s.id)), [form.serviceIds, services]);
   const totalDuration = useMemo(() => selectedServices.reduce((sum, s) => sum + getServiceDuration(s), 0), [selectedServices]);
   const totalPrice = useMemo(() => selectedServices.reduce((sum, s) => sum + getServicePrice(s), 0), [selectedServices]);
-
-  const isFixedRule = subscriptionBarberRule === "fixed";
   const hasActiveSubscription =
     mySubscription?.status === "active" || mySubscription?.status === "paused";
+  const selectedProducts = useMemo(
+    () => products
+      .filter((product) => (productQuantities[product.id] ?? 0) > 0)
+      .map((product) => ({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: productQuantities[product.id],
+        discount: hasActiveSubscription && !bookingForDependent
+          ? (product.subscriberDiscount ?? product.subscriber_discount ?? 0)
+          : 0,
+      })),
+    [bookingForDependent, hasActiveSubscription, productQuantities, products],
+  );
+  const productsTotal = useMemo(
+    () => selectedProducts.reduce(
+      (sum, product) => sum + product.price * product.quantity * (1 - product.discount / 100),
+      0,
+    ),
+    [selectedProducts],
+  );
+
+  const isFixedRule = subscriptionBarberRule === "fixed";
   const isBookingForDependentWithoutPlan = Boolean(bookingForDependent);
   const hasActiveSubscriptionForBooking =
     hasActiveSubscription && !isBookingForDependentWithoutPlan;
@@ -369,6 +414,7 @@ export function ClientBookingsPage() {
       selectedServices.every((s) => isServiceCoveredByPlan(s)),
     [hasActiveSubscriptionForBooking, isServiceCoveredByPlan, selectedServices],
   );
+  const amountDue = (allSelectedServicesCoveredByPlan ? 0 : totalPrice) + productsTotal;
 
   useEffect(() => {
     if (!bookingOpen || !form.barberId || !form.date || totalDuration <= 0) { setSlots([]); return; }
@@ -419,6 +465,17 @@ export function ClientBookingsPage() {
     }));
   }
 
+  function changeProductQuantity(product: Product, delta: number) {
+    setProductQuantities((current) => {
+      const next = Math.max(0, Math.min(product.stock, (current[product.id] ?? 0) + delta));
+      if (next === 0) {
+        const { [product.id]: _removed, ...rest } = current;
+        return rest;
+      }
+      return { ...current, [product.id]: next };
+    });
+  }
+
   function validateForm(): string | null {
     if (!form.barberId) return "Selecione o barbeiro.";
     if (!form.date) return "Selecione a data.";
@@ -432,7 +489,7 @@ export function ClientBookingsPage() {
     e.preventDefault();
     const err = validateForm();
     if (err) { toast.error(err); return; }
-    if (allSelectedServicesCoveredByPlan) {
+    if (allSelectedServicesCoveredByPlan && selectedProducts.length === 0) {
       await handleSubscriptionPayment();
       return;
     }
@@ -452,7 +509,7 @@ export function ClientBookingsPage() {
         time: form.time,
         notes: form.notes.trim() || null,
         services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
-        products: [],
+        products: selectedProducts,
       });
 
       // Registro de pagamento é secundário — agendamento já confirmado
@@ -460,7 +517,7 @@ export function ClientBookingsPage() {
         await createAppointmentPayment({
           appointmentId: appt.id,
           userId: user.id,
-          amount: totalPrice,
+          amount: amountDue,
           method: "local",
           status: "pending",
         });
@@ -475,13 +532,14 @@ export function ClientBookingsPage() {
         date: formatDateBR(form.date),
         time: form.time,
         services: selectedServices.map((s) => s.name),
-        total: totalPrice,
+        total: amountDue,
         notes: form.notes?.trim(),
         googleMapsUrl: barbershopProfile?.googleMapsUrl,
       });
       setBookingOpen(false);
       setBookingForDependent(null);
       setForm({ ...emptyForm, date: dateToDateString(new Date()) });
+      setProductQuantities({});
       await loadAppointments();
     } catch (err) {
       if (isConflictError(err)) {
@@ -508,14 +566,14 @@ export function ClientBookingsPage() {
         time: form.time,
         notes: form.notes.trim() || null,
         services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
-        products: [],
+        products: selectedProducts,
       });
 
       try {
         await createAppointmentPayment({
           appointmentId: appt.id,
           userId: user.id,
-          amount: totalPrice,
+          amount: amountDue,
           method: "subscription",
           status: "covered",
         });
@@ -537,6 +595,7 @@ export function ClientBookingsPage() {
       setBookingOpen(false);
       setBookingForDependent(null);
       setForm({ ...emptyForm, date: dateToDateString(new Date()) });
+      setProductQuantities({});
       await loadAppointments();
     } catch (err) {
       if (isConflictError(err)) {
@@ -563,7 +622,7 @@ export function ClientBookingsPage() {
         time: form.time,
         notes: form.notes.trim() || null,
         services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
-        products: [],
+        products: selectedProducts,
       });
 
       let paymentId = "";
@@ -571,7 +630,7 @@ export function ClientBookingsPage() {
         const payment = await createAppointmentPayment({
           appointmentId: appt.id,
           userId: user.id,
-          amount: totalPrice,
+          amount: amountDue,
           method: method === "cartao" ? "credito" : "pix",
           status: "pending",
         });
@@ -585,13 +644,14 @@ export function ClientBookingsPage() {
           date: formatDateBR(form.date),
           time: form.time,
           services: selectedServices.map((s) => s.name),
-          total: totalPrice,
+          total: amountDue,
           notes: form.notes?.trim(),
           googleMapsUrl: barbershopProfile?.googleMapsUrl,
         });
         setBookingOpen(false);
         setBookingForDependent(null);
         setForm({ ...emptyForm, date: dateToDateString(new Date()) });
+        setProductQuantities({});
         await loadAppointments();
         return;
       }
@@ -631,7 +691,7 @@ export function ClientBookingsPage() {
       date: formatDateBR(form.date),
       time: form.time,
       services: selectedServices.map((s) => s.name),
-      total: totalPrice,
+      total: amountDue,
       notes: form.notes?.trim(),
       googleMapsUrl: barbershopProfile?.googleMapsUrl,
     });
@@ -639,6 +699,7 @@ export function ClientBookingsPage() {
     setBookingOpen(false);
     setPendingPaymentData(null);
     setForm({ ...emptyForm, date: dateToDateString(new Date()) });
+    setProductQuantities({});
     await loadAppointments();
   }
 
@@ -741,7 +802,7 @@ export function ClientBookingsPage() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button size="sm" className="gap-2" onClick={() => { setForm({ ...emptyForm, date: dateToDateString(new Date()), barberId: activeLockedBarberId ?? "" }); setBookingOpen(true); }}>
+            <Button size="sm" className="gap-2" onClick={() => { setForm({ ...emptyForm, date: dateToDateString(new Date()), barberId: activeLockedBarberId ?? "" }); setProductQuantities({}); setBookingOpen(true); }}>
               <Plus size={14} /> Marcar Horario
             </Button>
           </div>
@@ -984,7 +1045,9 @@ export function ClientBookingsPage() {
                                 </Badge>
                               )}
                             </span>
-                            <span className="block text-xs text-muted-foreground">{getServiceDuration(s)} min — {formatCurrency(getServicePrice(s))}</span>
+                            <span className="block text-xs text-muted-foreground">
+                              {getServiceDuration(s)} min — {getServicePrice(s) > 0 ? formatCurrency(getServicePrice(s)) : "Consultar"}
+                            </span>
                           </span>
                         </label>
                       );
@@ -993,10 +1056,61 @@ export function ClientBookingsPage() {
                 </div>
                 {selectedServices.length > 0 && (
                   <p className="text-xs text-muted-foreground text-right">
-                    Total: <span className="font-medium text-foreground">{formatCurrency(totalPrice)}</span>
+                    Servicos: <span className="font-medium text-foreground">{formatCurrency(totalPrice)}</span>
                   </p>
                 )}
               </div>
+
+              {products.length > 0 ? (
+                <div className="space-y-3 md:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2"><Package className="h-4 w-4" /> Produtos opcionais</Label>
+                    <span className="text-xs text-muted-foreground">Adicione ao atendimento</span>
+                  </div>
+                  <div className="grid max-h-56 gap-2 overflow-y-auto rounded-md border border-border p-3 md:grid-cols-2">
+                    {products.map((product) => {
+                      const quantity = productQuantities[product.id] ?? 0;
+                      const discount = hasActiveSubscriptionForBooking
+                        ? (product.subscriberDiscount ?? product.subscriber_discount ?? 0)
+                        : 0;
+                      const unitPrice = product.price * (1 - discount / 100);
+
+                      return (
+                        <div key={product.id} className="flex items-center gap-3 rounded-md border border-border/70 p-2">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-secondary">
+                            {product.imageUrl || product.image_url ? (
+                              <img src={product.imageUrl || product.image_url || ""} alt={product.name} className="h-full w-full object-cover" />
+                            ) : (
+                              <Package className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-foreground">{product.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatCurrency(unitPrice)} · estoque {product.stock}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button type="button" variant="outline" size="icon" className="h-7 w-7" disabled={quantity === 0} onClick={() => changeProductQuantity(product, -1)}>
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <span className="w-5 text-center text-sm">{quantity}</span>
+                            <Button type="button" variant="outline" size="icon" className="h-7 w-7" disabled={quantity >= product.stock} onClick={() => changeProductQuantity(product, 1)}>
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {(selectedServices.length > 0 || selectedProducts.length > 0) ? (
+                <div className="md:col-span-2 rounded-md bg-secondary/50 p-3 text-right text-sm">
+                  Total a pagar: <span className="font-semibold text-foreground">{formatCurrency(amountDue)}</span>
+                </div>
+              ) : null}
 
               <div className="space-y-2 md:col-span-2">
                 <Label>Horario</Label>
@@ -1123,7 +1237,7 @@ export function ClientBookingsPage() {
           data={{
             appointmentId: pendingPaymentData.appointmentId,
             paymentId: pendingPaymentData.paymentId,
-            amount: totalPrice,
+            amount: amountDue,
             serviceName: selectedServices.map((s) => s.name).join(", "),
             paymentMethod: onlineMethod,
             userId: user?.id ?? "",

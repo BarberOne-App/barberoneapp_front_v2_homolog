@@ -7,8 +7,10 @@ import {
   Filter,
   Loader2,
   MoreHorizontal,
+  Plus,
   RefreshCcw,
   Search,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -34,6 +36,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useTableSelection } from "@/hooks/useTableSelection";
 import {
   listAllPayments,
@@ -49,6 +53,8 @@ type PaymentWithType = PaymentRecord & { paymentType: PaymentType };
 type ApiPaymentWithType = PaymentRecord & { paymentType: PaymentType | "extra" };
 type StatusFilter = "all" | PaymentStatus;
 type TypeFilter = "all" | PaymentType;
+type LocalPaymentMethod = Exclude<PaymentMethod, "local" | "subscription">;
+type PaymentSplitForm = { method: LocalPaymentMethod; amount: string };
 
 const statusLabels: Record<PaymentStatus, string> = {
   pending: "Pendente",
@@ -102,6 +108,19 @@ function formatDateTime(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function todayDateString() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseMoney(value: string) {
+  const parsed = Number(value.replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function normalizeText(value: string) {
@@ -179,12 +198,22 @@ export function PaymentsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [selectedDate, setSelectedDate] = useState(todayDateString);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [localPaymentDialog, setLocalPaymentDialog] = useState<PaymentWithType | null>(null);
-  const [selectedLocalMethod, setSelectedLocalMethod] = useState<PaymentMethod>("dinheiro");
+  const [selectedLocalMethod, setSelectedLocalMethod] = useState<LocalPaymentMethod>("dinheiro");
+  const [originalAmount, setOriginalAmount] = useState("");
+  const [discountAmount, setDiscountAmount] = useState("0");
+  const [surchargeAmount, setSurchargeAmount] = useState("0");
+  const [adjustmentNote, setAdjustmentNote] = useState("");
+  const [splitPayment, setSplitPayment] = useState(false);
+  const [paymentSplits, setPaymentSplits] = useState<PaymentSplitForm[]>([
+    { method: "dinheiro", amount: "" },
+    { method: "pix", amount: "" },
+  ]);
 
   const limit = 20;
 
@@ -195,6 +224,7 @@ export function PaymentsPage() {
     try {
       const result = await listAllPayments({
         status: statusFilter === "all" ? undefined : statusFilter,
+        date: selectedDate,
         page,
         limit,
       });
@@ -202,14 +232,14 @@ export function PaymentsPage() {
       const visibleItems = result.items.filter(shouldShowInPaymentsPage);
 
       setPayments(visibleItems);
-      setTotal(visibleItems.length);
+      setTotal(result.total);
       if (result.summary) setSummary(result.summary);
     } catch (err) {
       setError(getApiMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter]);
+  }, [page, selectedDate, statusFilter]);
 
   useEffect(() => {
     void loadPayments();
@@ -279,10 +309,41 @@ export function PaymentsPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
+  const calculatedFinalAmount = Math.max(
+    0,
+    parseMoney(originalAmount) - parseMoney(discountAmount) + parseMoney(surchargeAmount),
+  );
+  const informedSplitTotal = paymentSplits.reduce(
+    (sum, split) => sum + parseMoney(split.amount),
+    0,
+  );
+
+  function openPaymentConfirmation(payment: PaymentWithType) {
+    const currentOriginal = payment.originalAmount ?? payment.amount;
+    const allowedMethod: LocalPaymentMethod =
+      payment.method === "pix" || payment.method === "debito" || payment.method === "credito" || payment.method === "dinheiro"
+        ? payment.method
+        : "dinheiro";
+    const existingSplits = payment.splits?.length
+      ? payment.splits.map((split) => ({ method: split.method, amount: String(split.amount) }))
+      : [
+          { method: allowedMethod, amount: String(payment.amount) },
+          { method: allowedMethod === "pix" ? "dinheiro" as const : "pix" as const, amount: "" },
+        ];
+
+    setSelectedLocalMethod(allowedMethod);
+    setOriginalAmount(String(currentOriginal));
+    setDiscountAmount(String(payment.discountAmount ?? 0));
+    setSurchargeAmount(String(payment.surchargeAmount ?? 0));
+    setAdjustmentNote(payment.adjustmentNote ?? "");
+    setPaymentSplits(existingSplits);
+    setSplitPayment((payment.splits?.length ?? 0) > 1);
+    setLocalPaymentDialog(payment);
+  }
+
   async function changePaymentStatus(payment: PaymentWithType, status: PaymentStatus) {
-    if (status === "paid" && payment.method === "local") {
-      setSelectedLocalMethod("dinheiro");
-      setLocalPaymentDialog(payment);
+    if (status === "paid") {
+      openPaymentConfirmation(payment);
       return;
     }
 
@@ -300,12 +361,40 @@ export function PaymentsPage() {
 
   async function confirmLocalPayment() {
     if (!localPaymentDialog) return;
+    const original = parseMoney(originalAmount);
+    const discount = parseMoney(discountAmount);
+    const surcharge = parseMoney(surchargeAmount);
+    const finalAmount = original - discount + surcharge;
+    if (original < 0 || discount < 0 || surcharge < 0 || finalAmount <= 0) {
+      toast.error("Informe valores validos. O valor final deve ser maior que zero.");
+      return;
+    }
+
+    const splits = splitPayment
+      ? paymentSplits
+          .map((split) => ({ method: split.method, amount: parseMoney(split.amount) }))
+          .filter((split) => split.amount > 0)
+      : [{ method: selectedLocalMethod, amount: finalAmount }];
+    const splitTotal = splits.reduce((sum, split) => sum + split.amount, 0);
+    if (splits.length === 0 || Math.abs(splitTotal - finalAmount) > 0.009) {
+      toast.error("A soma das formas de pagamento deve ser igual ao valor final.");
+      return;
+    }
+
     const payment = localPaymentDialog;
-    setLocalPaymentDialog(null);
     setUpdatingId(payment.id);
     try {
-      await updatePayment(payment, { status: "paid", method: selectedLocalMethod });
+      await updatePayment(payment, {
+        status: "paid",
+        method: splits[0].method,
+        originalAmount: original,
+        discountAmount: discount,
+        surchargeAmount: surcharge,
+        adjustmentNote: adjustmentNote.trim() || null,
+        splits,
+      });
       toast.success("Pagamento confirmado.");
+      setLocalPaymentDialog(null);
       await loadPayments();
     } catch (err) {
       toast.error(getApiMessage(err));
@@ -339,6 +428,20 @@ export function PaymentsPage() {
         <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
           <h3 className="text-base font-medium text-foreground">Todos Pagamentos</h3>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="payments-date" className="sr-only">Data dos pagamentos</Label>
+              <Input
+                id="payments-date"
+                type="date"
+                value={selectedDate}
+                onChange={(event) => {
+                  setSelectedDate(event.target.value || todayDateString());
+                  setPage(1);
+                }}
+                className="h-9 w-40 bg-secondary"
+                title="Pagos usam a data da confirmacao; pendentes usam a data do agendamento"
+              />
+            </div>
             <div className="relative">
               <Search
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -442,6 +545,9 @@ export function PaymentsPage() {
                     Data
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Observacao
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Status
                   </th>
                   <th className="w-10 px-4 py-3" />
@@ -450,14 +556,14 @@ export function PaymentsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={9} className="p-8 text-center text-sm text-muted-foreground">
                       <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                       Carregando pagamentos...
                     </td>
                   </tr>
                 ) : filteredPayments.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={9} className="p-8 text-center text-sm text-muted-foreground">
                       Nenhum pagamento encontrado.
                     </td>
                   </tr>
@@ -500,14 +606,21 @@ export function PaymentsPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 text-sm text-foreground">
                           <CreditCard size={14} className="text-muted-foreground" />
-                          {methodLabels[payment.method] || payment.method}
+                          {payment.splits && payment.splits.length > 1
+                            ? payment.splits.map((split) => methodLabels[split.method]).join(" + ")
+                            : methodLabels[payment.method] || payment.method}
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Calendar size={14} />
-                          {formatDateTime(payment.paidAt || payment.createdAt)}
+                          {formatDateTime(payment.effectiveDate || payment.paidAt || payment.appointment?.startAt || payment.createdAt)}
                         </div>
+                      </td>
+                      <td className="max-w-56 px-4 py-3 text-sm text-muted-foreground">
+                        <span className="block truncate" title={payment.adjustmentNote || ""}>
+                          {payment.adjustmentNote || "-"}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <Badge
@@ -536,11 +649,10 @@ export function PaymentsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
-                              disabled={payment.status === "paid"}
                               onClick={() => changePaymentStatus(payment, "paid")}
                             >
                               <CheckCircle size={14} />
-                              Marcar como pago
+                              {payment.status === "paid" ? "Editar pagamento" : "Confirmar pagamento"}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               disabled={payment.status === "pending"}
@@ -600,39 +712,110 @@ export function PaymentsPage() {
         </div>
       </div>
       <Dialog open={Boolean(localPaymentDialog)} onOpenChange={(open) => { if (!open) setLocalPaymentDialog(null); }}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Como foi realizado o pagamento?</DialogTitle>
+            <DialogTitle>Confirmar pagamento</DialogTitle>
             <DialogDescription>
-              Selecione a forma de pagamento usada no local para{" "}
+              Confira o valor, registre ajustes e informe como o pagamento foi realizado por{" "}
               <span className="font-medium text-foreground">
                 {localPaymentDialog?.user?.name ?? "este cliente"}
               </span>
               .
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-3 py-2">
-            {(
-              [
-                { value: "dinheiro", label: "Dinheiro" },
-                { value: "pix", label: "PIX" },
-                { value: "credito", label: "Cartão Crédito" },
-                { value: "debito", label: "Cartão Débito" },
-              ] as { value: PaymentMethod; label: string }[]
-            ).map(({ value, label }) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setSelectedLocalMethod(value)}
-                className={`rounded-lg border px-4 py-3 text-sm font-medium transition-colors ${
-                  selectedLocalMethod === value
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-card text-foreground hover:bg-secondary/50"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="space-y-5 py-2">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="payment-original">Valor original</Label>
+                <Input id="payment-original" inputMode="decimal" value={originalAmount} onChange={(event) => setOriginalAmount(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="payment-discount">Desconto</Label>
+                <Input id="payment-discount" inputMode="decimal" value={discountAmount} onChange={(event) => setDiscountAmount(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="payment-surcharge">Acrescimo</Label>
+                <Input id="payment-surcharge" inputMode="decimal" value={surchargeAmount} onChange={(event) => setSurchargeAmount(event.target.value)} />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <span className="text-sm text-muted-foreground">Valor final</span>
+              <strong className="text-xl text-primary">{formatCurrency(calculatedFinalAmount)}</strong>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="payment-note">Observacao do ajuste</Label>
+              <Textarea
+                id="payment-note"
+                value={adjustmentNote}
+                onChange={(event) => setAdjustmentNote(event.target.value)}
+                maxLength={200}
+                placeholder="Opcional: motivo do desconto, acrescimo ou observacao do recebimento"
+                rows={2}
+              />
+              <p className="text-right text-xs text-muted-foreground">{adjustmentNote.length}/200</p>
+            </div>
+
+            <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border p-3 text-sm font-medium">
+              <Checkbox checked={splitPayment} onCheckedChange={(checked) => setSplitPayment(checked === true)} />
+              Dividir pagamento em mais de uma forma
+            </label>
+
+            {splitPayment ? (
+              <div className="space-y-3">
+                {paymentSplits.map((split, index) => (
+                  <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                    <select
+                      value={split.method}
+                      onChange={(event) => setPaymentSplits((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, method: event.target.value as LocalPaymentMethod } : item))}
+                      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="dinheiro">Dinheiro</option>
+                      <option value="pix">PIX</option>
+                      <option value="credito">Cartao credito</option>
+                      <option value="debito">Cartao debito</option>
+                    </select>
+                    <Input
+                      inputMode="decimal"
+                      value={split.amount}
+                      placeholder="Valor"
+                      onChange={(event) => setPaymentSplits((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, amount: event.target.value } : item))}
+                    />
+                    <Button type="button" variant="ghost" size="icon" disabled={paymentSplits.length <= 1} onClick={() => setPaymentSplits((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setPaymentSplits((current) => [...current, { method: "pix", amount: "" }])}>
+                  <Plus className="h-4 w-4" /> Adicionar forma
+                </Button>
+                <div className="grid grid-cols-2 gap-3 rounded-md bg-secondary/50 p-3 text-sm">
+                  <span>Informado: <strong>{formatCurrency(informedSplitTotal)}</strong></span>
+                  <span className="text-right">Falta: <strong className={Math.abs(calculatedFinalAmount - informedSplitTotal) > 0.009 ? "text-destructive" : "text-emerald-600"}>{formatCurrency(Math.max(0, calculatedFinalAmount - informedSplitTotal))}</strong></span>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {(
+                  [
+                    { value: "dinheiro", label: "Dinheiro" },
+                    { value: "pix", label: "PIX" },
+                    { value: "credito", label: "Cartao Credito" },
+                    { value: "debito", label: "Cartao Debito" },
+                  ] as { value: LocalPaymentMethod; label: string }[]
+                ).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setSelectedLocalMethod(value)}
+                    className={`rounded-lg border px-4 py-3 text-sm font-medium transition-colors ${selectedLocalMethod === value ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-foreground hover:bg-secondary/50"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLocalPaymentDialog(null)}>

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
+  CircleDollarSign,
   ChevronLeft,
   ChevronRight,
+  Info,
   Loader2,
   Scissors,
   TrendingUp,
@@ -20,6 +22,7 @@ import {
   getMyPayrollSummary,
   type EmployeePayment,
   type EmployeePayrollRow,
+  type SubscriptionCommissionPool,
 } from "@/service/employeePayrollService";
 import { getHomeInfo } from "@/service/homeInfoService";
 import type { Barber } from "@/service/barberService";
@@ -165,12 +168,40 @@ function calcServicesTotal(apt: Appointment): number {
   return apt.services.reduce((sum, s) => sum + (s.totalPrice ?? 0), 0);
 }
 
+function getAppointmentCommissionBreakdown(apt: Appointment) {
+  const subscriptionServices = apt.services.filter(
+    (service) => service.commissionType?.toLowerCase() === "subscription",
+  );
+  const regularServices = apt.services.filter(
+    (service) => service.commissionType?.toLowerCase() !== "subscription",
+  );
+
+  return {
+    hasSubscription: subscriptionServices.length > 0,
+    hasRegular: regularServices.length > 0,
+    regularCommission: roundMoney(
+      regularServices.reduce(
+        (sum, service) => sum + Number(service.commissionAmount || 0),
+        0,
+      ),
+    ),
+  };
+}
+
 /* ─── EarningsStats ─── */
 
 interface EarningsStats {
   // Receita e comissão dos atendimentos realizados (confirmed/completed)
   earnedRevenue: number;
-  earnedCommission: number;
+  regularCommission: number;
+  subscriptionPoolCommission: number;
+  totalCommission: number;
+  subscriptionParticipationPercent: number;
+  subscriptionPoints: number;
+  subscriptionAppointmentsCount: number;
+  subscriptionPoolTotal: number;
+  subscriptionPoolPoints: number;
+  hasSubscriptionActivity: boolean;
   // Cancelados / não compareceu
   cancelledRevenue: number;
   cancelledCommission: number;
@@ -179,12 +210,10 @@ interface EarningsStats {
   appointmentsCount: number;
   // Status de pagamento baseado no que o admin efetuou
   adminPaidAmount: number;
-  pendingPayment: number;
+  pendingRegularPayment: number;
   // Parte da barbearia (receita dos realizados - comissão dos realizados)
   shopEarnings: number;
   // Percentual de comissão do barbeiro
-  commissionPercent: number;
-  commissionLabel: string;
   // Listas para exibição
   filteredAppointments: Appointment[];
   extraPayments: EmployeePayment[];
@@ -212,6 +241,7 @@ export function BarberEarningsPage({
   });
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [row, setRow] = useState<EmployeePayrollRow | null>(null);
+  const [subscriptionPool, setSubscriptionPool] = useState<SubscriptionCommissionPool | null>(null);
   const [loading, setLoading] = useState(false);
 
   const { barber: ownBarber, loading: barberLoading } = useMyBarber(!barberOverride);
@@ -253,6 +283,7 @@ export function BarberEarningsPage({
       ]);
       setAppointments(appointmentsRes.items);
       setRow(summaryRes.items[0] ?? null);
+      setSubscriptionPool(summaryRes.subscriptionCommissionPool ?? null);
     } catch (err) {
       toast.error(getApiMessage(err));
     } finally {
@@ -278,7 +309,7 @@ export function BarberEarningsPage({
 
   const stats = useMemo((): EarningsStats => {
     let earnedRevenue = 0;
-    let earnedCommission = 0;
+    let regularCommission = 0;
     let cancelledRevenue = 0;
     let cancelledCommission = 0;
     let cancelledCount = 0;
@@ -286,17 +317,23 @@ export function BarberEarningsPage({
 
     for (const apt of appointments) {
       const total = calcServicesTotal(apt);
-      const commission = apt.commissionAmount ?? 0;
+      const appointmentRegularCommission = apt.services.reduce(
+        (sum, service) =>
+          service.commissionType === "subscription"
+            ? sum
+            : sum + Number(service.commissionAmount || 0),
+        0,
+      );
 
       if (isPaidStatus(apt.status)) {
         // Atendimento realizado (confirmado/finalizado) → entra nos ganhos do barbeiro
         earnedRevenue += total;
-        earnedCommission += commission;
+        regularCommission += appointmentRegularCommission;
         appointmentsCount++;
       } else if (isCancelledStatus(apt.status)) {
         // Cancelado / não compareceu → prejuízo
         cancelledRevenue += total;
-        cancelledCommission += commission;
+        cancelledCommission += appointmentRegularCommission;
         cancelledCount++;
       }
       // "scheduled" (agendados futuros) não entram em nenhum cálculo de ganhos
@@ -317,23 +354,26 @@ export function BarberEarningsPage({
 
     if (row) {
       earnedRevenue = Number(row.totalRevenue || earnedRevenue);
-      earnedCommission = Number(row.commission || earnedCommission);
+      regularCommission = Number(row.regularCommission ?? row.commission ?? regularCommission);
       appointmentsCount = Number(row.appointmentsCount || appointmentsCount);
     }
 
-    // Pendente = comissão ganha que o admin ainda não pagou via folha
-    const pendingPayment = roundMoney(
-      Math.max(roundMoney(earnedCommission) - adminPaidAmount, 0)
+    const subscriptionPoolCommission = Number(row?.subscriptionPoolCommission || 0);
+    const totalCommission = roundMoney(regularCommission + subscriptionPoolCommission);
+    // A folha quita apenas a comissão avulsa. O pote de assinaturas é apurado separadamente.
+    const pendingRegularPayment = roundMoney(
+      Math.max(roundMoney(regularCommission) - adminPaidAmount, 0)
     );
 
     const shopEarnings = roundMoney(
-      row ? Number(row.barbershopShare || 0) : Math.max(earnedRevenue - earnedCommission, 0)
+      Math.max(earnedRevenue - totalCommission, 0)
     );
-    const commissionPercent = barber?.commissionPercent ?? 50;
-    const hasSubscriptionPool = Number(row?.subscriptionPoolCommission || 0) > 0;
-    const commissionLabel = hasSubscriptionPool
-      ? `Seus Ganhos (${Number(row?.subscriptionParticipationPercent || 0).toFixed(2)}% do pote)`
-      : `Seus Ganhos (${commissionPercent}%)`;
+    const subscriptionAppointmentsCount = Number(row?.subscriptionAppointmentsCount || 0);
+    const subscriptionPoints = Number(row?.subscriptionPoints || 0);
+    const hasSubscriptionActivity =
+      subscriptionAppointmentsCount > 0 ||
+      subscriptionPoints > 0 ||
+      subscriptionPoolCommission > 0;
 
     // Tabela: exibe atendimentos realizados e cancelados (não exibe agendados futuros)
     const filteredAppointments = [...appointments]
@@ -342,16 +382,22 @@ export function BarberEarningsPage({
 
     return {
       earnedRevenue: roundMoney(earnedRevenue),
-      earnedCommission: roundMoney(earnedCommission),
+      regularCommission: roundMoney(regularCommission),
+      subscriptionPoolCommission: roundMoney(subscriptionPoolCommission),
+      totalCommission,
+      subscriptionParticipationPercent: Number(row?.subscriptionParticipationPercent || 0),
+      subscriptionPoints,
+      subscriptionAppointmentsCount,
+      subscriptionPoolTotal: Number(subscriptionPool?.commissionPool || 0),
+      subscriptionPoolPoints: Number(subscriptionPool?.totalPoints || 0),
+      hasSubscriptionActivity,
       cancelledRevenue: roundMoney(cancelledRevenue),
       cancelledCommission: roundMoney(cancelledCommission),
       cancelledCount,
       appointmentsCount,
       adminPaidAmount,
-      pendingPayment,
+      pendingRegularPayment,
       shopEarnings,
-      commissionPercent,
-      commissionLabel,
       filteredAppointments,
       extraPayments,
       payrollPayments,
@@ -359,7 +405,7 @@ export function BarberEarningsPage({
       payrollPaymentsTotal,
       totalReceivedPayments,
     };
-  }, [appointments, row, barber]);
+  }, [appointments, row, subscriptionPool]);
 
   const hasData =
     stats.appointmentsCount > 0 ||
@@ -430,43 +476,104 @@ export function BarberEarningsPage({
         </div>
       ) : (
         <>
-          {/* 5 cards de resumo */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {/* Resumo financeiro: avulsos e assinaturas são apurados separadamente */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
             <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs text-muted-foreground">Pendente</p>
-              <p className="mt-1 text-xl font-bold text-red-500">
-                {formatCurrency(stats.pendingPayment)}
+              <p className="text-xs text-muted-foreground">Faturamento dos atendimentos</p>
+              <p className="mt-1 text-xl font-bold text-foreground">
+                {formatCurrency(stats.earnedRevenue)}
               </p>
             </div>
 
             <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs text-muted-foreground">Pago</p>
+              <p className="text-xs text-muted-foreground">Comissão avulsa</p>
+              <p className="mt-1 text-xl font-bold text-emerald-500">
+                {formatCurrency(stats.regularCommission)}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-4">
+              <p className="text-xs text-muted-foreground">Comissão do pote</p>
+              <p className="mt-1 text-xl font-bold text-primary">
+                {formatCurrency(stats.subscriptionPoolCommission)}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+              <p className="text-xs text-muted-foreground">Total de comissões</p>
+              <p className="mt-1 text-xl font-bold text-primary">
+                {formatCurrency(stats.totalCommission)}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-4">
+              <p className="text-xs text-muted-foreground">Pago em folha</p>
               <p className="mt-1 text-xl font-bold text-emerald-500">
                 {formatCurrency(stats.adminPaidAmount)}
               </p>
             </div>
 
             <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs text-muted-foreground">Total Ganhos</p>
-              <p className="mt-1 text-xl font-bold text-primary">
-                {formatCurrency(stats.earnedCommission)}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs text-muted-foreground">Cancelados</p>
-              <p className="mt-1 text-xl font-bold text-amber-500">
-                {formatCurrency(stats.cancelledRevenue)}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs text-muted-foreground">Barbearia</p>
-              <p className="mt-1 text-xl font-bold text-foreground">
-                {formatCurrency(stats.shopEarnings)}
+              <p className="text-xs text-muted-foreground">Pendente avulso</p>
+              <p className="mt-1 text-xl font-bold text-red-500">
+                {formatCurrency(stats.pendingRegularPayment)}
               </p>
             </div>
           </div>
+
+          {stats.hasSubscriptionActivity && (
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-5">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 rounded-full bg-primary/10 p-2 text-primary">
+                  <CircleDollarSign size={18} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-semibold text-foreground">
+                    Como funciona a comissão das assinaturas
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Atendimentos avulsos geram comissão direta. Atendimentos cobertos pelo plano
+                    entram no pote de assinaturas e são distribuídos conforme os pontos e a
+                    participação de cada profissional.
+                  </p>
+                  <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Participação no pote</p>
+                      <p className="mt-0.5 font-semibold text-foreground">
+                        {stats.subscriptionParticipationPercent.toFixed(2)}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Pontos</p>
+                      <p className="mt-0.5 font-semibold text-foreground">
+                        {stats.subscriptionPoolPoints > 0
+                          ? `${stats.subscriptionPoints} de ${stats.subscriptionPoolPoints}`
+                          : stats.subscriptionPoints}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Atendimentos de plano</p>
+                      <p className="mt-0.5 font-semibold text-foreground">
+                        {stats.subscriptionAppointmentsCount}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Valor total do pote</p>
+                      <p className="mt-0.5 font-semibold text-foreground">
+                        {formatCurrency(stats.subscriptionPoolTotal)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Comissão neste pote</p>
+                      <p className="mt-0.5 font-semibold text-primary">
+                        {formatCurrency(stats.subscriptionPoolCommission)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Card de estatísticas do barbeiro */}
           <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -501,25 +608,31 @@ export function BarberEarningsPage({
                     value: formatCurrency(stats.earnedRevenue),
                   },
                   {
-                    label: stats.commissionLabel,
-                    value: formatCurrency(stats.earnedCommission),
+                    label: "Comissão avulsa",
+                    value: formatCurrency(stats.regularCommission),
                     highlight: true,
                   },
                   {
-                    label: "Pendente (a receber)",
-                    value: formatCurrency(stats.pendingPayment),
-                    warning: true,
+                    label: "Comissão do pote",
+                    value: formatCurrency(stats.subscriptionPoolCommission),
+                    highlight: true,
                   },
                   {
-                    label: "Pag. extras",
-                    value: formatCurrency(stats.extraPaymentsTotal),
+                    label: "Total de comissões",
+                    value: formatCurrency(stats.totalCommission),
+                    bold: true,
+                  },
+                  {
+                    label: "Pendente avulso",
+                    value: formatCurrency(stats.pendingRegularPayment),
+                    warning: true,
                   },
                   {
                     label: "Folha recebida",
                     value: formatCurrency(stats.payrollPaymentsTotal),
                   },
                   {
-                    label: "Barbearia",
+                    label: "Receita líquida estimada da barbearia",
                     value: formatCurrency(stats.shopEarnings),
                   },
                   {
@@ -575,14 +688,15 @@ export function BarberEarningsPage({
                       <th className="px-4 py-3 text-left font-medium">Data</th>
                       <th className="px-4 py-3 text-left font-medium">Horário</th>
                       <th className="px-4 py-3 text-left font-medium">Serviços</th>
+                      <th className="px-4 py-3 text-left font-medium">Tipo</th>
                       <th className="px-4 py-3 text-right font-medium">Total</th>
-                      <th className="px-4 py-3 text-right font-medium">Seus Ganhos</th>
+                      <th className="px-4 py-3 text-right font-medium">Apuração da comissão</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {stats.filteredAppointments.map((apt) => {
                       const aptTotal = calcServicesTotal(apt);
-                      const commission = apt.commissionAmount ?? 0;
+                      const commission = getAppointmentCommissionBreakdown(apt);
                       const paid = isPaidStatus(apt.status);
                       const cancelled = isCancelledStatus(apt.status);
                       const serviceNames = apt.services.map((s) => s.serviceName).join(", ");
@@ -621,6 +735,17 @@ export function BarberEarningsPage({
                           >
                             {serviceNames || "-"}
                           </td>
+                          <td className="px-4 py-3">
+                            {commission.hasSubscription && commission.hasRegular ? (
+                              <Badge variant="outline">Misto</Badge>
+                            ) : commission.hasSubscription ? (
+                              <Badge className="border-0 bg-primary/10 text-primary hover:bg-primary/20">
+                                Assinatura
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary">Avulso</Badge>
+                            )}
+                          </td>
                           <td
                             className={`px-4 py-3 text-right font-medium ${
                               cancelled ? "text-amber-500 line-through" : "text-foreground"
@@ -637,7 +762,21 @@ export function BarberEarningsPage({
                                   : "text-red-500"
                             }`}
                           >
-                            {cancelled ? "-" : formatCurrency(commission)}
+                            {cancelled ? (
+                              "-"
+                            ) : commission.hasSubscription ? (
+                              <div>
+                                {commission.hasRegular && (
+                                  <p>{formatCurrency(commission.regularCommission)} avulso</p>
+                                )}
+                                <p className="flex items-center justify-end gap-1 text-xs font-medium text-primary">
+                                  <Info size={12} />
+                                  Incluído no pote
+                                </p>
+                              </div>
+                            ) : (
+                              formatCurrency(commission.regularCommission)
+                            )}
                           </td>
                         </tr>
                       );

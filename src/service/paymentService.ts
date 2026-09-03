@@ -42,12 +42,22 @@ export interface PaymentRecord {
     } | null;
   } | null;
   amount: number;
+  originalAmount?: number;
+  discountAmount?: number;
+  surchargeAmount?: number;
+  adjustmentNote?: string | null;
+  splits?: Array<{
+    id?: string;
+    method: Exclude<PaymentMethod, "local" | "subscription">;
+    amount: number;
+  }>;
   method: PaymentMethod;
   status: PaymentStatus;
   statusRaw?: string | null;
   paidAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  effectiveDate?: string;
 }
 
 export interface ListPaymentsParams {
@@ -56,6 +66,7 @@ export interface ListPaymentsParams {
   method?: PaymentMethod;
   page?: number;
   limit?: number;
+  date?: string;
 }
 
 export interface ListPaymentsResponse {
@@ -140,7 +151,17 @@ export async function listAllPayments(params: ListPaymentsParams = {}): Promise<
 
 export async function updatePayment(
   payment: Pick<PaymentRecord, "id" | "appointmentId">,
-  data: { status?: PaymentStatus; method?: PaymentMethod; paidAt?: string; noShow?: boolean },
+  data: {
+    status?: PaymentStatus;
+    method?: PaymentMethod;
+    paidAt?: string;
+    noShow?: boolean;
+    originalAmount?: number;
+    discountAmount?: number;
+    surchargeAmount?: number;
+    adjustmentNote?: string | null;
+    splits?: Array<{ method: Exclude<PaymentMethod, "local" | "subscription">; amount: number }>;
+  },
 ) {
   const endpoint = payment.appointmentId ? "/appointmentPayments" : "/payments";
   const response = await api.patch<PaymentRecord>(`${endpoint}/${payment.id}`, data);
