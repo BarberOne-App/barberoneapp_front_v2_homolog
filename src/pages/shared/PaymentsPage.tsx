@@ -14,6 +14,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -150,6 +151,13 @@ function getPaymentDescription(payment: PaymentWithType) {
     return payment.subscription?.plan?.name || "Assinatura";
   }
 
+  if (payment.serviceTab) {
+    const names = payment.serviceTab.items
+      .map((item) => item.quantity > 1 ? `${item.quantity}x ${item.name}` : item.name)
+      .join(", ");
+    return `Comanda ${payment.serviceTab.code}${names ? ` — ${names}` : ""}`;
+  }
+
   const serviceNames = payment.appointment?.services
     ?.map((service) => service.serviceName)
     .filter(Boolean)
@@ -158,11 +166,46 @@ function getPaymentDescription(payment: PaymentWithType) {
   return serviceNames || "Agendamento";
 }
 
+function commandItemOriginLabel(item: NonNullable<PaymentRecord["serviceTab"]>["items"][number]) {
+  if (!item.isOriginal) return "";
+  if (item.type === "service") return " (serviço original)";
+  if (item.type === "product") return " (produto original)";
+  return " (item original)";
+}
+
+function commandItemStatus(status: PaymentStatus) {
+  if (status === "paid" || status === "approved") {
+    return { label: "PAGO", className: "text-emerald-700 dark:text-emerald-400" };
+  }
+  if (status === "covered") {
+    return { label: "COBERTO", className: "text-emerald-700 dark:text-emerald-400" };
+  }
+  if (status === "refunded") {
+    return { label: "REEMBOLSADO", className: "text-blue-700 dark:text-blue-400" };
+  }
+  if (status === "failed") {
+    return { label: "FALHOU", className: "text-red-700 dark:text-red-400" };
+  }
+  return { label: "PENDENTE", className: "text-amber-700 dark:text-amber-400" };
+}
+
 function shouldShowInPaymentsPage(payment: ApiPaymentWithType): payment is PaymentWithType {
   if (!payment.user?.id) return false;
-  if (payment.paymentType === "appointment") return Boolean(payment.appointmentId);
+  if (payment.paymentType === "appointment") return Boolean(payment.appointmentId || payment.serviceTabId);
   if (payment.paymentType === "subscription") return Boolean(payment.subscriptionId);
   return false;
+}
+
+function collapseCommandPayments(payments: PaymentWithType[]) {
+  const preferredByCommand = new Map<string, PaymentWithType>();
+  for (const payment of payments) {
+    if (!payment.serviceTab) continue;
+    const current = preferredByCommand.get(payment.serviceTab.id);
+    if (!current || (payment.serviceTabId && !current.serviceTabId)) {
+      preferredByCommand.set(payment.serviceTab.id, payment);
+    }
+  }
+  return payments.filter((payment) => !payment.serviceTab || preferredByCommand.get(payment.serviceTab.id)?.id === payment.id);
 }
 
 function downloadCsv(payments: PaymentWithType[]) {
@@ -192,10 +235,11 @@ function downloadCsv(payments: PaymentWithType[]) {
 }
 
 export function PaymentsPage() {
+  const [searchParams] = useSearchParams();
   const [payments, setPayments] = useState<PaymentWithType[]>([]);
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState<PaymentSummary | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("paymentId") ?? "");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [selectedDate, setSelectedDate] = useState(todayDateString);
@@ -229,7 +273,7 @@ export function PaymentsPage() {
         limit,
       });
 
-      const visibleItems = result.items.filter(shouldShowInPaymentsPage);
+      const visibleItems = collapseCommandPayments(result.items.filter(shouldShowInPaymentsPage));
 
       setPayments(visibleItems);
       setTotal(result.total);
@@ -588,28 +632,31 @@ export function PaymentsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div>
-                          <p className="text-sm font-medium text-foreground">
-                            {getPaymentDescription(payment)}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {typeLabels[payment.paymentType]}
-                            {payment.appointment?.barber?.displayName
-                              ? ` - ${payment.appointment.barber.displayName}`
-                              : ""}
-                          </p>
-                        </div>
+                        {payment.serviceTab ? <div className="min-w-80 space-y-2">
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">Comanda {payment.serviceTab.code}</p>
+                            <p className="text-xs text-muted-foreground">Comanda{payment.appointment?.barber?.displayName ? ` - ${payment.appointment.barber.displayName}` : ""}</p>
+                          </div>
+                          <div className="space-y-1 rounded-md border border-rose-200 bg-rose-100/80 p-2 dark:border-rose-900 dark:bg-rose-950/40">
+                            {payment.serviceTab.items.map((item, index) => {
+                              const itemStatus = commandItemStatus(item.status);
+                              return <div key={`${payment.id}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 text-xs">
+                                <span className="truncate" title={`${item.quantity}x ${item.name}${commandItemOriginLabel(item)}`}>{item.quantity}x {item.name}<span className="text-muted-foreground">{commandItemOriginLabel(item)}</span></span>
+                                <span className="whitespace-nowrap font-medium">{formatCurrency(item.total)}</span>
+                                <span className={`whitespace-nowrap text-[10px] font-bold ${itemStatus.className}`}>{itemStatus.label}</span>
+                              </div>;
+                            })}
+                          </div>
+                        </div> : <div>
+                          <p className="text-sm font-medium text-foreground">{getPaymentDescription(payment)}</p>
+                          <p className="text-xs text-muted-foreground">{typeLabels[payment.paymentType]}{payment.appointment?.barber?.displayName ? ` - ${payment.appointment.barber.displayName}` : ""}</p>
+                        </div>}
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-foreground">
                         {formatCurrency(payment.amount)}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 text-sm text-foreground">
-                          <CreditCard size={14} className="text-muted-foreground" />
-                          {payment.splits && payment.splits.length > 1
-                            ? payment.splits.map((split) => methodLabels[split.method]).join(" + ")
-                            : methodLabels[payment.method] || payment.method}
-                        </div>
+                        {payment.splits && payment.splits.length > 1 ? <div className="space-y-1">{payment.splits.map((split, index) => <div key={split.id ?? `${payment.id}-${index}`} className="flex items-center justify-between gap-3 rounded border px-2 py-1 text-xs"><span>{methodLabels[split.method]}</span><strong>{formatCurrency(split.amount)}</strong></div>)}</div> : <div className="flex items-center gap-2 text-sm text-foreground"><CreditCard size={14} className="text-muted-foreground" />{methodLabels[payment.method] || payment.method}</div>}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">

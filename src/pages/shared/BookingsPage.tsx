@@ -7,13 +7,16 @@ import {
   Filter,
   Loader2,
   MoreHorizontal,
+  Play,
   Plus,
+  ReceiptText,
   Search,
   Scissors,
   User,
   XCircle,
   Zap,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { AppCalendar } from "@/components/AppCalendar";
@@ -64,6 +67,7 @@ import { listBarbers, type Barber } from "@/service/barberService";
 import { listBlockedDates, type BlockedDate } from "@/service/blockedDateService";
 import { getBarbershopProfile, type BarbershopProfile } from "@/service/barbershopProfileService";
 import { listServices, type Service } from "@/service/serviceService";
+import { openServiceTab } from "@/service/serviceTabService";
 import { isFitAppointment } from "@/utils/fitAppointment";
 import { ClientPickerModal } from "@/components/ClientPickerModal";
 import { WhatsAppIcon } from "@/components/icons/WhatsAppIcon";
@@ -94,6 +98,7 @@ const emptyForm: BookingFormState = {
 const statusLabels: Record<AppointmentStatus, string> = {
   scheduled: "Agendado",
   confirmed: "Confirmado",
+  in_progress: "Em atendimento",
   completed: "Finalizado",
   cancelled: "Cancelado",
   no_show: "Nao compareceu",
@@ -102,6 +107,7 @@ const statusLabels: Record<AppointmentStatus, string> = {
 const statusStyles: Record<AppointmentStatus, string> = {
   scheduled: "bg-amber-500/10 text-amber-600 border-amber-500/20",
   confirmed: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  in_progress: "bg-violet-500/10 text-violet-600 border-violet-500/20",
   completed: "bg-blue-500/10 text-blue-600 border-blue-500/20",
   cancelled: "bg-red-500/10 text-red-600 border-red-500/20",
   no_show: "bg-gray-500/10 text-gray-500 border-gray-500/20",
@@ -190,6 +196,7 @@ function getServiceDuration(service: Service) {
 }
 
 export function BookingsPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -515,6 +522,16 @@ export function BookingsPage() {
     }
   }
 
+  async function startAttendance(appointment: Appointment) {
+    try {
+      await openServiceTab(appointment.id);
+      toast.success("Atendimento iniciado. Os itens do agendamento foram adicionados à comanda.");
+      navigate("/service-tabs");
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    }
+  }
+
   async function handleCancel(appointment: Appointment) {
     try {
       await cancelAppointment(appointment.id);
@@ -584,11 +601,13 @@ export function BookingsPage() {
                       ? "Agendados"
                       : statusFilter === "confirmed"
                         ? "Confirmados"
-                        : statusFilter === "completed"
-                          ? "Finalizados"
-                          : statusFilter === "cancelled"
-                            ? "Cancelados"
-                            : "Nao compareceu"
+                        : statusFilter === "in_progress"
+                          ? "Em atendimento"
+                            : statusFilter === "completed"
+                              ? "Finalizados"
+                              : statusFilter === "cancelled"
+                                ? "Cancelados"
+                                : "Nao compareceu"
                   }`}
           </h3>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -619,7 +638,7 @@ export function BookingsPage() {
                     setPage(1);
                   }}
                 >
-                  <DropdownMenuRadioItem value="active">Ativos (pendentes e confirmados)</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="active">Ativos (agendados, confirmados e em atendimento)</DropdownMenuRadioItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuRadioItem value="completed">Finalizados</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="cancelled">Cancelados</DropdownMenuRadioItem>
@@ -627,6 +646,7 @@ export function BookingsPage() {
                   <DropdownMenuSeparator />
                   <DropdownMenuRadioItem value="scheduled">Somente agendados</DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="confirmed">Somente confirmados</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="in_progress">Em atendimento</DropdownMenuRadioItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
@@ -702,9 +722,9 @@ export function BookingsPage() {
                 ) : (
                   filteredAppointments.map((appointment) => {
                     const start = formatDateTime(appointment.startAt);
-                    const serviceText =
-                      appointment.services.map((service) => service.serviceName).join(", ") ||
-                      "Sem servico";
+                    const serviceText = appointment.services.map((service) => service.serviceName)
+                      .concat(appointment.products.map((product) => product.productName)).join(", ") || "Sem itens";
+                    const transferUnavailable = new Date(appointment.startAt).getTime() - Date.now() < 60 * 60 * 1000;
                     const clientName = appointment.dependent?.name || appointment.client?.name || "Cliente";
                     const barberName = appointment.barber?.displayName || "Sem barbeiro";
 
@@ -799,13 +819,8 @@ export function BookingsPage() {
                                 <CheckCircle2 size={14} />
                                 Confirmar
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={appointment.status === "completed"}
-                                onClick={() => changeStatus(appointment, "completed")}
-                              >
-                                <CheckCircle2 size={14} />
-                                Finalizar
-                              </DropdownMenuItem>
+                              {appointment.status === "confirmed" && <DropdownMenuItem onClick={() => void startAttendance(appointment)}><Play size={14} />Iniciar atendimento</DropdownMenuItem>}
+                              {appointment.status === "in_progress" && <DropdownMenuItem onClick={() => navigate("/service-tabs")}><ReceiptText size={14} />Abrir comanda</DropdownMenuItem>}
                               <DropdownMenuItem
                                 disabled={appointment.status === "no_show"}
                                 onClick={() => changeStatus(appointment, "no_show")}
@@ -816,9 +831,9 @@ export function BookingsPage() {
                               {(appointment.status === "scheduled" || appointment.status === "confirmed") && (
                                 <>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => openTransferDialog(appointment)}>
+                                  <DropdownMenuItem disabled={transferUnavailable} onClick={() => openTransferDialog(appointment)}>
                                     <ArrowLeftRight size={14} />
-                                    Transferir barbeiro
+                                    {transferUnavailable ? "Alteração indisponível (menos de 1 hora)" : "Transferir barbeiro"}
                                   </DropdownMenuItem>
                                 </>
                               )}

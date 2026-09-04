@@ -15,6 +15,20 @@ export interface PaymentRecord {
     phone?: string | null;
   } | null;
   appointmentId?: string | null;
+  serviceTabId?: string | null;
+  serviceTab?: {
+    id: string;
+    code: string;
+    items: Array<{
+      name: string;
+      type: "service" | "product" | "consumption";
+      isOriginal: boolean;
+      status: PaymentStatus;
+      quantity: number;
+      unitPrice: number;
+      total: number;
+    }>;
+  } | null;
   appointment?: {
     id: string;
     startAt: string;

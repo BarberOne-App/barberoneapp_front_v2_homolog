@@ -3,6 +3,8 @@ import type { PaymentMethod } from "./paymentService";
 
 export interface CashClosingPayment {
   id: string;
+  transactionId: string;
+  splitId?: string | null;
   userId?: string | null;
   clientName?: string | null;
   appointmentId?: string | null;
