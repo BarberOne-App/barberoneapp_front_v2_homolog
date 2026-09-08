@@ -17,7 +17,8 @@ export type PermissionKey =
   | "manageBlockedDates"
   | "manageBenefits"
   | "manageSettings"
-  | "manageGallery";
+  | "manageGallery"
+  | "manageCrm";
 
 /**
  * Permissões que o recepcionista tem POR PADRÃO.

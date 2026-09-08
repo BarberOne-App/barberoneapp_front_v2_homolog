@@ -1,4 +1,4 @@
-import { Calendar, CircleDollarSign, CreditCard, Home, LayoutList, Package, ReceiptText, Scissors, Settings, UserCheck, Zap } from "lucide-react";
+import { Calendar, CircleDollarSign, CreditCard, Home, Kanban, LayoutList, Package, ReceiptText, Scissors, Settings, UserCheck, Zap } from "lucide-react";
 
 import { ProfileSidebar } from "../shared/ProfileSidebar";
 import type { SidebarSection } from "../shared/ProfileSidebar";
@@ -40,6 +40,7 @@ const sections: SidebarSection[] = [
         label: "Atendimento",
         children: [
           { icon: UserCheck, label: "Clientes", href: "/customers", requiredPermission: "manageCustomers" },
+          { icon: Kanban, label: "CRM", href: "/crm", requiredPermission: "manageCrm" },
         ],
       },
     ],

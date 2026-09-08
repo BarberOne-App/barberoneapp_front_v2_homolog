@@ -83,6 +83,13 @@ export interface CrmCardStats {
   lifetimeValue: number | null;
 }
 
+export interface CrmTrigger {
+  id: string;
+  reason: string;
+  isPrimary: boolean;
+  createdAt: string;
+}
+
 export interface CrmCard {
   id: string;
   barbershopId: string;
@@ -96,6 +103,7 @@ export interface CrmCard {
   createdByName: string | null;
   stage: string;
   primaryReason: string | null;
+  triggers: CrmTrigger[];
   nextAction: string | null;
   nextActionAt: string | null;
   notes: string | null;

@@ -14,6 +14,7 @@ import { SubscriptionReceivablesCalendarPage } from "../pages/admin/Subscription
 import { SubscriptionWithdrawalRequestPage } from "../pages/admin/SubscriptionWithdrawalRequestPage";
 import { BookingsPage } from "../pages/shared/BookingsPage";
 import { CashClosingPage } from "../pages/shared/CashClosingPage";
+import { CrmKanbanPage } from "../pages/shared/CrmKanbanPage";
 import { FitAppointmentPage } from "../pages/shared/FitAppointmentPage";
 import { CustomersPage } from "../pages/shared/CustomersPage";
 import { HelpCenterPage } from "../pages/shared/HelpCenterPage";
@@ -189,6 +190,13 @@ export const adminRoutes: AppRoute[] = [
     title: "Avaliacoes",
     breadcrumbs: ["Relacionamento", "Avaliacoes"],
     Component: ReviewsPage,
+  },
+  {
+    path: "/crm",
+    title: "CRM",
+    breadcrumbs: ["Relacionamento", "CRM"],
+    Component: CrmKanbanPage,
+    requiredPermission: "manageCrm",
   },
   {
     path: "/settings",
