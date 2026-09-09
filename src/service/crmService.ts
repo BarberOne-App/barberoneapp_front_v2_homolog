@@ -104,6 +104,7 @@ export interface CrmCard {
   stage: string;
   primaryReason: string | null;
   triggers: CrmTrigger[];
+  lastContactType: string | null;
   nextAction: string | null;
   nextActionAt: string | null;
   notes: string | null;

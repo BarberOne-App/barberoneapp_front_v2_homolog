@@ -1,8 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { toast } from "sonner";
-import { Filter, Kanban as KanbanIcon, Loader2, Plus, Search, Settings, Star } from "lucide-react";
+import {
+  Clock,
+  Filter,
+  Kanban as KanbanIcon,
+  Loader2,
+  MessageCircle,
+  Plus,
+  Search,
+  Settings,
+  Star,
+  Zap,
+} from "lucide-react";
 
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,10 +26,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CrmAutomationDialog } from "@/components/CrmAutomationDialog";
 import { CrmCardDetailDialog } from "@/components/CrmCardDetailDialog";
 import { CrmCreateCardDialog } from "@/components/CrmCreateCardDialog";
 import { CrmPipelineManagerDialog } from "@/components/CrmPipelineManagerDialog";
 import {
+  CONTACT_TYPE_LABELS,
+  REASON_LABELS,
   listCrmCards,
   listCrmPipelines,
   reasonLabel,
@@ -37,6 +52,22 @@ function getApiMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   return "Não foi possível concluir a operação.";
 }
+
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+const STAGE_BAR_COLORS = [
+  "bg-primary",
+  "bg-blue-500",
+  "bg-emerald-500",
+  "bg-amber-500",
+  "bg-rose-500",
+  "bg-violet-500",
+];
 
 type SortBy = "default" | "days" | "ticket";
 
@@ -63,11 +94,13 @@ export function CrmKanbanPage() {
 
   const [search, setSearch] = useState("");
   const [responsibleFilter, setResponsibleFilter] = useState<string>("all");
+  const [reasonFilter, setReasonFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<SortBy>("default");
   const [staff, setStaff] = useState<UserProfile[]>([]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
+  const [automationOpen, setAutomationOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 
   const dragStateRef = useRef<DragState | null>(null);
@@ -130,6 +163,33 @@ export function CrmKanbanPage() {
     return Array.from(map.entries());
   }, [staff]);
 
+  const reasonOptions = useMemo(() => {
+    const set = new Set<string>();
+    cards.forEach((c) => c.triggers.forEach((t) => set.add(t.reason)));
+    return Array.from(set);
+  }, [cards]);
+
+  const summary = useMemo(() => {
+    const stageOutcome = new Map(
+      (activePipeline?.stages ?? []).map((s) => [s.key, s.terminalOutcome])
+    );
+    let ativos = 0;
+    let recuperados = 0;
+    let encerrados = 0;
+    for (const card of cards) {
+      if (!card.resolvedAt) {
+        ativos += 1;
+        continue;
+      }
+      const outcome = stageOutcome.get(card.stage);
+      if (outcome === "recuperado") recuperados += 1;
+      else if (outcome === "encerrado") encerrados += 1;
+    }
+    const totalResolved = recuperados + encerrados;
+    const taxa = totalResolved > 0 ? Math.round((recuperados / totalResolved) * 100) : null;
+    return { ativos, recuperados, encerrados, taxa };
+  }, [cards, activePipeline]);
+
   const visibleCards = useMemo(() => {
     let list = cards;
     if (search.trim()) {
@@ -145,6 +205,9 @@ export function CrmKanbanPage() {
     if (responsibleFilter !== "all") {
       list = list.filter((c) => c.responsibleUserId === responsibleFilter);
     }
+    if (reasonFilter !== "all") {
+      list = list.filter((c) => c.triggers.some((t) => t.reason === reasonFilter));
+    }
     if (sortBy === "days") {
       list = [...list].sort(
         (a, b) => (b.stats.daysSinceLastVisit ?? -1) - (a.stats.daysSinceLastVisit ?? -1)
@@ -153,7 +216,7 @@ export function CrmKanbanPage() {
       list = [...list].sort((a, b) => (b.stats.averageTicket ?? 0) - (a.stats.averageTicket ?? 0));
     }
     return list;
-  }, [cards, search, responsibleFilter, sortBy]);
+  }, [cards, search, responsibleFilter, reasonFilter, sortBy]);
 
   const columns = useMemo(() => {
     const stages = [...(activePipeline?.stages ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -166,6 +229,8 @@ export function CrmKanbanPage() {
         .sort((a, b) => (sortBy === "default" ? a.sortOrder - b.sortOrder : 0)),
     }));
   }, [activePipeline, visibleCards, sortBy]);
+
+  const totalVisibleCards = visibleCards.length;
 
   async function moveCardToStage(card: CrmCard, newStage: string) {
     const previous = cards;
@@ -297,6 +362,25 @@ export function CrmKanbanPage() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
+                <Filter size={14} />
+                Motivo
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuRadioGroup value={reasonFilter} onValueChange={setReasonFilter}>
+                <DropdownMenuRadioItem value="all">Todos</DropdownMenuRadioItem>
+                {reasonOptions.map((reason) => (
+                  <DropdownMenuRadioItem key={reason} value={reason}>
+                    {REASON_LABELS[reason] ?? reason}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
                 Ordenar
               </Button>
             </DropdownMenuTrigger>
@@ -309,9 +393,17 @@ export function CrmKanbanPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button variant="outline" size="sm" onClick={() => setManagerOpen(true)}>
-            <Settings size={14} className="mr-2" />
-            Pipelines
+          <Button
+            variant="outline"
+            size="icon"
+            title="Automação pós-atendimento"
+            onClick={() => setAutomationOpen(true)}
+          >
+            <Zap size={14} />
+          </Button>
+
+          <Button variant="outline" size="icon" title="Pipelines" onClick={() => setManagerOpen(true)}>
+            <Settings size={14} />
           </Button>
 
           <Button size="sm" onClick={() => setCreateOpen(true)} disabled={!activePipelineId}>
@@ -331,6 +423,29 @@ export function CrmKanbanPage() {
             ))}
           </TabsList>
         </Tabs>
+      )}
+
+      {!pipelinesLoading && !showEmptyPipelines && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground">Cards ativos</p>
+            <p className="mt-1 text-2xl font-semibold text-foreground">{summary.ativos}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground">Recuperados</p>
+            <p className="mt-1 text-2xl font-semibold text-emerald-500">{summary.recuperados}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground">Encerrados</p>
+            <p className="mt-1 text-2xl font-semibold text-muted-foreground">{summary.encerrados}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground">Taxa de recuperação</p>
+            <p className="mt-1 text-2xl font-semibold text-foreground">
+              {summary.taxa !== null ? `${summary.taxa}%` : "–"}
+            </p>
+          </div>
+        </div>
       )}
 
       {pipelinesLoading ? (
@@ -361,71 +476,110 @@ export function CrmKanbanPage() {
           Nenhum card encontrado com os filtros atuais.
         </div>
       ) : (
-        <div className="flex flex-1 gap-4 overflow-x-auto pb-2">
-          {columns.map((column) => (
-            <div
-              key={column.key}
-              data-crm-column={column.key}
-              className="flex w-72 shrink-0 flex-col rounded-lg border border-border bg-secondary/30 p-2 transition-all"
-            >
-              <div className="mb-2 flex items-center justify-between px-1">
-                <span className="text-sm font-semibold text-foreground">{column.label}</span>
-                <Badge variant="outline">{column.cards.length}</Badge>
-              </div>
+        <>
+          <div className="flex flex-1 gap-4 overflow-x-auto pb-2">
+            {columns.map((column) => (
+              <div
+                key={column.key}
+                data-crm-column={column.key}
+                className="flex w-72 shrink-0 flex-col rounded-lg border border-border bg-secondary/30 p-2 transition-all"
+              >
+                <div className="mb-2 flex items-center justify-between px-1">
+                  <span className="text-sm font-semibold text-foreground">{column.label}</span>
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+                    {column.cards.length}
+                  </span>
+                </div>
 
-              <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
-                {column.cards.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-                    Nenhum card aqui
-                  </div>
-                ) : (
-                  column.cards.map((card) => (
-                    <div
-                      key={card.id}
-                      id={`crm-card-${card.id}`}
-                      onPointerDown={(e) => handlePointerDown(e, card)}
-                      onPointerMove={handlePointerMove}
-                      onPointerUp={handlePointerUp}
-                      onClick={() => {
-                        if (!dragStateRef.current?.moved) setSelectedCardId(card.id);
-                      }}
-                      className="cursor-grab select-none rounded-md border border-border bg-card p-3 text-sm shadow-sm active:cursor-grabbing"
-                    >
-                      <p className="truncate font-medium text-foreground">{card.clientName}</p>
-                      {card.clientPhone && (
-                        <p className="text-xs text-muted-foreground">{card.clientPhone}</p>
-                      )}
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {card.primaryReason && (
-                          <Badge variant="default" className="gap-1 text-[10px]">
-                            <Star size={9} />
-                            {reasonLabel(card.primaryReason)}
-                          </Badge>
-                        )}
-                        {card.triggers
-                          .filter((t) => !t.isPrimary)
-                          .slice(0, 2)
-                          .map((t) => (
-                            <Badge key={t.id} variant="outline" className="text-[10px]">
-                              {reasonLabel(t.reason)}
-                            </Badge>
-                          ))}
-                      </div>
-                      <div className="mt-2 space-y-0.5 text-[11px] text-muted-foreground">
-                        {card.stats.favoriteService && <p>Serviço favorito: {card.stats.favoriteService}</p>}
-                        {card.stats.daysSinceLastVisit !== null && (
-                          <p>{card.stats.daysSinceLastVisit} dia(s) sem retornar</p>
-                        )}
-                        {card.responsibleName && <p>Responsável: {card.responsibleName}</p>}
-                        {card.nextAction && <p>Próxima ação: {card.nextAction}</p>}
-                      </div>
+                <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
+                  {column.cards.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+                      Nenhum card aqui
                     </div>
-                  ))
-                )}
+                  ) : (
+                    column.cards.map((card) => (
+                      <div
+                        key={card.id}
+                        id={`crm-card-${card.id}`}
+                        onPointerDown={(e) => handlePointerDown(e, card)}
+                        onPointerMove={handlePointerMove}
+                        onPointerUp={handlePointerUp}
+                        onClick={() => {
+                          if (!dragStateRef.current?.moved) setSelectedCardId(card.id);
+                        }}
+                        className="cursor-grab select-none rounded-md border border-border bg-card p-3 text-sm shadow-sm active:cursor-grabbing"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-7 w-7">
+                            <AvatarFallback className="bg-primary/15 text-[11px] font-semibold text-primary">
+                              {getInitials(card.clientName)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-foreground">{card.clientName}</p>
+                            {card.clientPhone && (
+                              <p className="truncate text-xs text-muted-foreground">{card.clientPhone}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {card.primaryReason && (
+                            <Badge variant="default" className="gap-1 text-[10px]">
+                              <Star size={9} />
+                              {reasonLabel(card.primaryReason)}
+                            </Badge>
+                          )}
+                          {card.triggers
+                            .filter((t) => !t.isPrimary)
+                            .slice(0, 2)
+                            .map((t) => (
+                              <Badge key={t.id} variant="outline" className="text-[10px]">
+                                {reasonLabel(t.reason)}
+                              </Badge>
+                            ))}
+                        </div>
+
+                        <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+                          {card.stats.favoriteService && <p>Serviço favorito: {card.stats.favoriteService}</p>}
+                          <p className="flex items-center gap-1">
+                            <Clock size={10} />
+                            {card.stats.lastVisitAt
+                              ? `Última visita: há ${card.stats.daysSinceLastVisit} dia(s)`
+                              : "Última visita: Sem visitas"}
+                          </p>
+                          {card.lastContactType && (
+                            <p className="flex items-center gap-1">
+                              <MessageCircle size={10} />
+                              {CONTACT_TYPE_LABELS[card.lastContactType] ?? card.lastContactType}
+                            </p>
+                          )}
+                          {card.responsibleName && <p>Responsável: {card.responsibleName}</p>}
+                          {card.nextAction && <p>Próxima ação: {card.nextAction}</p>}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
+            ))}
+          </div>
+
+          {totalVisibleCards > 0 && (
+            <div className="flex h-2 w-full overflow-hidden rounded-full bg-secondary">
+              {columns
+                .filter((c) => c.cards.length > 0)
+                .map((column, index) => (
+                  <div
+                    key={column.key}
+                    title={`${column.label}: ${column.cards.length}`}
+                    className={STAGE_BAR_COLORS[index % STAGE_BAR_COLORS.length]}
+                    style={{ width: `${(column.cards.length / totalVisibleCards) * 100}%` }}
+                  />
+                ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
 
       {activePipelineId && (
@@ -450,6 +604,8 @@ export function CrmKanbanPage() {
         onClose={() => setManagerOpen(false)}
         onChanged={loadPipelines}
       />
+
+      <CrmAutomationDialog open={automationOpen} onClose={() => setAutomationOpen(false)} />
     </div>
   );
 }
