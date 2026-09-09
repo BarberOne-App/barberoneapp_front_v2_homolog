@@ -171,6 +171,7 @@ export function CrmCreateCardDialog({ open, pipelineId, onClose, onCreated }: Cr
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         onSelect={(selected) => setClient(selected)}
+        allowCreate
       />
     </>
   );

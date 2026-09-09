@@ -34,6 +34,69 @@ function getApiMessage(error: unknown) {
   return "Não foi possível concluir a operação.";
 }
 
+interface CrmPipelineTemplate {
+  key: string;
+  name: string;
+  description: string;
+  stages: CrmStageDefinition[];
+}
+
+const CRM_PIPELINE_TEMPLATES: CrmPipelineTemplate[] = [
+  {
+    key: "padrao",
+    name: "Padrão",
+    description: "Fluxo genérico de recuperação, para qualquer motivo.",
+    stages: [
+      { key: "contato_pendente", label: "Contato pendente", sortOrder: 1, isTerminal: false, terminalOutcome: null },
+      { key: "em_contato", label: "Em contato", sortOrder: 2, isTerminal: false, terminalOutcome: null },
+      { key: "aguardando_cliente", label: "Aguardando cliente", sortOrder: 3, isTerminal: false, terminalOutcome: null },
+      { key: "retorno_agendado", label: "Retorno agendado", sortOrder: 4, isTerminal: false, terminalOutcome: null },
+      { key: "recuperado", label: "Recuperado", sortOrder: 5, isTerminal: true, terminalOutcome: "recuperado" },
+      { key: "encerrado", label: "Encerrado", sortOrder: 6, isTerminal: true, terminalOutcome: "encerrado" },
+    ],
+  },
+  {
+    key: "pos_atendimento",
+    name: "Pós-atendimento",
+    description: "Fluxo genérico de pós-venda para qualquer serviço concluído — ideal para usar na automação automática.",
+    stages: [
+      { key: "contato_pendente", label: "Contato pendente", sortOrder: 1, isTerminal: false, terminalOutcome: null },
+      { key: "em_contato", label: "Em contato", sortOrder: 2, isTerminal: false, terminalOutcome: null },
+      { key: "retorno_agendado", label: "Retorno agendado", sortOrder: 3, isTerminal: false, terminalOutcome: null },
+      { key: "recuperado", label: "Recuperado", sortOrder: 4, isTerminal: true, terminalOutcome: "recuperado" },
+      { key: "encerrado", label: "Encerrado", sortOrder: 5, isTerminal: true, terminalOutcome: "encerrado" },
+    ],
+  },
+  {
+    key: "assinatura_vencida",
+    name: "Assinatura vencida",
+    description: "Acompanhamento de clientes com assinatura/plano vencido até a renovação.",
+    stages: [
+      { key: "contato_pendente", label: "Contato pendente", sortOrder: 1, isTerminal: false, terminalOutcome: null },
+      { key: "negociando_renovacao", label: "Negociando renovação", sortOrder: 2, isTerminal: false, terminalOutcome: null },
+      { key: "renovado", label: "Renovado", sortOrder: 3, isTerminal: true, terminalOutcome: "recuperado" },
+      { key: "cancelado", label: "Cancelado", sortOrder: 4, isTerminal: true, terminalOutcome: "encerrado" },
+    ],
+  },
+  {
+    key: "avaliacao_baixa",
+    name: "Avaliação baixa",
+    description: "Tratativa de clientes que deixaram uma avaliação ruim.",
+    stages: [
+      { key: "contato_pendente", label: "Contato pendente", sortOrder: 1, isTerminal: false, terminalOutcome: null },
+      { key: "em_tratativa", label: "Em tratativa", sortOrder: 2, isTerminal: false, terminalOutcome: null },
+      { key: "resolvido", label: "Resolvido", sortOrder: 3, isTerminal: true, terminalOutcome: "recuperado" },
+      { key: "sem_resposta", label: "Sem resposta", sortOrder: 4, isTerminal: true, terminalOutcome: "encerrado" },
+    ],
+  },
+  {
+    key: "em_branco",
+    name: "Em branco",
+    description: "Comece do zero, com apenas uma etapa inicial.",
+    stages: [{ key: "etapa_1", label: "Nova etapa", sortOrder: 1, isTerminal: false, terminalOutcome: null }],
+  },
+];
+
 function slugifyKey(label: string) {
   return label
     .trim()
@@ -54,6 +117,7 @@ export function CrmPipelineManagerDialog({ open, onClose, onChanged }: CrmPipeli
   const [pipelines, setPipelines] = useState<CrmPipeline[]>([]);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<CrmPipeline | "new" | null>(null);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [name, setName] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [stages, setStages] = useState<CrmStageDefinition[]>([]);
@@ -69,20 +133,25 @@ export function CrmPipelineManagerDialog({ open, onClose, onChanged }: CrmPipeli
 
   useEffect(() => {
     if (open) loadPipelines();
-    else setEditing(null);
+    else {
+      setEditing(null);
+      setShowTemplatePicker(false);
+    }
   }, [open]);
 
-  function startEdit(pipeline: CrmPipeline | "new") {
-    if (pipeline === "new") {
-      setName("");
-      setIsDefault(pipelines.length === 0);
-      setStages([{ key: "contato_pendente", label: "Contato pendente", sortOrder: 1, isTerminal: false, terminalOutcome: null }]);
-    } else {
-      setName(pipeline.name);
-      setIsDefault(pipeline.isDefault);
-      setStages([...pipeline.stages].sort((a, b) => a.sortOrder - b.sortOrder));
-    }
+  function startEditExisting(pipeline: CrmPipeline) {
+    setName(pipeline.name);
+    setIsDefault(pipeline.isDefault);
+    setStages([...pipeline.stages].sort((a, b) => a.sortOrder - b.sortOrder));
     setEditing(pipeline);
+  }
+
+  function startEditFromTemplate(template: CrmPipelineTemplate) {
+    setName(template.name);
+    setIsDefault(pipelines.length === 0);
+    setStages(template.stages.map((s) => ({ ...s })));
+    setEditing("new");
+    setShowTemplatePicker(false);
   }
 
   function addStage() {
@@ -164,7 +233,27 @@ export function CrmPipelineManagerDialog({ open, onClose, onChanged }: CrmPipeli
           <DialogTitle>Pipelines do CRM</DialogTitle>
         </DialogHeader>
 
-        {editing ? (
+        {showTemplatePicker ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Escolha o modelo mais parecido com o que você precisa — dá pra ajustar nome e etapas depois.
+            </p>
+            {CRM_PIPELINE_TEMPLATES.map((template) => (
+              <button
+                key={template.key}
+                type="button"
+                onClick={() => startEditFromTemplate(template)}
+                className="w-full rounded-md border border-border p-3 text-left transition-colors hover:bg-secondary/60"
+              >
+                <p className="font-medium text-foreground">{template.name}</p>
+                <p className="text-xs text-muted-foreground">{template.description}</p>
+              </button>
+            ))}
+            <Button type="button" variant="outline" onClick={() => setShowTemplatePicker(false)}>
+              Voltar
+            </Button>
+          </div>
+        ) : editing ? (
           <div className="space-y-4">
             <div>
               <Label className="mb-2 block">Nome do pipeline</Label>
@@ -271,7 +360,7 @@ export function CrmPipelineManagerDialog({ open, onClose, onChanged }: CrmPipeli
                     <p className="text-xs text-muted-foreground">{pipeline.stages.length} etapa(s)</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => startEdit(pipeline)}>
+                    <Button type="button" variant="outline" size="sm" onClick={() => startEditExisting(pipeline)}>
                       Editar
                     </Button>
                     <Button
@@ -287,7 +376,7 @@ export function CrmPipelineManagerDialog({ open, onClose, onChanged }: CrmPipeli
                 </div>
               ))
             )}
-            <Button type="button" onClick={() => startEdit("new")}>
+            <Button type="button" onClick={() => setShowTemplatePicker(true)}>
               <Plus size={14} className="mr-2" />
               Novo pipeline
             </Button>
