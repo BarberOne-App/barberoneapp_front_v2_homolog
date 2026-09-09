@@ -11,6 +11,7 @@ export type AppointmentStatus =
 export interface Appointment {
   id: string;
   barberId: string;
+  responsibleBarberIds?: string[];
   clientId: string;
   dependentId?: string | null;
   startAt: string;
@@ -81,6 +82,7 @@ export interface ListAppointmentsParams {
   page?: number;
   limit?: number;
   allAppointments?: boolean;
+  employeeHistory?: boolean;
 }
 
 export interface ListAppointmentsResponse {

@@ -30,12 +30,12 @@ function apiMessage(error: unknown) {
 
 async function listAllAppointments() {
   const limit = 100;
-  const first = await listAppointments({ allAppointments: true, page: 1, limit });
+  const first = await listAppointments({ allAppointments: true, employeeHistory: true, page: 1, limit });
   const items: Appointment[] = [...first.items];
   const pages = Math.ceil(first.total / limit);
 
   for (let page = 2; page <= pages; page += 1) {
-    const result = await listAppointments({ allAppointments: true, page, limit });
+    const result = await listAppointments({ allAppointments: true, employeeHistory: true, page, limit });
     items.push(...result.items);
   }
 
@@ -73,7 +73,12 @@ export function EmployeeAppointmentHistoryPage() {
         setBarbers(barberItems);
         setAppointmentCounts(
           appointments.reduce<Record<string, number>>((counts, appointment) => {
-            counts[appointment.barberId] = (counts[appointment.barberId] ?? 0) + 1;
+            const responsibleBarberIds = appointment.responsibleBarberIds?.length
+              ? appointment.responsibleBarberIds
+              : [appointment.barberId];
+            for (const responsibleBarberId of responsibleBarberIds) {
+              counts[responsibleBarberId] = (counts[responsibleBarberId] ?? 0) + 1;
+            }
             return counts;
           }, {}),
         );

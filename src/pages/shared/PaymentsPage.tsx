@@ -119,8 +119,36 @@ function todayDateString() {
   return `${year}-${month}-${day}`;
 }
 
+function getCommandTotal(payment: PaymentRecord) {
+  return payment.serviceTab?.items.reduce((sum, item) => sum + Number(item.total || 0), 0) ?? null;
+}
+
+function formatMoneyInput(value: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    useGrouping: false,
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
 function parseMoney(value: string) {
-  const parsed = Number(value.replace(/\./g, "").replace(",", "."));
+  const sanitized = value.trim().replace(/[^\d,.-]/g, "");
+  const lastComma = sanitized.lastIndexOf(",");
+  const lastDot = sanitized.lastIndexOf(".");
+  let normalized = sanitized;
+
+  if (lastComma >= 0 && lastDot >= 0) {
+    normalized = lastComma > lastDot
+      ? sanitized.replace(/\./g, "").replace(",", ".")
+      : sanitized.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    normalized = sanitized.replace(",", ".");
+  } else if (lastDot >= 0) {
+    const decimalDigits = sanitized.length - lastDot - 1;
+    normalized = decimalDigits <= 2 ? sanitized : sanitized.replace(/\./g, "");
+  }
+
+  const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -242,7 +270,9 @@ export function PaymentsPage() {
   const [search, setSearch] = useState(() => searchParams.get("paymentId") ?? "");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  const [selectedDate, setSelectedDate] = useState(todayDateString);
+  const [selectedDate, setSelectedDate] = useState(
+    () => searchParams.get("date") ?? todayDateString(),
+  );
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -261,14 +291,14 @@ export function PaymentsPage() {
 
   const limit = 20;
 
-  const loadPayments = useCallback(async () => {
+  const loadPayments = useCallback(async (dateOverride?: string) => {
     setLoading(true);
     setError(null);
 
     try {
       const result = await listAllPayments({
         status: statusFilter === "all" ? undefined : statusFilter,
-        date: selectedDate,
+        date: dateOverride ?? selectedDate,
         page,
         limit,
       });
@@ -369,16 +399,19 @@ export function PaymentsPage() {
         ? payment.method
         : "dinheiro";
     const existingSplits = payment.splits?.length
-      ? payment.splits.map((split) => ({ method: split.method, amount: String(split.amount) }))
+      ? payment.splits.map((split) => ({
+          method: split.method,
+          amount: formatMoneyInput(split.amount),
+        }))
       : [
-          { method: allowedMethod, amount: String(payment.amount) },
+          { method: allowedMethod, amount: formatMoneyInput(payment.amount) },
           { method: allowedMethod === "pix" ? "dinheiro" as const : "pix" as const, amount: "" },
         ];
 
     setSelectedLocalMethod(allowedMethod);
-    setOriginalAmount(String(currentOriginal));
-    setDiscountAmount(String(payment.discountAmount ?? 0));
-    setSurchargeAmount(String(payment.surchargeAmount ?? 0));
+    setOriginalAmount(formatMoneyInput(currentOriginal));
+    setDiscountAmount(formatMoneyInput(payment.discountAmount ?? 0));
+    setSurchargeAmount(formatMoneyInput(payment.surchargeAmount ?? 0));
     setAdjustmentNote(payment.adjustmentNote ?? "");
     setPaymentSplits(existingSplits);
     setSplitPayment((payment.splits?.length ?? 0) > 1);
@@ -439,7 +472,10 @@ export function PaymentsPage() {
       });
       toast.success("Pagamento confirmado.");
       setLocalPaymentDialog(null);
-      await loadPayments();
+      const paidDate = todayDateString();
+      setSelectedDate(paidDate);
+      setPage(1);
+      await loadPayments(paidDate);
     } catch (err) {
       toast.error(getApiMessage(err));
     } finally {
@@ -637,13 +673,13 @@ export function PaymentsPage() {
                             <p className="text-sm font-semibold text-foreground">Comanda {payment.serviceTab.code}</p>
                             <p className="text-xs text-muted-foreground">Comanda{payment.appointment?.barber?.displayName ? ` - ${payment.appointment.barber.displayName}` : ""}</p>
                           </div>
-                          <div className="space-y-1 rounded-md border border-rose-200 bg-rose-100/80 p-2 dark:border-rose-900 dark:bg-rose-950/40">
+                          <div className="space-y-1 rounded-md border border-primary bg-primary p-2 text-black">
                             {payment.serviceTab.items.map((item, index) => {
                               const itemStatus = commandItemStatus(item.status);
                               return <div key={`${payment.id}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 text-xs">
-                                <span className="truncate" title={`${item.quantity}x ${item.name}${commandItemOriginLabel(item)}`}>{item.quantity}x {item.name}<span className="text-muted-foreground">{commandItemOriginLabel(item)}</span></span>
-                                <span className="whitespace-nowrap font-medium">{formatCurrency(item.total)}</span>
-                                <span className={`whitespace-nowrap text-[10px] font-bold ${itemStatus.className}`}>{itemStatus.label}</span>
+                                <span className="truncate text-black" title={`${item.quantity}x ${item.name}${commandItemOriginLabel(item)}`}>{item.quantity}x {item.name}<span className="text-black/70">{commandItemOriginLabel(item)}</span></span>
+                                <span className="whitespace-nowrap font-medium text-black">{formatCurrency(item.total)}</span>
+                                <span className="whitespace-nowrap text-[10px] font-bold text-black">{itemStatus.label}</span>
                               </div>;
                             })}
                           </div>
@@ -652,8 +688,16 @@ export function PaymentsPage() {
                           <p className="text-xs text-muted-foreground">{typeLabels[payment.paymentType]}{payment.appointment?.barber?.displayName ? ` - ${payment.appointment.barber.displayName}` : ""}</p>
                         </div>}
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-foreground">
-                        {formatCurrency(payment.amount)}
+                      <td className="px-4 py-3 text-sm text-foreground">
+                        <p className="font-semibold">{formatCurrency(payment.amount)}</p>
+                        {payment.serviceTab && <>
+                          <p className="text-[11px] text-muted-foreground">A receber</p>
+                          {Math.abs((getCommandTotal(payment) ?? payment.amount) - payment.amount) > 0.009 && (
+                            <p className="mt-1 whitespace-nowrap text-[11px] text-muted-foreground">
+                              Total da comanda: {formatCurrency(getCommandTotal(payment) ?? payment.amount)}
+                            </p>
+                          )}
+                        </>}
                       </td>
                       <td className="px-4 py-3">
                         {payment.splits && payment.splits.length > 1 ? <div className="space-y-1">{payment.splits.map((split, index) => <div key={split.id ?? `${payment.id}-${index}`} className="flex items-center justify-between gap-3 rounded border px-2 py-1 text-xs"><span>{methodLabels[split.method]}</span><strong>{formatCurrency(split.amount)}</strong></div>)}</div> : <div className="flex items-center gap-2 text-sm text-foreground"><CreditCard size={14} className="text-muted-foreground" />{methodLabels[payment.method] || payment.method}</div>}

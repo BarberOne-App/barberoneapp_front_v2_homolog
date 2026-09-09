@@ -133,7 +133,7 @@ function getApiMessage(error: unknown): string {
 }
 
 function isPaidStatus(status: string): boolean {
-  return status === "confirmed" || status === "completed";
+  return status === "confirmed" || status === "in_progress" || status === "completed";
 }
 
 function isCancelledStatus(status: string): boolean {
@@ -144,6 +144,7 @@ function statusLabel(status: string): string {
   switch (status) {
     case "scheduled":   return "Agendado";
     case "confirmed":   return "Confirmado";
+    case "in_progress": return "Em atendimento";
     case "completed":   return "Finalizado";
     case "cancelled":   return "Cancelado";
     case "no_show":     return "Não compareceu";
@@ -271,6 +272,7 @@ export function BarberEarningsPage({
           dateFrom: periodStartStr,
           dateTo: periodEndStr,
           allAppointments: true,
+          employeeHistory: true,
           limit: 100,
         }),
         barberOverride

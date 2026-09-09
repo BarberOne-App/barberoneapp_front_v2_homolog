@@ -25,7 +25,7 @@ export interface ServiceTab {
   amountDue: number;
   openedAt: string;
   closedAt?: string | null;
-  payment?: { id: string; status: string | null } | null;
+  payment?: { id: string; status: string | null; paidAt?: string | null } | null;
   canFinalize: boolean;
   appointment: {
     id: string;
