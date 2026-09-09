@@ -261,3 +261,56 @@ export async function saveCrmAutomation(data: CrmPostServiceAutomationConfig) {
   );
   return response.data;
 }
+
+/* ── Dashboard ── */
+export interface CrmDashboardSummary {
+  ativos: number;
+  recuperados: number;
+  encerrados: number;
+  recoveryRate: number | null;
+}
+
+export interface CrmDashboardFunnelStage {
+  stage: string;
+  label: string;
+  total: number;
+}
+
+export interface CrmDashboardReason {
+  reason: string;
+  total: number;
+  percent: number;
+}
+
+export interface CrmDashboardMonth {
+  month: string;
+  recuperados: number;
+  encerrados: number;
+}
+
+export interface CrmDashboardAttentionItems {
+  overdueNextAction: number;
+  noContactInDays: number;
+  lowRatingWithoutContact: number;
+}
+
+export interface CrmDashboardResponsible {
+  responsibleUserId: string | null;
+  responsibleName: string;
+  resolvedCount: number;
+  avgResolutionDays: number | null;
+}
+
+export interface CrmDashboard {
+  summary: CrmDashboardSummary;
+  funnel: CrmDashboardFunnelStage[];
+  reasons: CrmDashboardReason[];
+  monthlyTrend: CrmDashboardMonth[];
+  attentionItems: CrmDashboardAttentionItems;
+  responsiblePerformance: CrmDashboardResponsible[];
+}
+
+export async function getCrmDashboard(params: { pipelineId?: string; months?: number } = {}) {
+  const response = await api.get<CrmDashboard>("/crm/dashboard", { params });
+  return response.data;
+}

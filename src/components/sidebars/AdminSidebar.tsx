@@ -99,6 +99,7 @@ function buildSections(): SidebarSection[] {
           label: "Relacionamento",
           children: [
             { icon: Kanban, label: "CRM", href: "/crm", requiredPermission: "manageCrm" },
+            { icon: BarChart3, label: "Dashboard do CRM", href: "/crm-dashboard", requiredPermission: "manageCrm" },
             { icon: Star, label: "Avaliacoes", href: "/reviews" },
           ],
         },
