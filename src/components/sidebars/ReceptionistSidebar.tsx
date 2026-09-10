@@ -52,6 +52,7 @@ const sections: SidebarSection[] = [
         children: [
           { icon: Scissors, label: "Servicos", href: "/services" },
           { icon: Package, label: "Produtos", href: "/products" },
+          { icon: ReceiptText, label: "Pedidos de produtos", href: "/product-orders", requiredPermission: "managePayments" },
           { icon: LayoutList, label: "Planos", href: "/plans" },
         ],
       },

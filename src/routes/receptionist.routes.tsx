@@ -7,6 +7,7 @@ import { FitAppointmentPage } from "../pages/shared/FitAppointmentPage";
 import { PaymentsPage } from "../pages/shared/PaymentsPage";
 import { PlansPage } from "../pages/admin/PlansPage";
 import { ProductsPage } from "../pages/admin/ProductsPage";
+import { ProductOrdersPage } from "../pages/admin/ProductOrdersPage";
 import { SchedulesPage } from "../pages/shared/SchedulesPage";
 import { ServicesPage } from "../pages/shared/ServicesPage";
 import { ServiceTabsPage } from "../pages/shared/ServiceTabsPage";
@@ -78,6 +79,13 @@ export const receptionistRoutes: AppRoute[] = [
     title: "Produtos",
     breadcrumbs: ["Catalogo", "Produtos"],
     Component: ProductsPage,
+  },
+  {
+    path: "/product-orders",
+    title: "Pedidos de produtos",
+    breadcrumbs: ["Catalogo", "Pedidos de produtos"],
+    Component: ProductOrdersPage,
+    requiredPermission: "managePayments",
   },
   {
     path: "/plans",

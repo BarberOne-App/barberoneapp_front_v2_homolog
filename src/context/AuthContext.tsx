@@ -1,7 +1,14 @@
 import { createContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
-import { fetchMe, googleLogin as googleLoginRequest, login as loginRequest, logout as logoutRequest } from "../service/authService";
+import {
+  SUPER_ADMIN_ACCESS_STORAGE_KEY,
+  fetchMe,
+  googleLogin as googleLoginRequest,
+  login as loginRequest,
+  logout as logoutRequest,
+  switchBarbershop as switchBarbershopRequest,
+} from "../service/authService";
 import type { AuthResponse } from "../service/authService";
 
 export interface User {
@@ -18,15 +25,20 @@ export interface User {
   birth_date?: string | null;
 }
 
+export type SuperAdminBarbershopAccess = NonNullable<AuthResponse["barbershop"]>;
+
 export interface AuthContextData {
   user: User | null;
   signed: boolean;
   loading: boolean;
+  barbershopAccess: SuperAdminBarbershopAccess | null;
 
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (accessToken: string, profileData?: { phone?: string; cpf?: string; birthDate?: string; password?: string }, slug?: string) => Promise<AuthResponse>;
   logout: () => void;
   updateUser: (user: User) => void;
+  enterBarbershopAccess: (barbershopId: string) => Promise<SuperAdminBarbershopAccess>;
+  exitBarbershopAccess: () => Promise<void>;
 }
 
 interface Props {
@@ -53,10 +65,31 @@ function getStoredUser(): User | null {
   }
 }
 
+function getStoredBarbershopAccess(user: User | null): SuperAdminBarbershopAccess | null {
+  if (user?.role !== "super_admin") {
+    localStorage.removeItem(SUPER_ADMIN_ACCESS_STORAGE_KEY);
+    return null;
+  }
+
+  const storedAccess = localStorage.getItem(SUPER_ADMIN_ACCESS_STORAGE_KEY);
+  if (!storedAccess) return null;
+
+  try {
+    const access = JSON.parse(storedAccess) as SuperAdminBarbershopAccess;
+    return access?.id ? access : null;
+  } catch {
+    localStorage.removeItem(SUPER_ADMIN_ACCESS_STORAGE_KEY);
+    return null;
+  }
+}
+
 export const AuthContext = createContext<AuthContextData | null>(null);
 
 export function AuthProvider({ children }: Props) {
   const [user, setUser] = useState<User | null>(() => getStoredUser());
+  const [barbershopAccess, setBarbershopAccess] = useState<SuperAdminBarbershopAccess | null>(() =>
+    getStoredBarbershopAccess(getStoredUser())
+  );
 
   /* Ao montar, sincroniza permissões com o servidor.
      Garante que mudanças feitas pelo admin tomem efeito sem re-login. */
@@ -68,6 +101,14 @@ export function AuthProvider({ children }: Props) {
       .then((fresh) => {
         localStorage.setItem("user", JSON.stringify(fresh));
         setUser(fresh);
+
+        setBarbershopAccess((currentAccess) => {
+          if (fresh.role === "super_admin" && currentAccess && fresh.barbershop?.id !== currentAccess.id) {
+            localStorage.removeItem(SUPER_ADMIN_ACCESS_STORAGE_KEY);
+            return null;
+          }
+          return currentAccess;
+        });
       })
       .catch(() => {
         /* Ignora erros de rede — mantém sessão local */
@@ -82,7 +123,9 @@ export function AuthProvider({ children }: Props) {
     if (storedBarbershop) {
       try {
         barbershopId = JSON.parse(storedBarbershop).id || undefined;
-      } catch {}
+      } catch {
+        // Ignora valor legado inválido e segue o login sem barbearia pré-selecionada.
+      }
     }
 
     const response = await loginRequest({
@@ -100,6 +143,13 @@ export function AuthProvider({ children }: Props) {
     });
 
     localStorage.setItem("user", JSON.stringify(response.user));
+
+    localStorage.removeItem(SUPER_ADMIN_ACCESS_STORAGE_KEY);
+    setBarbershopAccess(null);
+    if (response.user?.role === "super_admin") {
+      localStorage.removeItem("barbershop");
+      window.dispatchEvent(new Event("barbershop:updated"));
+    }
 
     setUser(response.user);
     console.info("[AuthContext] Estado de usuario atualizado.");
@@ -119,12 +169,40 @@ export function AuthProvider({ children }: Props) {
 
   function logout() {
     logoutRequest();
+    setBarbershopAccess(null);
     setUser(null);
   }
 
   function updateUser(updatedUser: User) {
     localStorage.setItem("user", JSON.stringify(updatedUser));
     setUser(updatedUser);
+    window.dispatchEvent(new Event("user:updated"));
+  }
+
+  async function enterBarbershopAccess(barbershopId: string) {
+    if (user?.role !== "super_admin") {
+      throw new Error("Apenas o superadmin pode acessar qualquer barbearia.");
+    }
+
+    const response = await switchBarbershopRequest(barbershopId);
+    if (!response.barbershop) {
+      throw new Error("A barbearia selecionada não foi retornada pelo servidor.");
+    }
+
+    localStorage.setItem(SUPER_ADMIN_ACCESS_STORAGE_KEY, JSON.stringify(response.barbershop));
+    setBarbershopAccess(response.barbershop);
+    setUser(response.user);
+    window.dispatchEvent(new Event("user:updated"));
+    return response.barbershop;
+  }
+
+  async function exitBarbershopAccess() {
+    if (user?.role !== "super_admin") return;
+
+    const response = await switchBarbershopRequest(null);
+    localStorage.removeItem(SUPER_ADMIN_ACCESS_STORAGE_KEY);
+    setBarbershopAccess(null);
+    setUser(response.user);
     window.dispatchEvent(new Event("user:updated"));
   }
 
@@ -136,10 +214,13 @@ export function AuthProvider({ children }: Props) {
         user,
         signed,
         loading: false,
+        barbershopAccess,
         login,
         loginWithGoogle,
         logout,
         updateUser,
+        enterBarbershopAccess,
+        exitBarbershopAccess,
       }}
     >
       {children}

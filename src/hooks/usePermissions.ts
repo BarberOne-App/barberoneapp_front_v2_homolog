@@ -33,7 +33,7 @@ const RECEPTIONIST_DEFAULTS: Partial<Record<PermissionKey, boolean>> = {
 
 export function usePermissions() {
   const { user } = useAuth();
-  const isAdmin = user?.isAdmin === true || user?.role === "admin";
+  const isAdmin = user?.isAdmin === true || user?.role === "admin" || user?.role === "super_admin";
   const isReceptionist = user?.role === "receptionist";
 
   function can(permission: PermissionKey): boolean {

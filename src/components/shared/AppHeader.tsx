@@ -43,7 +43,7 @@ export function AppHeader({
   actionLabel,
   actionHref,
 }: AppHeaderProps) {
-  const { user } = useAuth();
+  const { user, barbershopAccess } = useAuth();
   const { setOpen: setSidebarOpen } = useSidebarMobile();
   const [barbershop, setBarbershop] = useState<StoredBarbershop | null>(() =>
     getStoredBarbershop()
@@ -124,7 +124,7 @@ export function AppHeader({
           <Link to={actionHref}>{actionLabel}</Link>
         </Button>
 
-        {user?.role === "admin" && <AresChatButton barbershopSlug={barbershop?.slug} />}
+        {(user?.role === "admin" || barbershopAccess) && <AresChatButton barbershopSlug={barbershop?.slug} />}
 
         <div className="flex items-center gap-3 border-l border-border pl-3">
           <Avatar className="h-9 w-9">

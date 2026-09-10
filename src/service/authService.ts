@@ -1,5 +1,7 @@
 import api from "./api";
 
+export const SUPER_ADMIN_ACCESS_STORAGE_KEY = "superAdminBarbershopAccess";
+
 function maskToken(token?: string) {
   if (!token) {
     return null;
@@ -8,40 +10,28 @@ function maskToken(token?: string) {
   return `${token.slice(0, 8)}...${token.slice(-4)}`;
 }
 
-// export class TrialExpiredError extends Error {
-//   trialExpiredAt: string;
-//   barbershopName: string;
-
-//   constructor(message: string, trialExpiredAt: string, barbershopName: string) {
-//     super(message);
-//     this.name = "TrialExpiredError";
-//     this.trialExpiredAt = trialExpiredAt;
-//     this.barbershopName = barbershopName;
-//   }
-// }
-
 export class TrialExpiredError extends Error {
   trialExpiredAt: string;
+  barbershopId: string;
+  barbershopSlug: string;
   barbershopName: string;
-  barbershopId?: string;
-  barbershopSlug?: string;
-  subscriptionIntentToken?: string;
+  subscriptionIntentToken: string;
 
-  constructor(
-    message: string,
-    trialExpiredAt: string,
-    barbershopName: string,
-    barbershopId?: string,
-    barbershopSlug?: string,
-    subscriptionIntentToken?: string
-  ) {
-    super(message);
+  constructor(details: {
+    message: string;
+    trialExpiredAt: string;
+    barbershopId: string;
+    barbershopSlug: string;
+    barbershopName: string;
+    subscriptionIntentToken: string;
+  }) {
+    super(details.message);
     this.name = "TrialExpiredError";
-    this.trialExpiredAt = trialExpiredAt;
-    this.barbershopName = barbershopName;
-    this.barbershopId = barbershopId;
-    this.barbershopSlug = barbershopSlug;
-    this.subscriptionIntentToken = subscriptionIntentToken;
+    this.trialExpiredAt = details.trialExpiredAt;
+    this.barbershopId = details.barbershopId;
+    this.barbershopSlug = details.barbershopSlug;
+    this.barbershopName = details.barbershopName;
+    this.subscriptionIntentToken = details.subscriptionIntentToken;
   }
 }
 
@@ -57,57 +47,19 @@ export interface RegisterPayload {
   password: string;
 }
 
-// export interface AuthResponse {
-//   accessToken?: string;
-//   token?: string;
-//   refreshToken: string;
-//   trialExpired?: boolean;
-//   trialExpiredAt?: string;
-//   barbershopName?: string;
-//   message?: string;
-//   requiresProfileCompletion?: boolean;
-//   created?: boolean;
-//   user: {
-//     id: string;
-//     name: string;
-//     email: string;
-//     role?: string;
-//     isAdmin?: boolean;
-//     photoUrl?: string | null;
-//     permissions?: Record<string, boolean> | null;
-//   };
-//   barbershop?: {
-//     id: string;
-//     name: string;
-//     slug: string;
-//     status?: string;
-//     logoUrl?: string;
-//   } | null;
-//   currentBarbershop?: {
-//     id: string;
-//     name: string;
-//     slug: string;
-//     status?: string;
-//     logoUrl?: string;
-//   } | null;
-// }
-
 export interface AuthResponse {
   accessToken?: string;
   token?: string;
   refreshToken: string;
-
   trialExpired?: boolean;
   trialExpiredAt?: string;
-  barbershopName?: string;
   barbershopId?: string;
   barbershopSlug?: string;
+  barbershopName?: string;
   subscriptionIntentToken?: string;
-
   message?: string;
   requiresProfileCompletion?: boolean;
   created?: boolean;
-
   user: {
     id: string;
     name: string;
@@ -117,7 +69,6 @@ export interface AuthResponse {
     photoUrl?: string | null;
     permissions?: Record<string, boolean> | null;
   };
-
   barbershop?: {
     id: string;
     name: string;
@@ -125,7 +76,6 @@ export interface AuthResponse {
     status?: string;
     logoUrl?: string;
   } | null;
-
   currentBarbershop?: {
     id: string;
     name: string;
@@ -133,6 +83,22 @@ export interface AuthResponse {
     status?: string;
     logoUrl?: string;
   } | null;
+}
+
+function persistAuthResponse(response: AuthResponse) {
+  const accessToken = response.accessToken || response.token || "";
+  localStorage.setItem("token", accessToken);
+  localStorage.setItem("refreshToken", response.refreshToken);
+  localStorage.setItem("user", JSON.stringify(response.user));
+
+  const barbershop = response.currentBarbershop || response.barbershop;
+  if (barbershop) {
+    localStorage.setItem("barbershop", JSON.stringify(barbershop));
+  } else {
+    localStorage.removeItem("barbershop");
+  }
+
+  window.dispatchEvent(new Event("barbershop:updated"));
 }
 
 export async function login(data: LoginPayload) {
@@ -143,23 +109,15 @@ export async function login(data: LoginPayload) {
 
   const response = await api.post<AuthResponse>("/auth/login", data);
 
-  // if (response.data.trialExpired) {
-  //   throw new TrialExpiredError(
-  //     response.data.message ?? "Período de teste expirado.",
-  //     response.data.trialExpiredAt ?? new Date().toISOString(),
-  //     response.data.barbershopName ?? ""
-  //   );
-  // }
-
   if (response.data.trialExpired) {
-    throw new TrialExpiredError(
-      response.data.message ?? "Período de teste expirado.",
-      response.data.trialExpiredAt ?? new Date().toISOString(),
-      response.data.barbershopName ?? "",
-      response.data.barbershopId,
-      response.data.barbershopSlug,
-      response.data.subscriptionIntentToken
-    );
+    throw new TrialExpiredError({
+      message: response.data.message ?? "Período de teste expirado.",
+      trialExpiredAt: response.data.trialExpiredAt ?? new Date().toISOString(),
+      barbershopId: response.data.barbershopId ?? "",
+      barbershopSlug: response.data.barbershopSlug ?? "",
+      barbershopName: response.data.barbershopName ?? "",
+      subscriptionIntentToken: response.data.subscriptionIntentToken ?? "",
+    });
   }
 
   const accessToken = response.data.accessToken || response.data.token || "";
@@ -253,6 +211,7 @@ export function logout() {
   localStorage.removeItem("refreshToken");
   localStorage.removeItem("user");
   localStorage.removeItem("barbershop");
+  localStorage.removeItem(SUPER_ADMIN_ACCESS_STORAGE_KEY);
 }
 
 export function isAuthenticated() {
@@ -271,7 +230,14 @@ export async function fetchMe() {
     phone?: string | null;
     cpf?: string | null;
     birthDate?: string | null;
+    barbershop?: AuthResponse["barbershop"];
   }>("/auth/me");
+  return response.data;
+}
+
+export async function switchBarbershop(barbershopId: string | null) {
+  const response = await api.post<AuthResponse>("/auth/switch-barbershop", { barbershopId });
+  persistAuthResponse(response.data);
   return response.data;
 }
 

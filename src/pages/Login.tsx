@@ -9,6 +9,7 @@ import barberOneLogo from "../assets/image/barberOne-logo.png";
 import { useAuth } from "../hooks/useAuth";
 import { TrialExpiredError } from "../service/authService";
 import type { AuthResponse } from "../service/authService";
+import { saveSubscriptionRenewalContext } from "../service/platformSubscriptionService";
 import { getDefaultRouteForRole } from "../config/profileConfig";
 
 interface BarbershopOption {
@@ -59,18 +60,12 @@ export function Login() {
   const [errorMessage, setErrorMessage] = useState("");
   const [trialExpired, setTrialExpired] = useState<{
     message: string;
+    barbershopId: string;
+    barbershopSlug: string;
     barbershopName: string;
     trialExpiredAt: string;
-    barbershopId?: string;
-    barbershopSlug?: string;
-    subscriptionIntentToken?: string;
+    subscriptionIntentToken: string;
   } | null>(null);
-
-  // const [trialExpired, setTrialExpired] = useState<{
-  //   message: string;
-  //   barbershopName: string;
-  //   trialExpiredAt: string;
-  // } | null>(null);
 
   // pre-registration modal
   const [showCompleteModal, setShowCompleteModal] = useState(false);
@@ -91,18 +86,25 @@ export function Login() {
   const [showBarbershopDropdown, setShowBarbershopDropdown] = useState(false);
   const barbershopDropdownRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const blockedMessage = sessionStorage.getItem("accessBlockedMessage");
+    if (!blockedMessage) return;
+    sessionStorage.removeItem("accessBlockedMessage");
+    setErrorMessage(blockedMessage);
+  }, []);
+
   const hasBarbershopAlready = !!(pendingGoogleData?.barbershop || pendingGoogleData?.currentBarbershop);
 
   const filteredBarbershops = barbershopSearch.trim().length >= 1
     ? allBarbershops.filter(s =>
-      s.name.toLowerCase().includes(barbershopSearch.toLowerCase()) ||
-      s.slug.toLowerCase().includes(barbershopSearch.toLowerCase())
-    )
+        s.name.toLowerCase().includes(barbershopSearch.toLowerCase()) ||
+        s.slug.toLowerCase().includes(barbershopSearch.toLowerCase())
+      )
     : allBarbershops;
 
   useEffect(() => {
     if (!showCompleteModal || hasBarbershopAlready) return;
-    api.get<BarbershopOption[]>("/barbershops/public").then(r => setAllBarbershops(r.data)).catch(() => { });
+    api.get<BarbershopOption[]>("/barbershops/public").then(r => setAllBarbershops(r.data)).catch(() => {});
   }, [showCompleteModal, hasBarbershopAlready]);
 
   useEffect(() => {
@@ -210,34 +212,39 @@ export function Login() {
       setErrorMessage("");
       await login(email.trim(), password);
       navigate("/", { replace: true });
-    }
-    catch (err: unknown) {
-
+    } catch (err: unknown) {
       if (err instanceof TrialExpiredError) {
         setTrialExpired({
           message: err.message,
-          barbershopName: err.barbershopName,
-          trialExpiredAt: err.trialExpiredAt,
           barbershopId: err.barbershopId,
           barbershopSlug: err.barbershopSlug,
+          barbershopName: err.barbershopName,
+          trialExpiredAt: err.trialExpiredAt,
           subscriptionIntentToken: err.subscriptionIntentToken,
         });
         return;
       }
-
-      // if (err instanceof TrialExpiredError) {
-      //   setTrialExpired({
-      //     message: err.message,
-      //     barbershopName: err.barbershopName,
-      //     trialExpiredAt: err.trialExpiredAt,
-      //   });
-      //   return;
-      // }
-
       setErrorMessage(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleSubscriptionRenewal() {
+    if (!trialExpired?.barbershopId || !trialExpired.subscriptionIntentToken) {
+      setTrialExpired(null);
+      setErrorMessage("Não foi possível iniciar a renovação. Entre novamente para gerar uma nova autorização.");
+      return;
+    }
+
+    saveSubscriptionRenewalContext({
+      barbershopId: trialExpired.barbershopId,
+      barbershopSlug: trialExpired.barbershopSlug,
+      barbershopName: trialExpired.barbershopName,
+      expiredAt: trialExpired.trialExpiredAt,
+      subscriptionIntentToken: trialExpired.subscriptionIntentToken,
+    });
+    navigate("/renew-subscription");
   }
 
   return (
@@ -260,44 +267,14 @@ export function Login() {
               </div>
               <h2 className="text-xl font-bold text-foreground">Acesso suspenso</h2>
               <p className="text-sm text-muted-foreground">
-                O período de teste da barbearia{" "}
-                <span className="font-semibold text-foreground">{trialExpired.barbershopName}</span>{" "}
-                expirou. Para continuar usando a plataforma, assine um plano.
+                {trialExpired.message}
               </p>
             </div>
 
             <div className="flex flex-col gap-3">
               <button
                 type="button"
-                onClick={() => {
-                  if (!trialExpired.barbershopId) {
-                    setErrorMessage("Não foi possível identificar a barbearia para reativação.");
-                    setTrialExpired(null);
-                    return;
-                  }
-
-                  const pendingSubscription = {
-                    mode: "reactivate",
-                    barbershopId: trialExpired.barbershopId,
-                    barbershopSlug: trialExpired.barbershopSlug,
-                    barbershopName: trialExpired.barbershopName,
-                    subscriptionIntentToken: trialExpired.subscriptionIntentToken,
-                  };
-
-                  sessionStorage.setItem(
-                    "pendingBarbershopSubscription",
-                    JSON.stringify(pendingSubscription)
-                  );
-
-                  navigate("/", {
-                    state: {
-                      scrollTo: "planos",
-                      subscriptionMode: "reactivate",
-                      barbershop: pendingSubscription,
-                    },
-                  });
-                }}
-                // onClick={() => navigate("/", { state: { scrollTo: "planos" } })}
+                onClick={handleSubscriptionRenewal}
                 className="flex h-11 w-full items-center justify-center rounded-lg bg-primary font-semibold text-primary-foreground shadow transition hover:bg-primary/90"
               >
                 Ver planos e assinar
@@ -385,8 +362,9 @@ export function Login() {
                               setBarbershopSearch(shop.name);
                               setShowBarbershopDropdown(false);
                             }}
-                            className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-muted ${modalBarbershopSlug === shop.slug ? "bg-primary/10 font-semibold text-primary" : "text-foreground"
-                              }`}
+                            className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-muted ${
+                              modalBarbershopSlug === shop.slug ? "bg-primary/10 font-semibold text-primary" : "text-foreground"
+                            }`}
                           >
                             <Scissors className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                             <span>{shop.name}</span>

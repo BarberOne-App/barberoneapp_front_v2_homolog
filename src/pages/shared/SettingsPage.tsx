@@ -22,6 +22,7 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import { PlatformSubscriptionTab } from '@/components/PlatformSubscriptionTab';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PasswordInput } from '@/components/PasswordInput';
 import { Button } from '@/components/ui/button';
@@ -165,7 +166,8 @@ function formatPhone(value: string) {
 
 export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps) {
   const { user, updateUser } = useAuth();
-  const [activeTab, setActiveTab] = useState('general');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'general');
   const [profilePhotoUrl, setProfilePhotoUrl] = useState(user?.photoUrl ?? '');
   const [isUploadingProfilePhoto, setIsUploadingProfilePhoto] = useState(false);
   const profilePhotoFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1422,7 +1424,14 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
 
   return (
     <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          setActiveTab(value);
+          setSearchParams(value === 'general' ? {} : { tab: value }, { replace: true });
+        }}
+        className="w-full"
+      >
         <TabsList className={`grid w-full lg:w-auto ${isAdmin ? 'grid-cols-5' : 'grid-cols-6'}`}>
           <TabsTrigger value="general" className="gap-2">
             <Store size={14} />

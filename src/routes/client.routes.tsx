@@ -3,6 +3,8 @@ import { ClientDashboard } from "../pages/client/ClientDashboard";
 import { ClientPlansPage } from "../pages/client/ClientPlansPage";
 import { ClientReviewsPage } from "../pages/client/ClientReviewsPage";
 import { ClientSettingsPage } from "../pages/client/ClientSettingsPage";
+import { ClientProductsPage } from "../pages/client/ClientProductsPage";
+import { ClientCartPage } from "../pages/client/ClientCartPage";
 import { ServicesPage } from "../pages/shared/ServicesPage";
 import type { AppRoute } from "./types";
 
@@ -36,6 +38,18 @@ export const clientRoutes: AppRoute[] = [
     title: "Planos",
     breadcrumbs: ["Cliente", "Planos"],
     Component: ClientPlansPage,
+  },
+  {
+    path: "/products",
+    title: "Produtos",
+    breadcrumbs: ["Cliente", "Produtos"],
+    Component: ClientProductsPage,
+  },
+  {
+    path: "/cart",
+    title: "Carrinho",
+    breadcrumbs: ["Cliente", "Carrinho"],
+    Component: ClientCartPage,
   },
   {
     path: "/settings",

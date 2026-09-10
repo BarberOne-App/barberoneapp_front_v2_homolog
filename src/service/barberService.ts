@@ -18,7 +18,13 @@ export interface ListBarbersResponse {
   items: Barber[];
 }
 
-export async function listBarbers(params: { q?: string; page?: number; limit?: number; barbershopId?: string } = {}) {
+export async function listBarbers(params: {
+  q?: string;
+  page?: number;
+  limit?: number;
+  barbershopId?: string;
+  availabilityDate?: string;
+} = {}) {
   const response = await api.get<ListBarbersResponse>("/barbers", { params });
   return response.data;
 }

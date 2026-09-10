@@ -3,6 +3,7 @@ import api from "./api";
 export interface Service {
   id: string;
   name: string;
+  description?: string | null;
   basePrice: number;
   durationMinutes: number;
   servicePoints?: number;
@@ -36,6 +37,7 @@ export interface ListServicesResponse {
 
 export interface ServicePayload {
   name: string;
+  description?: string | null;
   basePrice: number;
   durationMinutes: number;
   servicePoints?: number;
