@@ -341,11 +341,11 @@ export function BookingsPage() {
 
     listBlockedDates({ dateFrom: form.date, dateTo: form.date, barberId: form.barberId })
       .then((items) => {
-        const block = items.find((b) => {
-          if (!b.barberId && !form.barberId) return true;
-          if (!b.barberId) return true; // barbearia inteira
-          return b.barberId === form.barberId;
-        });
+        const relevantBlocks = items.filter(
+          (block) => !block.barberId || block.barberId === form.barberId,
+        );
+        // Se houver regras sobrepostas, o bloqueio que também vale internamente prevalece.
+        const block = relevantBlocks.find((item) => !item.clientsOnly) ?? relevantBlocks[0];
         setBlockedDateWarning(block ?? null);
       })
       .catch(() => setBlockedDateWarning(null));
@@ -1130,14 +1130,19 @@ export function BookingsPage() {
               ) : null}
 
               {blockedDateWarning && (
-                <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive md:col-span-2">
-                  <strong>Data bloqueada:</strong>{" "}
+                <div className={`rounded-md border p-3 text-sm md:col-span-2 ${
+                  blockedDateWarning.clientsOnly
+                    ? "border-blue-500/30 bg-blue-500/10 text-blue-700"
+                    : "border-destructive/40 bg-destructive/10 text-destructive"
+                }`}>
+                  <strong>{blockedDateWarning.clientsOnly ? "Bloqueada somente para clientes:" : "Data bloqueada:"}</strong>{" "}
                   {blockedDateWarning.startTime && blockedDateWarning.endTime
                     ? `${blockedDateWarning.barberId ? "Barbeiro bloqueado" : "Barbearia bloqueada"} das ${blockedDateWarning.startTime} às ${blockedDateWarning.endTime}`
                     : blockedDateWarning.barberId
                       ? "O barbeiro está indisponível neste dia"
                       : "A barbearia está fechada neste dia"}
                   {blockedDateWarning.reason ? ` — ${blockedDateWarning.reason}` : ""}
+                  {blockedDateWarning.clientsOnly ? " — A agenda interna continua liberada." : ""}
                 </div>
               )}
 
@@ -1163,7 +1168,10 @@ export function BookingsPage() {
               </Button>
               <Button
                 type="submit"
-                disabled={saving || (!!blockedDateWarning && !blockedDateWarning.startTime)}
+                disabled={
+                  saving ||
+                  (!!blockedDateWarning && !blockedDateWarning.clientsOnly && !blockedDateWarning.startTime)
+                }
               >
                 {saving ? (
                   <>
