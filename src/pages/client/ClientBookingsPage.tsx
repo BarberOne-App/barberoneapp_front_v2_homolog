@@ -234,6 +234,7 @@ export function ClientBookingsPage() {
   const [userDependents, setUserDependents] = useState<Dependent[]>([]);
   const [bookingForDependent, setBookingForDependent] = useState<Dependent | null>(null);
   const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [barbersLoading, setBarbersLoading] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [productQuantities, setProductQuantities] = useState<Record<string, number>>({});
@@ -305,13 +306,11 @@ export function ClientBookingsPage() {
     async function load() {
       try {
         const barbershopId = getStoredBarbershopId();
-        const [b, s, availableProducts, profile] = await Promise.all([
-          listBarbers({ page: 1, limit: 100, barbershopId }),
+        const [s, availableProducts, profile] = await Promise.all([
           listServices({ includeInactive: false, page: 1, limit: 100, barbershopId }),
           listProducts({ active: true }),
           getBarbershopProfile(barbershopId),
         ]);
-        setBarbers(b.items);
         setServices(s.items.filter((sv) => sv.active));
         setProducts(availableProducts.filter((product) => product.active && product.stock > 0));
         setBarbershopProfile(profile);
@@ -336,6 +335,40 @@ export function ClientBookingsPage() {
     }
     void load();
   }, [bookingOpen, user?.id]);
+
+  useEffect(() => {
+    if (!bookingOpen) return;
+
+    let active = true;
+    setBarbersLoading(true);
+    listBarbers({
+      page: 1,
+      limit: 100,
+      barbershopId: getStoredBarbershopId(),
+      availabilityDate: form.date || undefined,
+    })
+      .then((response) => {
+        if (!active) return;
+        setBarbers(response.items);
+        setForm((current) => {
+          if (!current.barberId) return current;
+          const remainsAvailable = response.items.some(
+            (barber) => barber.id === current.barberId,
+          );
+          return remainsAvailable ? current : { ...current, barberId: "", time: "" };
+        });
+      })
+      .catch((err) => {
+        if (active) toast.error(getApiMessage(err));
+      })
+      .finally(() => {
+        if (active) setBarbersLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [bookingOpen, form.date]);
 
   useEffect(() => {
     const state = location.state as { openBooking?: boolean; serviceId?: string } | null;
@@ -976,10 +1009,10 @@ export function ClientBookingsPage() {
                 <Select
                   value={form.barberId}
                   onValueChange={(v) => { setField("barberId", v); setField("time", ""); }}
-                  disabled={hasLockedBarber}
+                  disabled={hasLockedBarber || barbersLoading}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecionar barbeiro" />
+                    <SelectValue placeholder={barbersLoading ? "Carregando barbeiros..." : "Selecionar barbeiro"} />
                   </SelectTrigger>
                   <SelectContent>
                     {barbers.map((b) => (
@@ -989,6 +1022,11 @@ export function ClientBookingsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {!barbersLoading && form.date && barbers.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Nenhum barbeiro disponivel para clientes nesta data.
+                  </p>
+                )}
                 {hasLockedBarber ? (
                   <p className="flex items-center gap-1.5 text-xs text-amber-600">
                     <Lock size={11} />
