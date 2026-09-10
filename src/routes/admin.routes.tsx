@@ -7,6 +7,7 @@ import { ExtraPaymentsPage } from "../pages/admin/ExtraPaymentsPage";
 import { GalleryPage } from "../pages/admin/GalleryPage";
 import { PlansPage } from "../pages/admin/PlansPage";
 import { ProductsPage } from "../pages/admin/ProductsPage";
+import { ProductOrdersPage } from "../pages/admin/ProductOrdersPage";
 import { PromotionsPage } from "../pages/admin/PromotionsPage";
 import { SubscriptionDefaultersPage } from "../pages/admin/SubscriptionDefaultersPage";
 import { SubscriptionCommissionPoolPage } from "../pages/admin/SubscriptionCommissionPoolPage";
@@ -154,6 +155,13 @@ export const adminRoutes: AppRoute[] = [
     title: "Produtos",
     breadcrumbs: ["Gerenciar", "Produtos"],
     Component: ProductsPage,
+  },
+  {
+    path: "/product-orders",
+    title: "Pedidos de produtos",
+    breadcrumbs: ["Gerenciar", "Pedidos de produtos"],
+    Component: ProductOrdersPage,
+    requiredPermission: "managePayments",
   },
   {
     path: "/stock",

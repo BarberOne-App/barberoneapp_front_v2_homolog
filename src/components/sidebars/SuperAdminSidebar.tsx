@@ -1,4 +1,4 @@
-import { BarChart3, Building2, ContactRound, CreditCard, FileText, LayoutDashboard, Megaphone, MessageSquareMore, Users } from "lucide-react";
+import { BarChart3, Building2, CalendarDays, ContactRound, CreditCard, FileText, LayoutDashboard, Megaphone, MessageSquareMore, Users } from "lucide-react";
 
 import { ProfileSidebar } from "../shared/ProfileSidebar";
 import type { SidebarSection } from "../shared/ProfileSidebar";
@@ -10,6 +10,7 @@ const sections: SidebarSection[] = [
       { icon: Building2, label: "Barbearias", href: "/barbershops" },
       { icon: Users, label: "Usuarios", href: "/users" },
       { icon: CreditCard, label: "Assinaturas", href: "/subscriptions" },
+      { icon: CalendarDays, label: "Calendário de Cobranças", href: "/subscription-calendar" },
       { icon: FileText, label: "Planos Landing", href: "/platform-plans" },
       { icon: MessageSquareMore, label: "AresChat", href: "/areschat" },
       { icon: ContactRound, label: "Contatos interessados", href: "/landing-leads" },

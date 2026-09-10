@@ -2,6 +2,7 @@ import { toast } from "sonner";
 
 import type { Appointment } from "@/service/appointmentService";
 import type { BarbershopProfile } from "@/service/barbershopProfileService";
+import type { ProductOrder } from "@/service/productService";
 
 export interface WhatsAppMessageData {
   clientName: string;
@@ -114,6 +115,32 @@ export function openWhatsApp(phone: string | null | undefined, message: string):
   } else {
     window.open(whatsappUrl, "_blank");
   }
+}
+
+export function buildProductOrderWhatsAppMessage(
+  order: ProductOrder,
+  barbershopName: string,
+): string {
+  const paid = order.payment?.status === "paid" || order.payment?.status === "approved";
+  const itemLines = order.items.map(
+    (item) => `  - ${item.quantity}x ${item.name} - ${formatCurrencyBR(item.total)}`,
+  );
+
+  return [
+    "*COMPROVANTE DO PEDIDO*",
+    "",
+    `Ola, ${barbershopName}!`,
+    "",
+    `*Pedido:* #${order.orderId.slice(0, 8).toUpperCase()}`,
+    `*Data:* ${new Date(order.createdAt).toLocaleString("pt-BR")}`,
+    "*Produtos:*",
+    ...itemLines,
+    "",
+    `*Total:* ${formatCurrencyBR(order.total)}`,
+    `*Pagamento:* ${paid ? "Pago" : "Pendente - pagamento na retirada"}`,
+    "",
+    "Segue a confirmacao da minha compra realizada pelo BarberOne.",
+  ].join("\n");
 }
 
 export function openWhatsAppShare(message: string): void {

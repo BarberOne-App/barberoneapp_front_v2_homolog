@@ -8,6 +8,12 @@ export interface BlockedDate {
   barberId?: string | null;
   startTime?: string | null;
   endTime?: string | null;
+  recurrenceType?: "none" | "daily" | "weekly" | "monthly";
+  recurrenceInterval?: number;
+  recurrenceWeekdays?: number[];
+  recurrenceMonthDay?: number | null;
+  recurrenceEndDate?: string | null;
+  clientsOnly?: boolean;
   barber?: {
     id: string;
     displayName: string;
@@ -22,6 +28,12 @@ export interface BlockedDatePayload {
   barberId?: string | null;
   startTime?: string | null;
   endTime?: string | null;
+  recurrenceType?: "none" | "daily" | "weekly" | "monthly";
+  recurrenceInterval?: number;
+  recurrenceWeekdays?: number[];
+  recurrenceMonthDay?: number | null;
+  recurrenceEndDate?: string | null;
+  clientsOnly?: boolean;
 }
 
 export async function listBlockedDates(params: {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Calendar,
   Clock,
@@ -7,6 +8,8 @@ import {
   Lock,
   Loader2,
   MoreHorizontal,
+  Minus,
+  Package,
   Plus,
   Search,
   Scissors,
@@ -72,6 +75,7 @@ import { getSettings, type BookingPaymentMethod, type SubscriptionBarberRule } f
 import { createAppointmentPayment } from "@/service/paymentService";
 import { createReview } from "@/service/reviewService";
 import { listServices, type Service } from "@/service/serviceService";
+import { listProducts, type Product } from "@/service/productService";
 import { isFitAppointment } from "@/utils/fitAppointment";
 import { buildWhatsAppMessage, openWhatsApp, type WhatsAppMessageData } from "@/utils/whatsapp";
 
@@ -96,6 +100,7 @@ const emptyForm: BookingFormState = {
 const statusLabels: Record<AppointmentStatus, string> = {
   scheduled: "Agendado",
   confirmed: "Confirmado",
+  in_progress: "Em atendimento",
   completed: "Finalizado",
   cancelled: "Cancelado",
   no_show: "Nao compareceu",
@@ -104,6 +109,7 @@ const statusLabels: Record<AppointmentStatus, string> = {
 const statusStyles: Record<AppointmentStatus, string> = {
   scheduled: "bg-amber-500/10 text-amber-600 border-amber-500/20",
   confirmed: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  in_progress: "bg-violet-500/10 text-violet-600 border-violet-500/20",
   completed: "bg-blue-500/10 text-blue-600 border-blue-500/20",
   cancelled: "bg-red-500/10 text-red-600 border-red-500/20",
   no_show: "bg-gray-500/10 text-gray-500 border-gray-500/20",
@@ -201,6 +207,8 @@ function getStoredBarbershopId(): string {
 }
 
 export function ClientBookingsPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   // Assinatura do cliente
@@ -226,7 +234,10 @@ export function ClientBookingsPage() {
   const [userDependents, setUserDependents] = useState<Dependent[]>([]);
   const [bookingForDependent, setBookingForDependent] = useState<Dependent | null>(null);
   const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [barbersLoading, setBarbersLoading] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productQuantities, setProductQuantities] = useState<Record<string, number>>({});
   const [slots, setSlots] = useState<string[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
 
@@ -295,13 +306,13 @@ export function ClientBookingsPage() {
     async function load() {
       try {
         const barbershopId = getStoredBarbershopId();
-        const [b, s, profile] = await Promise.all([
-          listBarbers({ page: 1, limit: 100, barbershopId }),
+        const [s, availableProducts, profile] = await Promise.all([
           listServices({ includeInactive: false, page: 1, limit: 100, barbershopId }),
+          listProducts({ active: true }),
           getBarbershopProfile(barbershopId),
         ]);
-        setBarbers(b.items);
         setServices(s.items.filter((sv) => sv.active));
+        setProducts(availableProducts.filter((product) => product.active && product.stock > 0));
         setBarbershopProfile(profile);
       } catch (err) { toast.error(getApiMessage(err)); }
 
@@ -325,13 +336,82 @@ export function ClientBookingsPage() {
     void load();
   }, [bookingOpen, user?.id]);
 
+  useEffect(() => {
+    if (!bookingOpen) return;
+
+    let active = true;
+    setBarbersLoading(true);
+    listBarbers({
+      page: 1,
+      limit: 100,
+      barbershopId: getStoredBarbershopId(),
+      availabilityDate: form.date || undefined,
+    })
+      .then((response) => {
+        if (!active) return;
+        setBarbers(response.items);
+        setForm((current) => {
+          if (!current.barberId) return current;
+          const remainsAvailable = response.items.some(
+            (barber) => barber.id === current.barberId,
+          );
+          return remainsAvailable ? current : { ...current, barberId: "", time: "" };
+        });
+      })
+      .catch((err) => {
+        if (active) toast.error(getApiMessage(err));
+      })
+      .finally(() => {
+        if (active) setBarbersLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [bookingOpen, form.date]);
+
+  useEffect(() => {
+    const state = location.state as { openBooking?: boolean; serviceId?: string } | null;
+    if (!state?.openBooking || !state.serviceId) return;
+
+    setForm({
+      ...emptyForm,
+      date: dateToDateString(new Date()),
+      serviceIds: [state.serviceId],
+    });
+    setProductQuantities({});
+    setBookingOpen(true);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
+
   const selectedServices = useMemo(() => services.filter((s) => form.serviceIds.includes(s.id)), [form.serviceIds, services]);
   const totalDuration = useMemo(() => selectedServices.reduce((sum, s) => sum + getServiceDuration(s), 0), [selectedServices]);
-  // const totalPrice = useMemo(() => selectedServices.reduce((sum, s) => sum + getServicePrice(s), 0), [selectedServices]);
-
-  const isFixedRule = subscriptionBarberRule === "fixed";
+  const totalPrice = useMemo(() => selectedServices.reduce((sum, s) => sum + getServicePrice(s), 0), [selectedServices]);
   const hasActiveSubscription =
     mySubscription?.status === "active" || mySubscription?.status === "paused";
+  const selectedProducts = useMemo(
+    () => products
+      .filter((product) => (productQuantities[product.id] ?? 0) > 0)
+      .map((product) => ({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: productQuantities[product.id],
+        discount: hasActiveSubscription && !bookingForDependent
+          ? (product.subscriberDiscount ?? product.subscriber_discount ?? 0)
+          : 0,
+      })),
+    [bookingForDependent, hasActiveSubscription, productQuantities, products],
+  );
+  const productsTotal = useMemo(
+    () => selectedProducts.reduce(
+      (sum, product) => sum + product.price * product.quantity * (1 - product.discount / 100),
+      0,
+    ),
+    [selectedProducts],
+  );
+
+  const isFixedRule = subscriptionBarberRule === "fixed";
   const isBookingForDependentWithoutPlan = Boolean(bookingForDependent);
   const hasActiveSubscriptionForBooking =
     hasActiveSubscription && !isBookingForDependentWithoutPlan;
@@ -369,6 +449,7 @@ export function ClientBookingsPage() {
       selectedServices.every((s) => isServiceCoveredByPlan(s)),
     [hasActiveSubscriptionForBooking, isServiceCoveredByPlan, selectedServices],
   );
+  const amountDue = (allSelectedServicesCoveredByPlan ? 0 : totalPrice) + productsTotal;
 
   useEffect(() => {
     if (!bookingOpen || !form.barberId || !form.date || totalDuration <= 0) { setSlots([]); return; }
@@ -400,49 +481,41 @@ export function ClientBookingsPage() {
   }, [appointments]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
-  const totalPrice = useMemo(() => {
-    return selectedServices.reduce((sum, service) => {
-      // Serviço coberto pelo plano não entra no total
-      if (isServiceCoveredByPlan(service)) {
-        return sum;
-      }
 
-      return sum + getServicePrice(service);
-    }, 0);
-  }, [selectedServices, isServiceCoveredByPlan]);
   function setField<K extends keyof BookingFormState>(key: K, value: BookingFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  // function toggleService(id: string, checked: boolean) {
-  //   const service = services.find((s) => s.id === id);
-  //   if (checked && hasActiveSubscriptionForBooking && service && !isServiceCoveredByPlan(service)) {
-  //     toast.error("Este serviço nao esta coberto pelo seu plano.");
-  //     return;
-  //   }
-
-  //   setForm((prev) => ({
-  //     ...prev,
-  //     serviceIds: checked ? [...prev.serviceIds, id] : prev.serviceIds.filter((s) => s !== id),
-  //     time: "",
-  //   }));
-  // }
-
   function toggleService(id: string, checked: boolean) {
+    const service = services.find((s) => s.id === id);
+    if (checked && hasActiveSubscriptionForBooking && service && !isServiceCoveredByPlan(service)) {
+      toast.error("Este servico nao esta coberto pelo seu plano.");
+      return;
+    }
+
     setForm((prev) => ({
       ...prev,
-      serviceIds: checked
-        ? [...prev.serviceIds, id]
-        : prev.serviceIds.filter((serviceId) => serviceId !== id),
+      serviceIds: checked ? [...prev.serviceIds, id] : prev.serviceIds.filter((s) => s !== id),
       time: "",
     }));
+  }
+
+  function changeProductQuantity(product: Product, delta: number) {
+    setProductQuantities((current) => {
+      const next = Math.max(0, Math.min(product.stock, (current[product.id] ?? 0) + delta));
+      if (next === 0) {
+        const { [product.id]: _removed, ...rest } = current;
+        return rest;
+      }
+      return { ...current, [product.id]: next };
+    });
   }
 
   function validateForm(): string | null {
     if (!form.barberId) return "Selecione o barbeiro.";
     if (!form.date) return "Selecione a data.";
-    if (form.serviceIds.length === 0) return "Selecione pelo menos um serviço.";
-    if (!form.time) return "Selecione o horário.";
+    if (form.serviceIds.length === 0) return "Selecione pelo menos um servico.";
+    if (!form.time) return "Selecione o horario.";
     return null;
   }
 
@@ -451,7 +524,7 @@ export function ClientBookingsPage() {
     e.preventDefault();
     const err = validateForm();
     if (err) { toast.error(err); return; }
-    if (allSelectedServicesCoveredByPlan) {
+    if (allSelectedServicesCoveredByPlan && selectedProducts.length === 0) {
       await handleSubscriptionPayment();
       return;
     }
@@ -470,17 +543,8 @@ export function ClientBookingsPage() {
         date: form.date,
         time: form.time,
         notes: form.notes.trim() || null,
-        services: selectedServices.map((service) => ({
-          id: service.id,
-          name: service.name,
-          basePrice: isServiceCoveredByPlan(service)
-            ? 0
-            : getServicePrice(service),
-          durationMinutes: service.durationMinutes,
-          quantity: 1,
-        })),
-        // services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
-        products: [],
+        services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
+        products: selectedProducts,
       });
 
       // Registro de pagamento é secundário — agendamento já confirmado
@@ -488,7 +552,7 @@ export function ClientBookingsPage() {
         await createAppointmentPayment({
           appointmentId: appt.id,
           userId: user.id,
-          amount: totalPrice,
+          amount: amountDue,
           method: "local",
           status: "pending",
         });
@@ -503,17 +567,18 @@ export function ClientBookingsPage() {
         date: formatDateBR(form.date),
         time: form.time,
         services: selectedServices.map((s) => s.name),
-        total: totalPrice,
+        total: amountDue,
         notes: form.notes?.trim(),
         googleMapsUrl: barbershopProfile?.googleMapsUrl,
       });
       setBookingOpen(false);
       setBookingForDependent(null);
       setForm({ ...emptyForm, date: dateToDateString(new Date()) });
+      setProductQuantities({});
       await loadAppointments();
     } catch (err) {
       if (isConflictError(err)) {
-        toast.error("Voce ja possui um agendamento neste horário. Confira seus agendamentos abaixo.");
+        toast.error("Voce ja possui um agendamento neste horario. Confira seus agendamentos abaixo.");
         await loadAppointments();
       } else {
         toast.error(getApiMessage(err));
@@ -535,24 +600,15 @@ export function ClientBookingsPage() {
         date: form.date,
         time: form.time,
         notes: form.notes.trim() || null,
-        services: selectedServices.map((service) => ({
-          id: service.id,
-          name: service.name,
-          basePrice: isServiceCoveredByPlan(service)
-            ? 0
-            : getServicePrice(service),
-          durationMinutes: service.durationMinutes,
-          quantity: 1,
-        })),
-        // services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
-        products: [],
+        services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
+        products: selectedProducts,
       });
 
       try {
         await createAppointmentPayment({
           appointmentId: appt.id,
           userId: user.id,
-          amount: totalPrice,
+          amount: amountDue,
           method: "subscription",
           status: "covered",
         });
@@ -574,10 +630,11 @@ export function ClientBookingsPage() {
       setBookingOpen(false);
       setBookingForDependent(null);
       setForm({ ...emptyForm, date: dateToDateString(new Date()) });
+      setProductQuantities({});
       await loadAppointments();
     } catch (err) {
       if (isConflictError(err)) {
-        toast.error("Voce ja possui um agendamento neste horário. Confira seus agendamentos abaixo.");
+        toast.error("Voce ja possui um agendamento neste horario. Confira seus agendamentos abaixo.");
         await loadAppointments();
       } else {
         toast.error(getApiMessage(err));
@@ -599,17 +656,8 @@ export function ClientBookingsPage() {
         date: form.date,
         time: form.time,
         notes: form.notes.trim() || null,
-        services: selectedServices.map((service) => ({
-          id: service.id,
-          name: service.name,
-          basePrice: isServiceCoveredByPlan(service)
-            ? 0
-            : getServicePrice(service),
-          durationMinutes: service.durationMinutes,
-          quantity: 1,
-        })),
-        // services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
-        products: [],
+        services: selectedServices.map((s) => ({ id: s.id, name: s.name, basePrice: s.basePrice, durationMinutes: s.durationMinutes, quantity: 1 })),
+        products: selectedProducts,
       });
 
       let paymentId = "";
@@ -617,7 +665,7 @@ export function ClientBookingsPage() {
         const payment = await createAppointmentPayment({
           appointmentId: appt.id,
           userId: user.id,
-          amount: totalPrice,
+          amount: amountDue,
           method: method === "cartao" ? "credito" : "pix",
           status: "pending",
         });
@@ -631,13 +679,14 @@ export function ClientBookingsPage() {
           date: formatDateBR(form.date),
           time: form.time,
           services: selectedServices.map((s) => s.name),
-          total: totalPrice,
+          total: amountDue,
           notes: form.notes?.trim(),
           googleMapsUrl: barbershopProfile?.googleMapsUrl,
         });
         setBookingOpen(false);
         setBookingForDependent(null);
         setForm({ ...emptyForm, date: dateToDateString(new Date()) });
+        setProductQuantities({});
         await loadAppointments();
         return;
       }
@@ -647,7 +696,7 @@ export function ClientBookingsPage() {
       setPaymentOpen(true);
     } catch (err) {
       if (isConflictError(err)) {
-        toast.error("Voce ja possui um agendamento neste horário. Confira seus agendamentos abaixo.");
+        toast.error("Voce ja possui um agendamento neste horario. Confira seus agendamentos abaixo.");
         await loadAppointments();
       } else {
         toast.error(getApiMessage(err));
@@ -677,7 +726,7 @@ export function ClientBookingsPage() {
       date: formatDateBR(form.date),
       time: form.time,
       services: selectedServices.map((s) => s.name),
-      total: totalPrice,
+      total: amountDue,
       notes: form.notes?.trim(),
       googleMapsUrl: barbershopProfile?.googleMapsUrl,
     });
@@ -685,6 +734,7 @@ export function ClientBookingsPage() {
     setBookingOpen(false);
     setPendingPaymentData(null);
     setForm({ ...emptyForm, date: dateToDateString(new Date()) });
+    setProductQuantities({});
     await loadAppointments();
   }
 
@@ -714,7 +764,7 @@ export function ClientBookingsPage() {
         rating: reviewRating,
         comment: reviewComment.trim() || null,
       });
-      toast.success("Avaliação registrada.");
+      toast.success("Avaliacao registrada.");
       setReviewAppointment(null);
       setReviewRating(5);
       setReviewComment("");
@@ -787,8 +837,8 @@ export function ClientBookingsPage() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button size="sm" className="gap-2" onClick={() => { setForm({ ...emptyForm, date: dateToDateString(new Date()), barberId: activeLockedBarberId ?? "" }); setBookingOpen(true); }}>
-              <Plus size={14} /> Marcar Horário
+            <Button size="sm" className="gap-2" onClick={() => { setForm({ ...emptyForm, date: dateToDateString(new Date()), barberId: activeLockedBarberId ?? "" }); setProductQuantities({}); setBookingOpen(true); }}>
+              <Plus size={14} /> Marcar Horario
             </Button>
           </div>
         </div>
@@ -800,7 +850,7 @@ export function ClientBookingsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  {["Serviço", "Data e Hora", "Barbeiro", "Valor", "Status"].map((col) => (
+                  {["Servico", "Data e Hora", "Barbeiro", "Valor", "Status"].map((col) => (
                     <th key={col} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">{col}</th>
                   ))}
                   <th className="w-10 px-4 py-3" />
@@ -814,7 +864,7 @@ export function ClientBookingsPage() {
                 ) : (
                   filteredAppointments.map((appt) => {
                     const start = formatDateTime(appt.startAt);
-                    const serviceText = appt.services.map((s) => s.serviceName).join(", ") || "Sem serviço";
+                    const serviceText = appt.services.map((s) => s.serviceName).join(", ") || "Sem servico";
                     const barberName = appt.barber?.displayName || "Sem barbeiro";
                     const canCancel = appt.status === "scheduled" || appt.status === "confirmed";
                     const canReview = appt.status === "completed";
@@ -892,10 +942,10 @@ export function ClientBookingsPage() {
         )}
 
         <div className="flex flex-col gap-3 border-t border-border p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <span>Página {page} de {totalPages} - {total} agendamentos</span>
+          <span>Pagina {page} de {totalPages} - {total} agendamentos</span>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}>Anterior</Button>
-            <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Próxima</Button>
+            <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Proxima</Button>
           </div>
         </div>
       </div>
@@ -905,9 +955,9 @@ export function ClientBookingsPage() {
         <DialogContent className="flex max-h-[90vh] flex-col overflow-hidden sm:max-w-2xl">
           <form onSubmit={handleBookingSubmit} className="flex min-h-0 flex-1 flex-col gap-5">
             <DialogHeader className="flex-shrink-0">
-              <DialogTitle>Marcar Horário</DialogTitle>
+              <DialogTitle>Marcar Horario</DialogTitle>
               <DialogDescription>
-                Escolha o barbeiro, serviço e um horário disponível.
+                Escolha o barbeiro, servico e um horario disponivel.
               </DialogDescription>
             </DialogHeader>
 
@@ -926,8 +976,8 @@ export function ClientBookingsPage() {
                       className={cn(
                         "flex-1 min-w-[140px] px-4 py-2 text-sm font-medium rounded-lg border transition-all text-center",
                         !bookingForDependent
-                          ? "bg-primary/10 border-primary text-primary"
-                          : "bg-secondary/40 border-border text-foreground hover:bg-secondary"
+                           ? "bg-primary/10 border-primary text-primary"
+                           : "bg-secondary/40 border-border text-foreground hover:bg-secondary"
                       )}
                     >
                       Para mim ({user?.name})
@@ -959,10 +1009,10 @@ export function ClientBookingsPage() {
                 <Select
                   value={form.barberId}
                   onValueChange={(v) => { setField("barberId", v); setField("time", ""); }}
-                  disabled={hasLockedBarber}
+                  disabled={hasLockedBarber || barbersLoading}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecionar barbeiro" />
+                    <SelectValue placeholder={barbersLoading ? "Carregando barbeiros..." : "Selecionar barbeiro"} />
                   </SelectTrigger>
                   <SelectContent>
                     {barbers.map((b) => (
@@ -972,6 +1022,11 @@ export function ClientBookingsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {!barbersLoading && form.date && barbers.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Nenhum barbeiro disponivel para clientes nesta data.
+                  </p>
+                )}
                 {hasLockedBarber ? (
                   <p className="flex items-center gap-1.5 text-xs text-amber-600">
                     <Lock size={11} />
@@ -986,82 +1041,134 @@ export function ClientBookingsPage() {
               </div>
 
               <>
-                <div className="space-y-2">
-                  <Label>Data</Label>
-                  <AppCalendar value={dateStringToDate(form.date)} onChange={(d) => { setField("date", dateToDateString(d)); setField("time", ""); }} fromYear={new Date().getFullYear()} toYear={new Date().getFullYear() + 1} className="h-9 rounded-md" />
-                </div>
+              <div className="space-y-2">
+                <Label>Data</Label>
+                <AppCalendar value={dateStringToDate(form.date)} onChange={(d) => { setField("date", dateToDateString(d)); setField("time", ""); }} fromYear={new Date().getFullYear()} toYear={new Date().getFullYear() + 1} className="h-9 rounded-md" />
+              </div>
 
-                <div className="space-y-3 md:col-span-2">
-                  <Label>Serviços</Label>
-                  <div className="grid max-h-52 gap-2 overflow-y-auto rounded-md border border-border p-3 md:grid-cols-2">
-                    {services.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Nenhum serviço disponível.</p>
-                    ) : (
-                      services.map((s) => {
-                        const isCovered = isServiceCoveredByPlan(s);
-                        const isOutOfPlanForSubscriber = hasActiveSubscriptionForBooking && !isCovered;
+              <div className="space-y-3 md:col-span-2">
+                <Label>Servicos</Label>
+                <div className="grid max-h-52 gap-2 overflow-y-auto rounded-md border border-border p-3 md:grid-cols-2">
+                  {services.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhum servico disponivel.</p>
+                  ) : (
+                    services.map((s) => {
+                      const isCovered = isServiceCoveredByPlan(s);
+                      const isOutOfPlanForSubscriber = hasActiveSubscriptionForBooking && !isCovered;
 
-                        return (
-                          <label
-                            key={s.id}
-                            className="flex cursor-pointer items-start gap-3 rounded-md p-2 text-sm hover:bg-secondary/60"
-                          // className={cn(
-                          //   "flex items-start gap-3 rounded-md p-2 text-sm",
-                          //   isOutOfPlanForSubscriber
-                          //     ? "cursor-not-allowed opacity-50"
-                          //     : "cursor-pointer hover:bg-secondary/60",
-                          // )}
-                          >
-                            <Checkbox
-                              checked={form.serviceIds.includes(s.id)}
-                              // disabled={isOutOfPlanForSubscriber}
-                              onCheckedChange={(c) => toggleService(s.id, c === true)}
-                            />
-                            <span className="min-w-0">
-                              <span className="flex flex-wrap items-center gap-2 font-medium text-foreground">
-                                {s.name}
-                                {isCovered && (
-                                  <Badge className="border-emerald-500/20 bg-emerald-500/10 px-2 py-0 text-[11px] text-emerald-600 hover:bg-emerald-500/10">
-                                    Coberto pelo seu plano
-                                  </Badge>
-                                )}
-                                {isOutOfPlanForSubscriber && (
-                                  <Badge variant="outline" className="px-2 py-0 text-[11px]">
-                                    Fora do seu plano
-                                  </Badge>
-                                )}
-                              </span>
-                              <span className="block text-xs text-muted-foreground">{getServiceDuration(s)} min — {formatCurrency(getServicePrice(s))}</span>
+                      return (
+                        <label
+                          key={s.id}
+                          className={cn(
+                            "flex items-start gap-3 rounded-md p-2 text-sm",
+                            isOutOfPlanForSubscriber
+                              ? "cursor-not-allowed opacity-50"
+                              : "cursor-pointer hover:bg-secondary/60",
+                          )}
+                        >
+                          <Checkbox
+                            checked={form.serviceIds.includes(s.id)}
+                            disabled={isOutOfPlanForSubscriber}
+                            onCheckedChange={(c) => toggleService(s.id, c === true)}
+                          />
+                          <span className="min-w-0">
+                            <span className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+                              {s.name}
+                              {isCovered && (
+                                <Badge className="border-emerald-500/20 bg-emerald-500/10 px-2 py-0 text-[11px] text-emerald-600 hover:bg-emerald-500/10">
+                                  Coberto pelo seu plano
+                                </Badge>
+                              )}
+                              {isOutOfPlanForSubscriber && (
+                                <Badge variant="outline" className="px-2 py-0 text-[11px]">
+                                  Fora do seu plano
+                                </Badge>
+                              )}
                             </span>
-                          </label>
-                        );
-                      })
-                    )}
-                  </div>
-                  {selectedServices.length > 0 && (
-                    <p className="text-xs text-muted-foreground text-right">
-                      Total: <span className="font-medium text-foreground">{formatCurrency(totalPrice)}</span>
-                    </p>
+                            <span className="block text-xs text-muted-foreground">
+                              {getServiceDuration(s)} min — {getServicePrice(s) > 0 ? formatCurrency(getServicePrice(s)) : "Consultar"}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })
                   )}
                 </div>
+                {selectedServices.length > 0 && (
+                  <p className="text-xs text-muted-foreground text-right">
+                    Servicos: <span className="font-medium text-foreground">{formatCurrency(totalPrice)}</span>
+                  </p>
+                )}
+              </div>
 
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Horário</Label>
-                  <Select value={form.time} onValueChange={(v) => setField("time", v)} disabled={!form.barberId || !form.date || totalDuration <= 0 || slotsLoading}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder={slotsLoading ? "Carregando horários..." : "Selecionar horário"} /></SelectTrigger>
-                    <SelectContent>{slots.map((slot) => <SelectItem key={slot} value={slot}>{slot}</SelectItem>)}</SelectContent>
-                  </Select>
-                  {!slotsLoading && totalDuration > 0 && slots.length === 0 && form.barberId && form.date ? (
-                    <p className="text-xs text-muted-foreground">Nenhum horário disponível. Tente outra data.</p>
-                  ) : !slotsLoading && slots.length > 0 ? (
-                    <p className="text-xs text-muted-foreground">{slots.length} horários disponíveis para {totalDuration} min.</p>
-                  ) : null}
-                </div>
+              {products.length > 0 ? (
+                <div className="space-y-3 md:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2"><Package className="h-4 w-4" /> Produtos opcionais</Label>
+                    <span className="text-xs text-muted-foreground">Adicione ao atendimento</span>
+                  </div>
+                  <div className="grid max-h-56 gap-2 overflow-y-auto rounded-md border border-border p-3 md:grid-cols-2">
+                    {products.map((product) => {
+                      const quantity = productQuantities[product.id] ?? 0;
+                      const discount = hasActiveSubscriptionForBooking
+                        ? (product.subscriberDiscount ?? product.subscriber_discount ?? 0)
+                        : 0;
+                      const unitPrice = product.price * (1 - discount / 100);
 
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="booking-notes">Observações</Label>
-                  <Textarea id="booking-notes" value={form.notes} onChange={(e) => setField("notes", e.target.value)} placeholder="Opcional — Ex: preferência de estilo, etc." />
+                      return (
+                        <div key={product.id} className="flex items-center gap-3 rounded-md border border-border/70 p-2">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-secondary">
+                            {product.imageUrl || product.image_url ? (
+                              <img src={product.imageUrl || product.image_url || ""} alt={product.name} className="h-full w-full object-cover" />
+                            ) : (
+                              <Package className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-foreground">{product.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatCurrency(unitPrice)} · estoque {product.stock}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button type="button" variant="outline" size="icon" className="h-7 w-7" disabled={quantity === 0} onClick={() => changeProductQuantity(product, -1)}>
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <span className="w-5 text-center text-sm">{quantity}</span>
+                            <Button type="button" variant="outline" size="icon" className="h-7 w-7" disabled={quantity >= product.stock} onClick={() => changeProductQuantity(product, 1)}>
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
+              ) : null}
+
+              {(selectedServices.length > 0 || selectedProducts.length > 0) ? (
+                <div className="md:col-span-2 rounded-md bg-secondary/50 p-3 text-right text-sm">
+                  Total a pagar: <span className="font-semibold text-foreground">{formatCurrency(amountDue)}</span>
+                </div>
+              ) : null}
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>Horario</Label>
+                <Select value={form.time} onValueChange={(v) => setField("time", v)} disabled={!form.barberId || !form.date || totalDuration <= 0 || slotsLoading}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={slotsLoading ? "Carregando horarios..." : "Selecionar horario"} /></SelectTrigger>
+                  <SelectContent>{slots.map((slot) => <SelectItem key={slot} value={slot}>{slot}</SelectItem>)}</SelectContent>
+                </Select>
+                {!slotsLoading && totalDuration > 0 && slots.length === 0 && form.barberId && form.date ? (
+                  <p className="text-xs text-muted-foreground">Nenhum horario disponivel. Tente outra data.</p>
+                ) : !slotsLoading && slots.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">{slots.length} horarios disponiveis para {totalDuration} min.</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="booking-notes">Observacoes</Label>
+                <Textarea id="booking-notes" value={form.notes} onChange={(e) => setField("notes", e.target.value)} placeholder="Opcional — Ex: preferencia de estilo, etc." />
+              </div>
               </>
             </div>
 
@@ -1078,7 +1185,7 @@ export function ClientBookingsPage() {
           <DialogHeader>
             <DialogTitle>Avaliar atendimento</DialogTitle>
             <DialogDescription>
-              Sua avaliação será enviada para a barbearia.
+              Sua avaliacao sera enviada para a barbearia.
             </DialogDescription>
           </DialogHeader>
 
@@ -1170,7 +1277,7 @@ export function ClientBookingsPage() {
           data={{
             appointmentId: pendingPaymentData.appointmentId,
             paymentId: pendingPaymentData.paymentId,
-            amount: totalPrice,
+            amount: amountDue,
             serviceName: selectedServices.map((s) => s.name).join(", "),
             paymentMethod: onlineMethod,
             userId: user?.id ?? "",

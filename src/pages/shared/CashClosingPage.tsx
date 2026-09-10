@@ -308,8 +308,8 @@ function collectCashClosingReportData(closings: CashClosing[]) {
   const movements = buildCashClosingReportRows(orderedClosings);
   const paymentRows = movements.filter((item) => item.payment);
   const totalAmount = orderedClosings.reduce((sum, closing) => sum + closing.totalAmount, 0);
-  const totalAppointments = paymentRows.filter((item) => item.payment?.type === "appointment").length;
-  const totalCashOut = paymentRows.filter((item) => item.payment?.type === "cash_out").length;
+  const totalAppointments = new Set(paymentRows.filter((item) => item.payment?.type === "appointment").map((item) => item.payment!.transactionId)).size;
+  const totalCashOut = new Set(paymentRows.filter((item) => item.payment?.type === "cash_out").map((item) => item.payment!.transactionId)).size;
   const totalsByMethod = orderedClosings.reduce<Record<string, number>>((acc, closing) => {
     Object.entries(closing.totalsByMethod ?? {}).forEach(([method, amount]) => {
       acc[method] = (acc[method] ?? 0) + Number(amount || 0);

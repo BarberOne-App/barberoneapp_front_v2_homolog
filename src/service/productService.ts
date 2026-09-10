@@ -128,3 +128,69 @@ export async function createProductStockMovement(data: ProductStockMovementPaylo
 
   return response.data;
 }
+
+export interface ProductOrderItem {
+  productId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
+export interface ProductOrder {
+  orderId: string;
+  status: string;
+  total: number;
+  createdAt: string;
+  payment: {
+    id: string;
+    method: string;
+    status: string;
+    paidAt: string | null;
+  } | null;
+  items: ProductOrderItem[];
+}
+
+export async function checkoutProductCart(items: Array<{ productId: string; quantity: number }>) {
+  const response = await api.post<{
+    orderId: string;
+    paymentId: string;
+    total: number;
+    status: string;
+    items: ProductOrderItem[];
+  }>("/products/cart/checkout", { items });
+
+  return response.data;
+}
+
+export async function listProductOrders() {
+  const response = await api.get<ProductOrder[]>("/products/orders");
+  return response.data;
+}
+
+export interface BarbershopProductOrder extends ProductOrder {
+  client: {
+    id: string;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+  } | null;
+}
+
+export async function listBarbershopProductOrders() {
+  const response = await api.get<BarbershopProductOrder[]>("/products/orders/admin");
+  return response.data;
+}
+
+export async function confirmProductOrderPayment(
+  orderId: string,
+  method: "dinheiro" | "pix" | "debito" | "credito",
+) {
+  const response = await api.patch<{ ok: boolean }>(`/products/orders/${orderId}/payment`, { method });
+  return response.data;
+}
+
+export async function cancelProductOrder(orderId: string) {
+  const response = await api.post<{ ok: boolean }>(`/products/orders/${orderId}/cancel`);
+  return response.data;
+}

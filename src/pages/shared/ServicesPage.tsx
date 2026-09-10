@@ -7,6 +7,7 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
   Archive,
@@ -61,6 +62,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -87,6 +89,7 @@ type ServiceFilter = "all" | "active" | "inactive" | "covered";
 
 interface ServiceFormState {
   name: string;
+  description: string;
   basePrice: string;
   durationMinutes: string;
   servicePoints: string;
@@ -99,6 +102,7 @@ interface ServiceFormState {
 
 const emptyForm: ServiceFormState = {
   name: "",
+  description: "",
   basePrice: "",
   durationMinutes: "30",
   servicePoints: "1",
@@ -152,6 +156,7 @@ function getCommission(service: Service) {
 function serviceToForm(service: Service): ServiceFormState {
   return {
     name: service.name ?? "",
+    description: service.description ?? "",
     basePrice: String(service.basePrice ?? ""),
     durationMinutes: String(service.durationMinutes ?? 30),
     servicePoints: String(service.servicePoints ?? service.service_points ?? 1),
@@ -164,10 +169,12 @@ function serviceToForm(service: Service): ServiceFormState {
 }
 
 export function ServicesPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { can } = usePermissions();
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const isAdmin = user?.role === "admin" || user?.isAdmin === true;
+  const isClient = user?.role === "client";
   const canManage = isAdmin || can("manageServices");
   const [services, setServices] = useState<Service[]>([]);
   const [search, setSearch] = useState("");
@@ -178,6 +185,7 @@ export function ServicesPage() {
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [serviceToDeactivate, setServiceToDeactivate] = useState<Service | null>(null);
   const [serviceToReactivate, setServiceToReactivate] = useState<Service | null>(null);
   const [form, setForm] = useState<ServiceFormState>(emptyForm);
@@ -330,7 +338,7 @@ export function ServicesPage() {
     const promotionalPrice = parseCurrencyInput(form.promotionalPrice || "0");
 
     if (!form.name.trim()) return "Informe o nome do servico.";
-    if (!Number.isFinite(basePrice) || basePrice <= 0) return "Informe um preco maior que zero.";
+    if (!Number.isFinite(basePrice) || basePrice < 0) return "Informe um preco valido.";
     if (!Number.isInteger(durationMinutes) || durationMinutes < 1) {
       return "Informe uma duracao valida.";
     }
@@ -365,6 +373,7 @@ export function ServicesPage() {
 
     const payload = {
       name: form.name.trim(),
+      description: form.description.trim() || null,
       basePrice: parseCurrencyInput(form.basePrice),
       durationMinutes: Number(form.durationMinutes),
       servicePoints: Number(form.servicePoints),
@@ -551,7 +560,10 @@ export function ServicesPage() {
                     return (
                       <tr
                         key={service.id}
-                        className="border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30"
+                        className={`border-b border-border transition-colors last:border-b-0 hover:bg-secondary/30 ${isClient ? "cursor-pointer" : ""}`}
+                        onClick={() => {
+                          if (isClient) setSelectedService(service);
+                        }}
                       >
 
                         <td className="px-4 py-3">
@@ -571,6 +583,11 @@ export function ServicesPage() {
                               <p className="truncate text-sm font-medium text-foreground">
                                 {service.name}
                               </p>
+                              {service.description ? (
+                                <p className="max-w-xs truncate text-xs text-muted-foreground">
+                                  {service.description}
+                                </p>
+                              ) : null}
                               {service.promotionalPrice && service.promotionalPrice > 0 ? (
                                 <p className="text-xs text-muted-foreground">
                                   Promocional: {formatCurrency(service.promotionalPrice)}
@@ -591,7 +608,7 @@ export function ServicesPage() {
                           </td>
                         )}
                         <td className="px-4 py-3 text-sm font-medium text-foreground">
-                          {formatCurrency(service.basePrice)}
+                          {service.basePrice > 0 ? formatCurrency(service.basePrice) : "Sem valor"}
                         </td>
                         {isAdmin ? (
                           <td className="px-4 py-3 text-sm text-muted-foreground">
@@ -628,7 +645,10 @@ export function ServicesPage() {
                           <td className="px-4 py-3">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <button className="p-1 text-muted-foreground transition-colors hover:text-foreground">
+                                <button
+                                  className="p-1 text-muted-foreground transition-colors hover:text-foreground"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
                                   <MoreHorizontal size={16} />
                                 </button>
                               </DropdownMenuTrigger>
@@ -690,6 +710,20 @@ export function ServicesPage() {
                   placeholder="Ex: Corte degradê"
                   required
                 />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="service-description">Descricao</Label>
+                <Textarea
+                  id="service-description"
+                  value={form.description}
+                  onChange={(event) => setField("description", event.target.value)}
+                  placeholder="Explique o que esta incluso no servico"
+                  maxLength={1000}
+                  rows={3}
+                />
+                <p className="text-right text-xs text-muted-foreground">
+                  {form.description.length}/1000
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="service-price">Preco base</Label>
@@ -846,6 +880,56 @@ export function ServicesPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(selectedService)} onOpenChange={(open) => !open && setSelectedService(null)}>
+        <DialogContent className="overflow-hidden p-0 sm:max-w-lg">
+          {selectedService ? (
+            <>
+              <div className="flex h-56 items-center justify-center bg-secondary">
+                {selectedService.imageUrl ? (
+                  <img
+                    src={selectedService.imageUrl}
+                    alt={selectedService.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <Scissors className="h-16 w-16 text-muted-foreground/50" />
+                )}
+              </div>
+              <div className="space-y-5 p-6">
+                <DialogHeader>
+                  <DialogTitle>{selectedService.name}</DialogTitle>
+                  <DialogDescription>
+                    {selectedService.description || "Consulte a barbearia para mais detalhes sobre este servico."}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex items-center justify-between rounded-lg border border-border p-4">
+                  <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4" /> {selectedService.durationMinutes} min
+                  </span>
+                  <span className="font-semibold text-foreground">
+                    {selectedService.basePrice > 0
+                      ? formatCurrency(selectedService.promotionalPrice && selectedService.promotionalPrice > 0
+                          ? selectedService.promotionalPrice
+                          : selectedService.basePrice)
+                      : "Consultar"}
+                  </span>
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={() => {
+                    const serviceId = selectedService.id;
+                    setSelectedService(null);
+                    navigate("/bookings", { state: { openBooking: true, serviceId } });
+                  }}
+                >
+                  Agendar este servico
+                </Button>
+              </div>
+            </>
+          ) : null}
         </DialogContent>
       </Dialog>
 
