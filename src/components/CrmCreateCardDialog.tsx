@@ -15,9 +15,11 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ClientPickerModal } from "@/components/ClientPickerModal";
+import { preventTourPanelDismiss } from "@/lib/preventTourPanelDismiss";
 import {
   REASON_LABELS,
   createCrmCard,
+  type CrmCard,
   type CrmReason,
 } from "@/service/crmService";
 import { listUsers, type UserProfile } from "@/service/userService";
@@ -37,7 +39,7 @@ interface CrmCreateCardDialogProps {
   open: boolean;
   pipelineId: string;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (card: CrmCard) => void;
 }
 
 export function CrmCreateCardDialog({ open, pipelineId, onClose, onCreated }: CrmCreateCardDialogProps) {
@@ -71,7 +73,7 @@ export function CrmCreateCardDialog({ open, pipelineId, onClose, onCreated }: Cr
     }
     setSaving(true);
     try {
-      await createCrmCard({
+      const created = await createCrmCard({
         clientId: client.id,
         pipelineId,
         primaryReason: reason,
@@ -80,7 +82,7 @@ export function CrmCreateCardDialog({ open, pipelineId, onClose, onCreated }: Cr
         notes: notes.trim() || null,
       });
       toast.success("Card criado.");
-      onCreated();
+      onCreated(created);
       onClose();
     } catch (err) {
       toast.error(getApiMessage(err));
@@ -92,7 +94,7 @@ export function CrmCreateCardDialog({ open, pipelineId, onClose, onCreated }: Cr
   return (
     <>
       <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg" onPointerDownOutside={preventTourPanelDismiss}>
           <DialogHeader>
             <DialogTitle>Novo card</DialogTitle>
           </DialogHeader>
@@ -108,7 +110,13 @@ export function CrmCreateCardDialog({ open, pipelineId, onClose, onCreated }: Cr
                   </Button>
                 </div>
               ) : (
-                <Button type="button" variant="outline" className="w-full" onClick={() => setPickerOpen(true)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  data-tour="create-dialog-cliente-btn"
+                  onClick={() => setPickerOpen(true)}
+                >
                   Selecionar cliente
                 </Button>
               )}
@@ -117,7 +125,7 @@ export function CrmCreateCardDialog({ open, pipelineId, onClose, onCreated }: Cr
             <div>
               <Label className="mb-2 block">Motivo</Label>
               <Select value={reason} onValueChange={(v) => setReason(v as CrmReason)}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full" data-tour="create-dialog-motivo-select">
                   <SelectValue placeholder="Selecione o motivo" />
                 </SelectTrigger>
                 <SelectContent>
@@ -158,7 +166,12 @@ export function CrmCreateCardDialog({ open, pipelineId, onClose, onCreated }: Cr
             </div>
 
             <div className="flex justify-end">
-              <Button type="button" onClick={handleSubmit} disabled={saving}>
+              <Button
+                type="button"
+                data-tour="create-dialog-submit-btn"
+                onClick={handleSubmit}
+                disabled={saving}
+              >
                 {saving ? <Loader2 size={14} className="mr-2 animate-spin" /> : null}
                 Criar card
               </Button>

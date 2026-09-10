@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
+import { preventTourPanelDismiss } from "@/lib/preventTourPanelDismiss";
 import {
   CONTACT_TYPE_LABELS,
   EVENT_TYPE_LABELS,
@@ -225,7 +226,10 @@ export function CrmCardDetailDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-        <DialogContent className="flex max-h-[90vh] flex-col overflow-y-auto sm:max-w-2xl">
+        <DialogContent
+          className="flex max-h-[90vh] flex-col overflow-y-auto sm:max-w-2xl"
+          onPointerDownOutside={preventTourPanelDismiss}
+        >
           <DialogHeader>
             <DialogTitle>{card?.clientName ?? "Card do CRM"}</DialogTitle>
           </DialogHeader>
@@ -244,7 +248,7 @@ export function CrmCardDetailDialog({
                 <div>
                   <Label className="mb-2 block">Etapa</Label>
                   <Select value={stage} onValueChange={setStage}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full" data-tour="card-detail-etapa-select">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -363,7 +367,7 @@ export function CrmCardDetailDialog({
                 )}
               </div>
 
-              <div className="border-t border-border pt-4">
+              <div className="border-t border-border pt-4" data-tour="card-detail-registrar-contato">
                 <Label className="mb-2 block">Registrar contato</Label>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <Select value={contactType} onValueChange={setContactType}>
@@ -397,7 +401,7 @@ export function CrmCardDetailDialog({
                 </Button>
               </div>
 
-              <div className="border-t border-border pt-4">
+              <div className="border-t border-border pt-4" data-tour="card-detail-historico">
                 <Label className="mb-2 block">Histórico</Label>
                 <div className="max-h-52 space-y-2 overflow-y-auto text-sm">
                   {events.length === 0 ? (

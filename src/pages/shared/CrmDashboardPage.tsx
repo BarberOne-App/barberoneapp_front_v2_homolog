@@ -207,7 +207,7 @@ export function CrmDashboardPage() {
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {/* Funil por etapa */}
-            <div className="rounded-lg border border-border bg-card p-4">
+            <div className="rounded-lg border border-border bg-card p-4" data-tour="dashboard-funil">
               <p className="mb-3 text-sm font-semibold text-foreground">Cards ativos por etapa</p>
               {funnelData.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">Nenhum card ativo neste pipeline.</p>
@@ -225,7 +225,7 @@ export function CrmDashboardPage() {
             </div>
 
             {/* Motivos mais frequentes */}
-            <div className="rounded-lg border border-border bg-card p-4">
+            <div className="rounded-lg border border-border bg-card p-4" data-tour="dashboard-motivos">
               <p className="mb-3 text-sm font-semibold text-foreground">Motivos mais frequentes</p>
               {reasonsData.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">Nenhum card criado no período.</p>
@@ -252,7 +252,7 @@ export function CrmDashboardPage() {
           </div>
 
           {/* Evolucao mensal */}
-          <div className="rounded-lg border border-border bg-card p-4">
+          <div className="rounded-lg border border-border bg-card p-4" data-tour="dashboard-evolucao">
             <p className="mb-3 text-sm font-semibold text-foreground">Evolução mensal (recuperados x encerrados)</p>
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={monthlyData} margin={{ left: 8, right: 24 }}>
@@ -269,7 +269,7 @@ export function CrmDashboardPage() {
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             {/* Atencao hoje */}
-            <div className="rounded-lg border border-border bg-card p-4">
+            <div className="rounded-lg border border-border bg-card p-4" data-tour="dashboard-atencao">
               <p className="mb-3 text-sm font-semibold text-foreground">Precisa de atenção hoje</p>
               <div className="space-y-3 text-sm">
                 <div className="flex items-center gap-2">

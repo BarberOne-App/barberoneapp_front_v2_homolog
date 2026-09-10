@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { preventTourPanelDismiss } from "@/lib/preventTourPanelDismiss";
 import {
   getCrmAutomation,
   listCrmPipelines,
@@ -78,7 +79,7 @@ export function CrmAutomationDialog({ open, onClose }: CrmAutomationDialogProps)
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg" onPointerDownOutside={preventTourPanelDismiss}>
         <DialogHeader>
           <DialogTitle>Automação pós-atendimento</DialogTitle>
         </DialogHeader>
@@ -101,13 +102,18 @@ export function CrmAutomationDialog({ open, onClose }: CrmAutomationDialogProps)
                   Cria card automaticamente ao finalizar um atendimento.
                 </p>
               </div>
-              <Switch id="crm-automation-enabled" checked={enabled} onCheckedChange={setEnabled} />
+              <Switch
+                id="crm-automation-enabled"
+                data-tour="automation-switch"
+                checked={enabled}
+                onCheckedChange={setEnabled}
+              />
             </div>
 
             <div>
               <Label className="mb-2 block">Pipeline padrão</Label>
               <Select value={genericPipelineId} onValueChange={setGenericPipelineId}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full" data-tour="automation-pipeline-select">
                   <SelectValue placeholder="Selecione um pipeline" />
                 </SelectTrigger>
                 <SelectContent>

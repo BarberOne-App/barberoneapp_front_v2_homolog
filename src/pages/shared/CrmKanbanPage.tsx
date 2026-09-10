@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   Clock,
   Filter,
+  HelpCircle,
   Kanban as KanbanIcon,
   Loader2,
   MessageCircle,
@@ -41,6 +42,7 @@ import {
   type CrmPipeline,
 } from "@/service/crmService";
 import { listUsers, type UserProfile } from "@/service/userService";
+import { useCrmTour } from "@/hooks/useCrmTour";
 
 function getApiMessage(error: unknown) {
   const responseData = (error as { response?: { data?: unknown } })?.response?.data;
@@ -104,6 +106,10 @@ export function CrmKanbanPage() {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 
   const dragStateRef = useRef<DragState | null>(null);
+  const { registerControls, unregisterControls, startTour, hasSeenTour } = useCrmTour();
+  const lastCreatedCardIdRef = useRef<string | null>(null);
+  const hasAutoStartedRef = useRef(false);
+  const cardsRef = useRef<CrmCard[]>([]);
 
   const activePipeline = useMemo(
     () => pipelines.find((p) => p.id === activePipelineId) ?? null,
@@ -156,6 +162,29 @@ export function CrmKanbanPage() {
     const timer = window.setInterval(() => void load(activePipelineId, true), 10000);
     return () => window.clearInterval(timer);
   }, [activePipelineId, load]);
+
+  useEffect(() => {
+    cardsRef.current = cards;
+  }, [cards]);
+
+  useEffect(() => {
+    registerControls({
+      openCreateDialog: () => setCreateOpen(true),
+      closeCreateDialog: () => setCreateOpen(false),
+      openManagerDialog: () => setManagerOpen(true),
+      closeManagerDialog: () => setManagerOpen(false),
+      openAutomationDialog: () => setAutomationOpen(true),
+      closeAutomationDialog: () => setAutomationOpen(false),
+      openCardDetail: (cardId) =>
+        setSelectedCardId(cardId ?? lastCreatedCardIdRef.current ?? cardsRef.current[0]?.id ?? null),
+      closeCardDetail: () => setSelectedCardId(null),
+    });
+    if (!hasAutoStartedRef.current && !hasSeenTour) {
+      hasAutoStartedRef.current = true;
+      startTour();
+    }
+    return () => unregisterControls();
+  }, [registerControls, unregisterControls, startTour, hasSeenTour]);
 
   const responsibleOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -397,16 +426,32 @@ export function CrmKanbanPage() {
             variant="outline"
             size="icon"
             title="Automação pós-atendimento"
+            data-tour="kanban-automacao-btn"
             onClick={() => setAutomationOpen(true)}
           >
             <Zap size={14} />
           </Button>
 
-          <Button variant="outline" size="icon" title="Pipelines" onClick={() => setManagerOpen(true)}>
+          <Button
+            variant="outline"
+            size="icon"
+            title="Pipelines"
+            data-tour="kanban-pipelines-btn"
+            onClick={() => setManagerOpen(true)}
+          >
             <Settings size={14} />
           </Button>
 
-          <Button size="sm" onClick={() => setCreateOpen(true)} disabled={!activePipelineId}>
+          <Button variant="outline" size="icon" title="Tour guiado" onClick={() => startTour()}>
+            <HelpCircle size={14} />
+          </Button>
+
+          <Button
+            size="sm"
+            data-tour="kanban-novo-card-btn"
+            onClick={() => setCreateOpen(true)}
+            disabled={!activePipelineId}
+          >
             <Plus size={14} className="mr-2" />
             Novo card
           </Button>
@@ -448,6 +493,7 @@ export function CrmKanbanPage() {
         </div>
       )}
 
+      <div className="flex flex-1 flex-col gap-4" data-tour="kanban-board">
       {pipelinesLoading ? (
         <div className="flex flex-1 items-center justify-center">
           <Loader2 size={24} className="animate-spin text-muted-foreground" />
@@ -478,7 +524,7 @@ export function CrmKanbanPage() {
       ) : (
         <>
           <div className="flex flex-1 gap-4 overflow-x-auto pb-2">
-            {columns.map((column) => (
+            {columns.map((column, columnIndex) => (
               <div
                 key={column.key}
                 data-crm-column={column.key}
@@ -491,7 +537,10 @@ export function CrmKanbanPage() {
                   </span>
                 </div>
 
-                <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
+                <div
+                  className="flex flex-1 flex-col gap-2 overflow-y-auto"
+                  {...(columnIndex === 0 ? { "data-tour": "kanban-column-cards" } : {})}
+                >
                   {column.cards.length === 0 ? (
                     <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
                       Nenhum card aqui
@@ -581,13 +630,17 @@ export function CrmKanbanPage() {
           )}
         </>
       )}
+      </div>
 
       {activePipelineId && (
         <CrmCreateCardDialog
           open={createOpen}
           pipelineId={activePipelineId}
           onClose={() => setCreateOpen(false)}
-          onCreated={() => activePipelineId && load(activePipelineId)}
+          onCreated={(card) => {
+            lastCreatedCardIdRef.current = card.id;
+            activePipelineId && void load(activePipelineId);
+          }}
         />
       )}
 

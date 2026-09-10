@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { preventTourPanelDismiss } from "@/lib/preventTourPanelDismiss";
 import {
   Select,
   SelectContent,
@@ -228,7 +229,10 @@ export function CrmPipelineManagerDialog({ open, onClose, onChanged }: CrmPipeli
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="flex max-h-[90vh] flex-col overflow-y-auto sm:max-w-2xl">
+      <DialogContent
+        className="flex max-h-[90vh] flex-col overflow-y-auto sm:max-w-2xl"
+        onPointerDownOutside={preventTourPanelDismiss}
+      >
         <DialogHeader>
           <DialogTitle>Pipelines do CRM</DialogTitle>
         </DialogHeader>
@@ -340,7 +344,7 @@ export function CrmPipelineManagerDialog({ open, onClose, onChanged }: CrmPipeli
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3" data-tour="pipeline-manager-list">
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 size={20} className="animate-spin text-muted-foreground" />
@@ -376,7 +380,11 @@ export function CrmPipelineManagerDialog({ open, onClose, onChanged }: CrmPipeli
                 </div>
               ))
             )}
-            <Button type="button" onClick={() => setShowTemplatePicker(true)}>
+            <Button
+              type="button"
+              data-tour="pipeline-manager-novo-btn"
+              onClick={() => setShowTemplatePicker(true)}
+            >
               <Plus size={14} className="mr-2" />
               Novo pipeline
             </Button>
