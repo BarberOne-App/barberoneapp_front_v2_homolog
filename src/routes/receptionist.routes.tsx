@@ -2,6 +2,8 @@ import { ReceptionistDashboard } from "../pages/receptionist/ReceptionistDashboa
 import { ReceptionistSettingsPage } from "../pages/receptionist/ReceptionistSettingsPage";
 import { BookingsPage } from "../pages/shared/BookingsPage";
 import { CashClosingPage } from "../pages/shared/CashClosingPage";
+import { CrmDashboardPage } from "../pages/shared/CrmDashboardPage";
+import { CrmKanbanPage } from "../pages/shared/CrmKanbanPage";
 import { CustomersPage } from "../pages/shared/CustomersPage";
 import { FitAppointmentPage } from "../pages/shared/FitAppointmentPage";
 import { PaymentsPage } from "../pages/shared/PaymentsPage";
@@ -45,6 +47,20 @@ export const receptionistRoutes: AppRoute[] = [
     breadcrumbs: ["Operacao", "Agenda"],
     Component: SchedulesPage,
     requiredPermission: "manageBlockedDates",
+  },
+  {
+    path: "/crm",
+    title: "CRM",
+    breadcrumbs: ["Relacionamento", "CRM"],
+    Component: CrmKanbanPage,
+    requiredPermission: "manageCrm",
+  },
+  {
+    path: "/crm-dashboard",
+    title: "Dashboard do CRM",
+    breadcrumbs: ["Relacionamento", "Dashboard"],
+    Component: CrmDashboardPage,
+    requiredPermission: "manageCrm",
   },
   {
     path: "/payments",
