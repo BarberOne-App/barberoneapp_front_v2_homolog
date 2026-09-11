@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Loader2, Search, User } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -9,17 +10,39 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { listUsers, type UserProfile } from "@/service/userService";
+import { Label } from "@/components/ui/label";
+import { createUser, listUsers, type UserProfile } from "@/service/userService";
 
 interface ClientPickerModalProps {
   open: boolean;
   onClose: () => void;
   onSelect: (client: UserProfile) => void;
+  /** Quando true, exibe a opção "Cadastrar novo cliente" com formulário rápido (nome/telefone/e-mail). */
+  allowCreate?: boolean;
 }
 
 const PAGE_SIZE = 15;
 
-export function ClientPickerModal({ open, onClose, onSelect }: ClientPickerModalProps) {
+function getApiMessage(error: unknown) {
+  const responseData = (error as { response?: { data?: unknown } })?.response?.data;
+  if (Array.isArray(responseData)) return responseData.join(" ");
+  if (responseData && typeof responseData === "object") {
+    const message = (responseData as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  if (error instanceof Error) return error.message;
+  return "Não foi possível concluir a operação.";
+}
+
+function generatePlaceholderPassword() {
+  if (typeof crypto !== "undefined" && "getRandomValues" in crypto) {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+}
+
+export function ClientPickerModal({ open, onClose, onSelect, allowCreate }: ClientPickerModalProps) {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -27,6 +50,12 @@ export function ClientPickerModal({ open, onClose, onSelect }: ClientPickerModal
   const [clients, setClients] = useState<UserProfile[]>([]);
   const [total, setTotal] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -58,8 +87,36 @@ export function ClientPickerModal({ open, onClose, onSelect }: ClientPickerModal
       setPage(1);
       setClients([]);
       setTotal(0);
+      setShowCreateForm(false);
+      setNewName("");
+      setNewPhone("");
+      setNewEmail("");
     }
   }, [open]);
+
+  async function handleCreateClient() {
+    if (!newName.trim() || !newEmail.trim()) {
+      toast.error("Informe nome e e-mail.");
+      return;
+    }
+    setCreating(true);
+    try {
+      const created = await createUser({
+        name: newName.trim(),
+        email: newEmail.trim(),
+        phone: newPhone.trim() || null,
+        password: generatePlaceholderPassword(),
+        role: "client",
+      });
+      toast.success("Cliente cadastrado.");
+      onSelect(created);
+      onClose();
+    } catch (err) {
+      toast.error(getApiMessage(err));
+    } finally {
+      setCreating(false);
+    }
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -70,18 +127,61 @@ export function ClientPickerModal({ open, onClose, onSelect }: ClientPickerModal
           <DialogTitle>Selecionar Cliente</DialogTitle>
         </DialogHeader>
 
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nome, e-mail ou telefone..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            autoFocus
-          />
-        </div>
+        {showCreateForm ? (
+          <div className="space-y-4">
+            <div>
+              <Label className="mb-2 block">Nome</Label>
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Nome completo"
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label className="mb-2 block">Telefone</Label>
+              <Input
+                value={newPhone}
+                onChange={(e) => setNewPhone(e.target.value)}
+                placeholder="(00) 00000-0000"
+              />
+            </div>
+            <div>
+              <Label className="mb-2 block">E-mail</Label>
+              <Input
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="cliente@exemplo.com"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Cadastro rápido, só o essencial — dá pra completar o resto do cadastro depois em Clientes.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowCreateForm(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleCreateClient} disabled={creating}>
+                {creating ? <Loader2 size={14} className="mr-2 animate-spin" /> : null}
+                Cadastrar e selecionar
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome, e-mail ou telefone..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+                autoFocus
+              />
+            </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-border">
+            <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-border">
           {loading ? (
             <div className="flex items-center justify-center py-10">
               <Loader2 size={20} className="animate-spin text-muted-foreground" />
@@ -140,6 +240,18 @@ export function ClientPickerModal({ open, onClose, onSelect }: ClientPickerModal
             </Button>
           </div>
         </div>
+
+        {allowCreate && (
+          <button
+            type="button"
+            className="text-left text-sm text-primary underline"
+            onClick={() => setShowCreateForm(true)}
+          >
+            + Não encontrou? Cadastrar novo cliente
+          </button>
+        )}
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
