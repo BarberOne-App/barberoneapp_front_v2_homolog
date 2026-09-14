@@ -16,6 +16,7 @@ import { SubscriptionWithdrawalRequestPage } from "../pages/admin/SubscriptionWi
 import { BookingsPage } from "../pages/shared/BookingsPage";
 import { CashClosingPage } from "../pages/shared/CashClosingPage";
 import { CrmDashboardPage } from "../pages/shared/CrmDashboardPage";
+import { CrmFeatureGate } from "../components/CrmFeatureGate";
 import { CrmKanbanPage } from "../pages/shared/CrmKanbanPage";
 import { FitAppointmentPage } from "../pages/shared/FitAppointmentPage";
 import { CustomersPage } from "../pages/shared/CustomersPage";
@@ -204,14 +205,14 @@ export const adminRoutes: AppRoute[] = [
     path: "/crm",
     title: "CRM",
     breadcrumbs: ["Relacionamento", "CRM"],
-    Component: CrmKanbanPage,
+    Component: () => <CrmFeatureGate><CrmKanbanPage /></CrmFeatureGate>,
     requiredPermission: "manageCrm",
   },
   {
     path: "/crm-dashboard",
     title: "Dashboard do CRM",
     breadcrumbs: ["Relacionamento", "Dashboard"],
-    Component: CrmDashboardPage,
+    Component: () => <CrmFeatureGate><CrmDashboardPage /></CrmFeatureGate>,
     requiredPermission: "manageCrm",
   },
   {
@@ -227,3 +228,5 @@ export const adminRoutes: AppRoute[] = [
     Component: HelpCenterPage,
   },
 ];
+
+

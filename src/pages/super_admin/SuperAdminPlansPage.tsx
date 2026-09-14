@@ -40,12 +40,12 @@ const EMPTY_FORM = {
   trialPeriodDays: "0", statementDescriptor: "BARBERONE",
   paymentMethods: ["credit_card"] as string[], features: "",
   maxBarbers: "", maxAdmins: "", maxReceptionists: "",
-  isPublic: true, isRecommended: false, sortOrder: "0", syncPagarme: true,
+  isPublic: true, isRecommended: false, includesCrm: false, sortOrder: "0", syncPagarme: true,
 };
 
 type PlanForm = typeof EMPTY_FORM;
 
-function togglePM(form: PlanForm, method: string): PlanForm {
+function planFeatures(form: PlanForm) { const list = form.features.split("`n").map((feature) => feature.trim()).filter(Boolean).filter((feature) => feature.toLowerCase() !== "crm"); return form.includesCrm ? [...list, "crm"] : list; }`r`n`r`nfunction togglePM(form: PlanForm, method: string): PlanForm {
   const exists = form.paymentMethods.includes(method);
   const next = exists ? form.paymentMethods.filter((m) => m !== method) : [...form.paymentMethods, method];
   return { ...form, paymentMethods: next.length > 0 ? next : ["credit_card"] };
@@ -252,7 +252,7 @@ export function SuperAdminPlansPage() {
           <p className="text-xs text-muted-foreground">Pix nao e suportado em recorrencia de assinatura no Pagar.me.</p>
         </div>
         <div className="flex flex-wrap gap-4">
-          {[{ key: "isPublic", label: "Exibir na landing page" }, { key: "isRecommended", label: "Marcar como recomendado" }, { key: "syncPagarme", label: "Sincronizar com Pagar.me" }].map((opt) => (
+          {[{ key: "includesCrm", label: "Incluir CRM de Relacionamento" }, { key: "isPublic", label: "Exibir na landing page" }, { key: "isRecommended", label: "Marcar como recomendado" }, { key: "syncPagarme", label: "Sincronizar com Pagar.me" }].map((opt) => (
             <label key={opt.key} className="flex items-center gap-2 text-sm text-foreground">
               <input type="checkbox" checked={Boolean(form[opt.key as keyof PlanForm])} onChange={(e) => setForm((p) => ({ ...p, [opt.key]: e.target.checked }))} className="rounded border-border accent-primary" />
               {opt.label}
@@ -388,7 +388,7 @@ export function SuperAdminPlansPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-4">
-                {[{ key: "isPublic", label: "Exibir na landing page" }, { key: "isRecommended", label: "Marcar como recomendado" }].map((opt) => (
+                {[{ key: "includesCrm", label: "Incluir CRM de Relacionamento" }, { key: "isPublic", label: "Exibir na landing page" }, { key: "isRecommended", label: "Marcar como recomendado" }].map((opt) => (
                   <label key={opt.key} className="flex items-center gap-2 text-sm text-foreground">
                     <input type="checkbox" checked={Boolean(editForm[opt.key as keyof PlanForm])} onChange={(e) => setEditForm((p) => ({ ...p, [opt.key]: e.target.checked }))} className="rounded border-border accent-primary" />
                     {opt.label}
@@ -416,3 +416,4 @@ export function SuperAdminPlansPage() {
     </div>
   );
 }
+
