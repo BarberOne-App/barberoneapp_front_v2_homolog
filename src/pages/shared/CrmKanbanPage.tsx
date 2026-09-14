@@ -178,13 +178,14 @@ export function CrmKanbanPage() {
       openCardDetail: (cardId) =>
         setSelectedCardId(cardId ?? lastCreatedCardIdRef.current ?? cardsRef.current[0]?.id ?? null),
       closeCardDetail: () => setSelectedCardId(null),
+      hasPipelines: () => pipelines.length > 0,
     });
     if (!hasAutoStartedRef.current && !hasSeenTour) {
       hasAutoStartedRef.current = true;
       startTour();
     }
     return () => unregisterControls();
-  }, [registerControls, unregisterControls, startTour, hasSeenTour]);
+  }, [registerControls, unregisterControls, startTour, hasSeenTour, pipelines]);
 
   const responsibleOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -501,7 +502,7 @@ export function CrmKanbanPage() {
       ) : showEmptyPipelines ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-sm text-muted-foreground">
           <p>Nenhum pipeline criado ainda.</p>
-          <Button size="sm" onClick={() => setManagerOpen(true)}>
+          <Button size="sm" data-tour="kanban-empty-create-pipeline-btn" onClick={() => setManagerOpen(true)}>
             Criar pipeline
           </Button>
         </div>

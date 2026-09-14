@@ -238,7 +238,7 @@ export function CrmPipelineManagerDialog({ open, onClose, onChanged }: CrmPipeli
         </DialogHeader>
 
         {showTemplatePicker ? (
-          <div className="space-y-3">
+          <div className="space-y-3" data-tour="pipeline-template-picker">
             <p className="text-sm text-muted-foreground">
               Escolha o modelo mais parecido com o que você precisa — dá pra ajustar nome e etapas depois.
             </p>
@@ -337,7 +337,7 @@ export function CrmPipelineManagerDialog({ open, onClose, onChanged }: CrmPipeli
               <Button type="button" variant="outline" onClick={() => setEditing(null)}>
                 Cancelar
               </Button>
-              <Button type="button" onClick={handleSave} disabled={saving}>
+              <Button type="button" data-tour="pipeline-manager-save-btn" onClick={handleSave} disabled={saving}>
                 {saving ? <Loader2 size={14} className="mr-2 animate-spin" /> : null}
                 Salvar
               </Button>

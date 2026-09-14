@@ -159,6 +159,33 @@ export function CrmTourProvider({ children }: { children: ReactNode }) {
     void goToStep(0).then(() => setIsOpenRef.current?.(true));
   }, [goToStep]);
 
+  // Alguns passos só fazem sentido numa conta sem pipeline ainda (o
+  // "bootstrap" do primeiro pipeline) ou só numa que já tem - resolveStepIndex
+  // pula esses passos em runtime, pra frente ou pra trás, sem afetar contas
+  // no estado oposto.
+  const isStepSkipped = useCallback(
+    (step: (typeof crmTourSteps)[number]) => step.skipIf?.(controlsRef.current) ?? false,
+    [],
+  );
+  const resolveStepIndex = useCallback(
+    (fromIndex: number, direction: 1 | -1) => {
+      let idx = fromIndex;
+      while (idx >= 0 && idx < crmTourSteps.length && isStepSkipped(crmTourSteps[idx])) {
+        idx += direction;
+      }
+      return idx;
+    },
+    [isStepSkipped],
+  );
+  const visibleStepCount = useCallback(
+    () => crmTourSteps.filter((s) => !isStepSkipped(s)).length,
+    [isStepSkipped],
+  );
+  const visibleIndexOf = useCallback(
+    (rawIndex: number) => crmTourSteps.slice(0, rawIndex).filter((s) => !isStepSkipped(s)).length,
+    [isStepSkipped],
+  );
+
   const reactourSteps = useMemo(
     () => crmTourSteps.map((step) => ({ selector: step.selector, content: step.content })),
     [],
@@ -202,12 +229,12 @@ export function CrmTourProvider({ children }: { children: ReactNode }) {
         }}
         ContentComponent={(props) => (
           <CrmTourStepPanel
-            currentStep={props.currentStep}
-            totalSteps={crmTourSteps.length}
+            currentStep={visibleIndexOf(props.currentStep)}
+            totalSteps={visibleStepCount()}
             content={String(props.steps[props.currentStep]?.content ?? "")}
             disabled={isTransitioning}
-            onNext={() => void goToStep(props.currentStep + 1)}
-            onPrev={() => void goToStep(props.currentStep - 1)}
+            onNext={() => void goToStep(resolveStepIndex(props.currentStep + 1, 1))}
+            onPrev={() => void goToStep(resolveStepIndex(props.currentStep - 1, -1))}
             onSkipOrFinish={() => {
               props.setIsOpen(false);
               markSeen();

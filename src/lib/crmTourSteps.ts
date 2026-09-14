@@ -11,6 +11,42 @@ export const crmTourSteps: CrmTourStepConfig[] = [
     content:
       "Bem-vindo ao CRM! Aqui você acompanha cada cliente que precisa de atenção — de quem cancelou até quem sumiu — organizados como um quadro de tarefas.",
   },
+  // Passos de "bootstrap": só aparecem numa conta que ainda não tem nenhum
+  // pipeline (skipIf pula todos eles quando já existe pipeline). Guiam a
+  // criação do primeiro pipeline antes de seguir pro fluxo normal de card -
+  // sem isso, os passos seguintes destacam elementos que nem chegam a
+  // existir no DOM (o botão "Novo card" fica desabilitado e o diálogo de
+  // criação não é montado sem um pipeline ativo).
+  {
+    id: "kanban-create-pipeline-empty",
+    route: "/crm",
+    selector: '[data-tour="kanban-empty-create-pipeline-btn"]',
+    content:
+      "Sua barbearia ainda não tem nenhum pipeline. Clique aqui pra criar o primeiro — é o quadro onde os cards do CRM vão aparecer.",
+    skipIf: (controls) => controls?.hasPipelines() ?? false,
+  },
+  {
+    id: "bootstrap-pipeline-novo",
+    route: "/crm",
+    selector: '[data-tour="pipeline-manager-novo-btn"]',
+    content: "Clique aqui pra criar um pipeline novo, com um modelo pronto ou do zero.",
+    skipIf: (controls) => controls?.hasPipelines() ?? false,
+  },
+  {
+    id: "bootstrap-pipeline-template",
+    route: "/crm",
+    selector: '[data-tour="pipeline-template-picker"]',
+    content: "Escolha um modelo pra começar — o 'Padrão' cobre a maioria dos casos.",
+    skipIf: (controls) => controls?.hasPipelines() ?? false,
+  },
+  {
+    id: "bootstrap-pipeline-save",
+    route: "/crm",
+    selector: '[data-tour="pipeline-manager-save-btn"]',
+    content: "Pronto! Clique em Salvar pra criar seu primeiro pipeline.",
+    skipIf: (controls) => controls?.hasPipelines() ?? false,
+    onExit: (controls) => controls?.closeManagerDialog(),
+  },
   {
     id: "kanban-novo-card-btn",
     route: "/crm",
