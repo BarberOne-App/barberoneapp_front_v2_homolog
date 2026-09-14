@@ -10,6 +10,7 @@ export const crmTourSteps: CrmTourStepConfig[] = [
     selector: '[data-tour="kanban-board"]',
     content:
       "Bem-vindo ao CRM! Aqui você acompanha cada cliente que precisa de atenção — de quem cancelou até quem sumiu — organizados como um quadro de tarefas.",
+    informational: true,
   },
   // Passos de "bootstrap": só aparecem numa conta que ainda não tem nenhum
   // pipeline (skipIf pula todos eles quando já existe pipeline). Guiam a
@@ -78,6 +79,7 @@ export const crmTourSteps: CrmTourStepConfig[] = [
     route: "/crm",
     selector: '[data-tour="kanban-column-cards"]',
     content: "É assim que o card aparece no quadro — ele fica na primeira etapa até você fazer o próximo contato.",
+    informational: true,
     onEnter: (controls) => controls?.closeCreateDialog(),
   },
   {
@@ -98,6 +100,7 @@ export const crmTourSteps: CrmTourStepConfig[] = [
     route: "/crm",
     selector: '[data-tour="card-detail-historico"]',
     content: "Todo contato registrado fica salvo aqui, em ordem, pra você nunca perder o histórico com esse cliente.",
+    informational: true,
   },
   {
     id: "kanban-pipelines-btn",
@@ -111,6 +114,7 @@ export const crmTourSteps: CrmTourStepConfig[] = [
     route: "/crm",
     selector: '[data-tour="pipeline-manager-list"]',
     content: "Aqui estão seus pipelines. A maioria das barbearias usa só um, mas dá pra ter vários.",
+    informational: true,
     onEnter: (controls) => controls?.openManagerDialog(),
   },
   {
@@ -146,18 +150,21 @@ export const crmTourSteps: CrmTourStepConfig[] = [
     route: "/crm-dashboard",
     selector: '[data-tour="dashboard-funil"]',
     content: "Agora vamos ao Dashboard. Aqui está o funil: quantos clientes em cada etapa.",
+    informational: true,
   },
   {
     id: "dashboard-motivos",
     route: "/crm-dashboard",
     selector: '[data-tour="dashboard-motivos"]',
     content: "Os motivos mais comuns de cliente sumido ou cancelado.",
+    informational: true,
   },
   {
     id: "dashboard-evolucao",
     route: "/crm-dashboard",
     selector: '[data-tour="dashboard-evolucao"]',
     content: "E aqui, quantos clientes você recuperou x perdeu mês a mês.",
+    informational: true,
   },
   {
     id: "dashboard-atencao",
@@ -165,5 +172,6 @@ export const crmTourSteps: CrmTourStepConfig[] = [
     selector: '[data-tour="dashboard-atencao"]',
     content:
       "Essa lista mostra quem precisa de atenção hoje. Esse é o CRM! Você pode assistir de novo clicando no ícone de ajuda.",
+    informational: true,
   },
 ];

@@ -2,6 +2,7 @@ import { createContext, useCallback, useEffect, useMemo, useRef, useState, type 
 import { useLocation, useNavigate } from "react-router-dom";
 import { TourProvider as ReactourProvider, useTour } from "@reactour/tour";
 
+import { CrmTourArrow } from "@/components/crm-tour/CrmTourArrow";
 import { CrmTourStepPanel } from "@/components/crm-tour/CrmTourStepPanel";
 import { crmTourSteps } from "@/lib/crmTourSteps";
 import { waitForSelector } from "@/lib/waitForSelector";
@@ -81,6 +82,7 @@ export function CrmTourProvider({ children }: { children: ReactNode }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isTourOpen, setIsTourOpen] = useState(false);
+  const [stepActionDone, setStepActionDone] = useState(false);
   const [hasSeenTour, setHasSeenTour] = useState(() => {
     try {
       return localStorage.getItem(HAS_SEEN_TOUR_KEY) === "true";
@@ -186,6 +188,30 @@ export function CrmTourProvider({ children }: { children: ReactNode }) {
     [isStepSkipped],
   );
 
+  // "Próximo" só libera depois que o usuário realmente interage com o
+  // elemento destacado do passo (não é só decorativo - sem isso dava pra
+  // clicar Próximo repetidas vezes sem fazer nada, e o tour "andava" sem o
+  // usuário aprender a ação de verdade). Passos informativos (sem ação
+  // nenhuma pra fazer) liberam na hora.
+  useEffect(() => {
+    const step = crmTourSteps[currentStep];
+    setStepActionDone(Boolean(step?.informational));
+  }, [currentStep]);
+
+  useEffect(() => {
+    if (!isTourOpen) return;
+    function handleClick(event: MouseEvent) {
+      const step = crmTourSteps[currentStep];
+      if (!step || step.informational) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest(step.selector)) {
+        setStepActionDone(true);
+      }
+    }
+    document.addEventListener("click", handleClick, true);
+    return () => document.removeEventListener("click", handleClick, true);
+  }, [isTourOpen, currentStep]);
+
   const reactourSteps = useMemo(
     () => crmTourSteps.map((step) => ({ selector: step.selector, content: step.content })),
     [],
@@ -227,20 +253,27 @@ export function CrmTourProvider({ children }: { children: ReactNode }) {
         onClickMask={() => {
           /* clicar fora do spotlight não fecha o tour, evita perder o lugar sem querer */
         }}
-        ContentComponent={(props) => (
-          <CrmTourStepPanel
-            currentStep={visibleIndexOf(props.currentStep)}
-            totalSteps={visibleStepCount()}
-            content={String(props.steps[props.currentStep]?.content ?? "")}
-            disabled={isTransitioning}
-            onNext={() => void goToStep(resolveStepIndex(props.currentStep + 1, 1))}
-            onPrev={() => void goToStep(resolveStepIndex(props.currentStep - 1, -1))}
-            onSkipOrFinish={() => {
-              props.setIsOpen(false);
-              markSeen();
-            }}
-          />
-        )}
+        ContentComponent={(props) => {
+          const step = crmTourSteps[props.currentStep];
+          return (
+            <>
+              {!isTransitioning && step && !step.informational && <CrmTourArrow selector={step.selector} />}
+              <CrmTourStepPanel
+                currentStep={visibleIndexOf(props.currentStep)}
+                totalSteps={visibleStepCount()}
+                content={String(props.steps[props.currentStep]?.content ?? "")}
+                disabled={isTransitioning}
+                nextDisabled={!stepActionDone}
+                onNext={() => void goToStep(resolveStepIndex(props.currentStep + 1, 1))}
+                onPrev={() => void goToStep(resolveStepIndex(props.currentStep - 1, -1))}
+                onSkipOrFinish={() => {
+                  props.setIsOpen(false);
+                  markSeen();
+                }}
+              />
+            </>
+          );
+        }}
       >
         <TourOpenBridge setIsOpenRef={setIsOpenRef} onOpenChange={setIsTourOpen} />
         {children}

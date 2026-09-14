@@ -23,4 +23,8 @@ export interface CrmTourStepConfig {
   // sentido numa conta ainda sem pipeline (o "bootstrap" do primeiro
   // pipeline) ou só numa conta que já tem pipeline.
   skipIf?: (controls: CrmTourControls | null) => boolean;
+  // true = passo só mostra algo, sem pedir nenhuma ação - "Próximo" libera na
+  // hora. Por padrão (undefined/false) o passo exige um clique real dentro
+  // do elemento destacado (selector) antes de liberar "Próximo".
+  informational?: boolean;
 }
