@@ -11,6 +11,7 @@ import {
   LayoutList,
   Package,
   PlusCircle,
+  Kanban,
   ReceiptText,
   Scissors,
   Settings,
@@ -98,6 +99,8 @@ function buildSections(): SidebarSection[] {
           icon: Star,
           label: "Relacionamento",
           children: [
+            { icon: Kanban, label: "CRM", href: "/crm", requiredPermission: "manageCrm" },
+            { icon: BarChart3, label: "Dashboard do CRM", href: "/crm-dashboard", requiredPermission: "manageCrm" },
             { icon: Star, label: "Avaliacoes", href: "/reviews" },
           ],
         },
