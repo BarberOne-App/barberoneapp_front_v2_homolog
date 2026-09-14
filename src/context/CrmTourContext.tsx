@@ -198,19 +198,67 @@ export function CrmTourProvider({ children }: { children: ReactNode }) {
     setStepActionDone(Boolean(step?.informational));
   }, [currentStep]);
 
+  // Cada passo detecta sua própria conclusão do jeito que faz sentido pra
+  // ação dele - clicar no elemento nem sempre é o suficiente:
+  // - "click": clique real dentro do elemento (padrão - botões simples).
+  // - "disappear": o elemento some do DOM (ex.: "Selecionar cliente" vira o
+  //   card do cliente escolhido; diálogo fecha só quando salva com sucesso).
+  //   Clicar sem completar a ação de verdade não conta.
+  // - "change": o texto do próprio elemento muda (ex.: um <Select> que troca
+  //   o valor exibido) - só abrir o dropdown não conta.
   useEffect(() => {
     if (!isTourOpen) return;
-    function handleClick(event: MouseEvent) {
-      const step = crmTourSteps[currentStep];
-      if (!step || step.informational) return;
-      const target = event.target;
-      if (target instanceof Element && target.closest(step.selector)) {
-        setStepActionDone(true);
+    const step = crmTourSteps[currentStep];
+    if (!step || step.informational) return;
+    const completion = step.completion ?? "click";
+
+    if (completion === "click") {
+      function handleClick(event: MouseEvent) {
+        const target = event.target;
+        if (target instanceof Element && target.closest(step!.selector)) {
+          setStepActionDone(true);
+        }
       }
+      document.addEventListener("click", handleClick, true);
+      return () => document.removeEventListener("click", handleClick, true);
     }
-    document.addEventListener("click", handleClick, true);
-    return () => document.removeEventListener("click", handleClick, true);
+
+    if (completion === "disappear") {
+      let wasPresent = Boolean(document.querySelector(step.selector));
+      const observer = new MutationObserver(() => {
+        const present = Boolean(document.querySelector(step.selector));
+        if (wasPresent && !present) setStepActionDone(true);
+        wasPresent = present;
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      return () => observer.disconnect();
+    }
+
+    if (completion === "change") {
+      const el = document.querySelector(step.selector);
+      if (!el) return;
+      const initialText = el.textContent;
+      const observer = new MutationObserver(() => {
+        if (el.textContent !== initialText) setStepActionDone(true);
+      });
+      observer.observe(el, { characterData: true, childList: true, subtree: true });
+      return () => observer.disconnect();
+    }
   }, [isTourOpen, currentStep]);
+
+  // Assim que a ação do passo é detectada, avança sozinho pro próximo -
+  // "Próximo" continua disponível como atalho manual, mas não é mais
+  // obrigatório clicar nele. Passos informational nunca entram aqui (ficam
+  // sempre com stepActionDone=true), senão o usuário seria arrastado pro
+  // próximo passo antes de terminar de ler.
+  useEffect(() => {
+    const step = crmTourSteps[currentStep];
+    if (!step || step.informational || !stepActionDone) return;
+    const timer = window.setTimeout(() => {
+      void goToStep(resolveStepIndex(currentStep + 1, 1));
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [stepActionDone, currentStep, goToStep, resolveStepIndex]);
 
   const reactourSteps = useMemo(
     () => crmTourSteps.map((step) => ({ selector: step.selector, content: step.content })),

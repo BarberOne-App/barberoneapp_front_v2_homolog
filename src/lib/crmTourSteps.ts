@@ -61,18 +61,27 @@ export const crmTourSteps: CrmTourStepConfig[] = [
     selector: '[data-tour="create-dialog-cliente-btn"]',
     content: "Primeiro, escolha o cliente — busque pelo nome ou telefone, ou cadastre um novo na hora.",
     onEnter: (controls) => controls?.openCreateDialog(),
+    // Clicar só abre o modal de seleção - a ação do passo só termina quando
+    // um cliente é de fato escolhido, o que troca esse botão pelo card do
+    // cliente selecionado (o botão some do DOM).
+    completion: "disappear",
   },
   {
     id: "create-dialog-motivo",
     route: "/crm",
     selector: '[data-tour="create-dialog-motivo-select"]',
     content: "Agora escolha o motivo, como 'Retorno atrasado' ou 'Avaliação baixa'.",
+    // Clicar só abre o dropdown - só conta quando o valor exibido muda.
+    completion: "change",
   },
   {
     id: "create-dialog-submit",
     route: "/crm",
     selector: '[data-tour="create-dialog-submit-btn"]',
     content: "Pronto! Clique aqui pra criar o card.",
+    // Clicar pode falhar (validação) e o diálogo continua aberto - só conta
+    // quando o diálogo fecha de verdade (card criado com sucesso).
+    completion: "disappear",
   },
   {
     id: "kanban-card-created",
@@ -88,6 +97,7 @@ export const crmTourSteps: CrmTourStepConfig[] = [
     selector: '[data-tour="card-detail-etapa-select"]',
     content: "Aqui você muda a etapa do cliente conforme ele avança, de 'Contato pendente' até 'Recuperado'.",
     onEnter: (controls) => controls?.openCardDetail(),
+    completion: "change",
   },
   {
     id: "card-detail-contato",
@@ -143,6 +153,7 @@ export const crmTourSteps: CrmTourStepConfig[] = [
     route: "/crm",
     selector: '[data-tour="automation-pipeline-select"]',
     content: "Escolha qual pipeline recebe os cards criados automaticamente.",
+    completion: "change",
     onExit: (controls) => controls?.closeAutomationDialog(),
   },
   {

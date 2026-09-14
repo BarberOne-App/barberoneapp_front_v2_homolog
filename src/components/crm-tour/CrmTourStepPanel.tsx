@@ -34,15 +34,22 @@ export function CrmTourStepPanel({
   const waitingForAction = !disabled && !isLast && nextDisabled;
 
   return createPortal(
+    // pointer-events-none no wrapper inteiro (não só "auto" como antes): o
+    // painel é fixed bottom-6, e alguns diálogos (ex.: ClientPickerModal)
+    // renderizam ações reais (ex.: "Cadastrar novo cliente") bem perto dessa
+    // mesma região da tela. Com o wrapper inteiro pointer-events-auto, o
+    // texto/fundo do painel ficava por cima e engolia o clique antes de
+    // chegar no botão de verdade por baixo - só a barra de controles (Passo
+    // X de Y + botões) realmente precisa capturar clique.
     <div
       data-crm-tour-panel="true"
-      className="pointer-events-auto fixed bottom-6 left-1/2 z-[2147483647] w-72 -translate-x-1/2 flex flex-col gap-3 rounded-lg border border-border bg-background p-4 text-sm text-foreground shadow-2xl"
+      className="pointer-events-none fixed bottom-6 left-1/2 z-[2147483647] w-72 -translate-x-1/2 flex flex-col gap-3 rounded-lg border border-border bg-background p-4 text-sm text-foreground shadow-2xl"
     >
       <p className="leading-relaxed">{content}</p>
       {waitingForAction && (
         <p className="text-xs font-medium text-primary">Faça a ação destacada acima pra continuar.</p>
       )}
-      <div className="flex items-center justify-between gap-2 pt-1">
+      <div className="pointer-events-auto flex items-center justify-between gap-2 pt-1">
         <span className="text-xs text-muted-foreground">
           Passo {currentStep + 1} de {totalSteps}
         </span>

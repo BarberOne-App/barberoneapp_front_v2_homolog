@@ -24,7 +24,18 @@ export interface CrmTourStepConfig {
   // pipeline) ou só numa conta que já tem pipeline.
   skipIf?: (controls: CrmTourControls | null) => boolean;
   // true = passo só mostra algo, sem pedir nenhuma ação - "Próximo" libera na
-  // hora. Por padrão (undefined/false) o passo exige um clique real dentro
-  // do elemento destacado (selector) antes de liberar "Próximo".
+  // hora, sem avanço automático (senão o usuário nunca teria tempo de ler).
   informational?: boolean;
+  // Como detectar que a ação do passo foi concluída (passos não
+  // informational exigem uma dessas antes de liberar/avançar):
+  // - "click" (padrão): um clique real dentro do elemento destacado.
+  // - "disappear": o elemento destacado some do DOM (botão vira outra coisa
+  //   quando a escolha é feita, ex.: "Selecionar cliente" vira o card do
+  //   cliente escolhido; diálogo fecha depois de criar com sucesso). Clicar
+  //   sem completar a ação de verdade (ex.: dialog continua aberto por causa
+  //   de erro de validação) não conta.
+  // - "change": o conteúdo do próprio elemento muda (ex.: um <Select> que
+  //   troca o texto exibido quando uma opção é escolhida) - clicar só pra
+  //   abrir o dropdown não conta.
+  completion?: "click" | "disappear" | "change";
 }
