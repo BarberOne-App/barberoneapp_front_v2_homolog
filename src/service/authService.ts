@@ -212,6 +212,9 @@ export function logout() {
   localStorage.removeItem("user");
   localStorage.removeItem("barbershop");
   localStorage.removeItem(SUPER_ADMIN_ACCESS_STORAGE_KEY);
+  // Remove o formato legado, que não identificava a barbearia e podia exibir
+  // uma sessão de caixa pertencente a outro estabelecimento no próximo login.
+  localStorage.removeItem("cashClosing:openSession");
 }
 
 export function isAuthenticated() {

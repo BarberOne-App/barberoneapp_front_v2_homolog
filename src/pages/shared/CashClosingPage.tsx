@@ -32,14 +32,13 @@ import {
 } from "@/service/paymentService";
 import { listSubscriptions, type Subscription } from "@/service/subscriptionService";
 import { downloadPdfReport, type ReportColumn } from "@/utils/reportExport";
-
-type OpenCashSession = {
-  openedAt: string;
-  openedBy: string;
-  openedByName: string;
-};
-
-const openCashSessionKey = "cashClosing:openSession";
+import {
+  getActiveBarbershopId,
+  getStoredOpenCashSession,
+  removeStoredOpenCashSession,
+  storeOpenCashSession,
+  type OpenCashSession,
+} from "@/lib/cashSessionStorage";
 
 const methodLabels: Record<PaymentMethod, string> = {
   credito: "Credito",
@@ -165,19 +164,6 @@ function normalizeText(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
-}
-
-function getStoredOpenCashSession() {
-  const storedSession = localStorage.getItem(openCashSessionKey);
-
-  if (!storedSession) return null;
-
-  try {
-    return JSON.parse(storedSession) as OpenCashSession;
-  } catch {
-    localStorage.removeItem(openCashSessionKey);
-    return null;
-  }
 }
 
 function getCashPaymentDescription(payment: CashClosingPayment) {
@@ -449,14 +435,15 @@ function downloadCashClosingsCsv(closings: CashClosing[]) {
 }
 
 export function CashClosingPage() {
-  const { user } = useAuth();
+  const { user, barbershopAccess } = useAuth();
+  const activeBarbershopId = getActiveBarbershopId(barbershopAccess?.id);
   const [closingCash, setClosingCash] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingCsv, setExportingCsv] = useState(false);
   const [cashPreview, setCashPreview] = useState<CashClosingSummary | null>(null);
   const [cashClosings, setCashClosings] = useState<CashClosing[]>([]);
   const [openCashSession, setOpenCashSession] = useState<OpenCashSession | null>(() =>
-    getStoredOpenCashSession(),
+    getStoredOpenCashSession(activeBarbershopId),
   );
   const [loading, setLoading] = useState(true);
   const initialReportRange = currentMonthRange();
@@ -514,6 +501,10 @@ export function CashClosingPage() {
   useEffect(() => {
     void loadCashClosings();
   }, [loadCashClosings]);
+
+  useEffect(() => {
+    setOpenCashSession(getStoredOpenCashSession(activeBarbershopId));
+  }, [activeBarbershopId]);
 
   const loadSubscriptionOptions = useCallback(async () => {
     setLoadingSubscriptions(true);
@@ -574,13 +565,19 @@ export function CashClosingPage() {
   const cashIsOpen = Boolean(openCashSession);
 
   function handleOpenCash() {
-    const session = {
+    if (!activeBarbershopId) {
+      toast.error("Não foi possível identificar a barbearia para abrir o caixa.");
+      return;
+    }
+
+    const session: OpenCashSession = {
+      barbershopId: activeBarbershopId,
       openedAt: new Date().toISOString(),
       openedBy: user?.id || "",
       openedByName: user?.name || "Usuario nao identificado",
     };
 
-    localStorage.setItem(openCashSessionKey, JSON.stringify(session));
+    storeOpenCashSession(session);
     setOpenCashSession(session);
     toast.success("Caixa aberto com sucesso.");
   }
@@ -589,7 +586,7 @@ export function CashClosingPage() {
     setClosingCash(true);
     try {
       await createCashClosing();
-      localStorage.removeItem(openCashSessionKey);
+      removeStoredOpenCashSession(activeBarbershopId);
       setOpenCashSession(null);
       toast.success("Caixa fechado com sucesso.");
       await loadCashClosings();
