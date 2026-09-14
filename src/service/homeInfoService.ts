@@ -1,4 +1,5 @@
 import api from "./api";
+import type { OpeningHoursDay } from "@/lib/openingHours";
 
 export interface HomeInfo {
   id?: string;
@@ -15,6 +16,7 @@ export interface HomeInfo {
   schedule_line1?: string | null;
   schedule_line2?: string | null;
   schedule_line3?: string | null;
+  opening_hours?: OpeningHoursDay[];
   whatsapp_number?: string | null;
   location_title?: string | null;
   location_address?: string | null;

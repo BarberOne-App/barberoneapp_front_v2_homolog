@@ -22,6 +22,8 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import { PlatformSubscriptionTab } from '@/components/PlatformSubscriptionTab';
+import { OpeningHoursEditor } from '@/components/OpeningHoursEditor';
+import { getOpeningHoursError, type OpeningHoursDay } from '@/lib/openingHours';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PasswordInput } from '@/components/PasswordInput';
@@ -197,6 +199,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
     schedule_line2: '',
     schedule_line3: '',
   });
+  const [openingHours, setOpeningHours] = useState<OpeningHoursDay[]>([]);
   const [aboutForm, setAboutForm] = useState({
     about_title: '',
     about_text1: '',
@@ -418,6 +421,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
         }
 
         setHomeInfo(data);
+        setOpeningHours(data.opening_hours ?? []);
         setHeroForm({
           hero_title: data.hero_title ?? '',
           hero_subtitle: data.hero_subtitle ?? '',
@@ -1080,6 +1084,12 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
       schedule_line3: workingHoursForm.schedule_line3.trim(),
     };
 
+    const openingHoursError = getOpeningHoursError(openingHours);
+    if (openingHoursError) {
+      toast.error(openingHoursError);
+      return;
+    }
+
     if (
       !trimmedAboutForm.about_title ||
       !trimmedAboutForm.about_text1 ||
@@ -1117,6 +1127,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
           ...trimmedAboutForm,
           ...trimmedLocationForm,
           ...trimmedWorkingHoursForm,
+          opening_hours: openingHours,
         }),
       ]);
 
@@ -1131,6 +1142,7 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
       setBusinessLogoUrl(profile.logoUrl ?? '');
       persistStoredBarbershop(profile);
       setHomeInfo(updatedHomeInfo);
+      setOpeningHours(updatedHomeInfo.opening_hours ?? []);
       setHeroForm({
         hero_title: updatedHomeInfo.hero_title ?? '',
         hero_subtitle: updatedHomeInfo.hero_subtitle ?? '',
@@ -1732,7 +1744,15 @@ export function SettingsPage({ canShareRegistrationLink = false }: SettingsProps
           </div>
 
           <div className="bg-card rounded-xl border border-border p-6">
-            <h3 className="text-lg font-medium text-foreground mb-4">Horario de Funcionamento</h3>
+            <h3 className="text-lg font-medium text-foreground mb-2">Horário de Funcionamento</h3>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Defina os dias de atendimento e os horários de abertura e fechamento. Estes horários controlam os agendamentos disponíveis, no horário de Brasília.
+            </p>
+            <OpeningHoursEditor value={openingHours} onChange={setOpeningHours}
+              disabled={isLoadingHomeInfo || isSavingGeneralSettings} />
+            <p className="mb-4 mt-6 border-t border-border pt-4 text-sm text-muted-foreground">
+              Os campos abaixo são o texto exibido ao público. Atualize-os para que correspondam aos horários definidos acima.
+            </p>
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">Titulo</label>

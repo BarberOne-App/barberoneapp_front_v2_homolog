@@ -33,6 +33,11 @@ import { getCashClosingPreview, type CashClosingSummary } from "@/service/cashCl
 import { listUsers, type UserProfile } from "@/service/userService";
 import { listActiveFeatureUpdates, type FeatureUpdate } from "@/service/featureUpdateService";
 import { getHomeInfo, type HomeInfo } from "@/service/homeInfoService";
+import {
+  getActiveBarbershopId,
+  getStoredOpenCashSession,
+  type OpenCashSession,
+} from "@/lib/cashSessionStorage";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -73,12 +78,6 @@ interface BirthdayReminder {
   phone?: string | null;
   birthDate: string;
   daysUntil: number;
-}
-
-interface OpenCashSession {
-  openedAt: string;
-  openedBy: string;
-  openedByName: string;
 }
 
 function StatSkeleton() {
@@ -226,19 +225,6 @@ function formatCashPeriod(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
-}
-
-function getStoredOpenCashSession() {
-  const storedSession = localStorage.getItem("cashClosing:openSession");
-
-  if (!storedSession) return null;
-
-  try {
-    return JSON.parse(storedSession) as OpenCashSession;
-  } catch {
-    localStorage.removeItem("cashClosing:openSession");
-    return null;
-  }
 }
 
 function buildBirthdayReminders(customers: UserProfile[]): BirthdayReminder[] {
@@ -447,9 +433,11 @@ function FeatureUpdatesDialog({
 }
 
 export function AdminDashboard() {
-  const { user } = useAuth();
+  const { user, barbershopAccess } = useAuth();
+  const userId = user?.id;
   const userName = user?.name?.trim() || "Usuario";
   const isAdmin = user?.role === "admin" || user?.isAdmin === true;
+  const activeBarbershopId = getActiveBarbershopId(barbershopAccess?.id);
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -492,7 +480,7 @@ export function AdminDashboard() {
   }, [activeReminderModal]);
 
   const loadUrgentReminders = useCallback(async () => {
-    if (!isAdmin || !user?.id) return;
+    if (!isAdmin || !userId) return;
 
     const [cashResult, customersResult, featureUpdatesResult, homeInfoResult] = await Promise.allSettled([
       getCashClosingPreview(),
@@ -502,7 +490,7 @@ export function AdminDashboard() {
     ]);
 
     const loadedCashPreview = cashResult.status === "fulfilled" ? cashResult.value : null;
-    const loadedOpenCashSession = getStoredOpenCashSession();
+    const loadedOpenCashSession = getStoredOpenCashSession(activeBarbershopId);
     const loadedHomeInfo = homeInfoResult.status === "fulfilled" ? homeInfoResult.value : null;
     const loadedCashReminderPhase = getCashReminderPhase(loadedOpenCashSession, loadedHomeInfo);
     const loadedBirthdays =
@@ -521,7 +509,7 @@ export function AdminDashboard() {
 
     if (
       loadedCashReminderPhase &&
-      sessionStorage.getItem(getReminderStorageKey("cash", user.id, `${getTodayKey()}:${loadedCashReminderPhase}`)) !== "dismissed"
+      sessionStorage.getItem(getReminderStorageKey("cash", userId, `${getTodayKey()}:${loadedCashReminderPhase}`)) !== "dismissed"
     ) {
       nextQueue.push("cash");
     }
@@ -529,7 +517,7 @@ export function AdminDashboard() {
     const birthdaySignature = getBirthdayReminderSignature(loadedBirthdays);
     if (
       loadedBirthdays.length > 0 &&
-      sessionStorage.getItem(getReminderStorageKey("birthdays", user.id, `${getTodayKey()}:${birthdaySignature}`)) !== "dismissed"
+      sessionStorage.getItem(getReminderStorageKey("birthdays", userId, `${getTodayKey()}:${birthdaySignature}`)) !== "dismissed"
     ) {
       nextQueue.push("birthdays");
     }
@@ -537,18 +525,20 @@ export function AdminDashboard() {
     const featureSignature = getFeatureUpdateSignature(loadedFeatureUpdates);
     if (
       loadedFeatureUpdates.length > 0 &&
-      sessionStorage.getItem(getReminderStorageKey("features", user.id, featureSignature)) !== "dismissed"
+      sessionStorage.getItem(getReminderStorageKey("features", userId, featureSignature)) !== "dismissed"
     ) {
       nextQueue.push("features");
     }
 
     enqueueReminderModals(nextQueue);
-  }, [enqueueReminderModals, isAdmin, user?.id]);
+  }, [activeBarbershopId, enqueueReminderModals, isAdmin, userId]);
 
   useEffect(() => {
-    if (!isAdmin || !user?.id) return;
+    if (!isAdmin || !userId) return;
 
-    void loadUrgentReminders();
+    const initialLoadTimer = window.setTimeout(() => {
+      void loadUrgentReminders();
+    }, 0);
 
     const timer = window.setInterval(() => {
       void loadUrgentReminders();
@@ -564,11 +554,12 @@ export function AdminDashboard() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      window.clearTimeout(initialLoadTimer);
       window.clearInterval(timer);
       window.removeEventListener("focus", loadUrgentReminders);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [isAdmin, loadUrgentReminders, user?.id]);
+  }, [isAdmin, loadUrgentReminders, userId]);
 
   function dismissReminderModal(modal: ReminderModal) {
     if (!user?.id) return;
